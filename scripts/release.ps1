@@ -20,7 +20,7 @@ Write-Host ">>> [1/7] Updating version to v$Version across project files..." -Fo
 # 1. Cargo.toml
 $cargoPath = Join-Path $Root "Cargo.toml"
 $cargo = Get-Content $cargoPath -Raw
-$cargo = $cargo -replace 'version\s*=\s*"[^"]+"', ('version = "' + $Version + '"')
+$cargo = $cargo -replace '(?m)^version\s*=\s*"[^"]+"', ('version = "' + $Version + '"')
 Set-Content $cargoPath $cargo -NoNewline
 
 # 2. installer.iss
