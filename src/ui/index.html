@@ -1155,7 +1155,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.2</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.3</span>
         </div>
       </div>
 
@@ -2115,7 +2115,7 @@
         </svg>
         <div>
           <div style="font-size: 17px; font-weight: 700; color: var(--text-main);">90FTP - Modern Site Manager</div>
-          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.0.2 Dev (Windows x64)</div>
+          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.0.3 Dev (Windows x64)</div>
         </div>
         <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; max-width: 360px;">
           High-Performance Asynchronous SFTP, FTP & FTPS Transfer Engine.
@@ -2157,7 +2157,7 @@
             <div id="updateSubtext" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Querying GitHub releases for aljupcom/90FTP...</div>
           </div>
           <div id="updateCurrentBadge" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25); white-space: nowrap;">
-            Current: v0.0.0.2
+            Current: v0.0.0.3
           </div>
         </div>
 
@@ -2302,7 +2302,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.2';
+    let APP_CURRENT_VERSION = '0.0.0.3';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -3404,7 +3404,8 @@
       document.getElementById('editorModal').classList.remove('active');
     }
 
-    document.getElementById('editorTextarea').addEventListener('keydown', function(e) {
+    const editorAreaEl = document.getElementById('editorTextarea');
+    if (editorAreaEl) editorAreaEl.addEventListener('keydown', function(e) {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         saveEditorContent();
@@ -3761,8 +3762,10 @@
     }
 
     ['cm_ur','cm_uw','cm_ux','cm_gr','cm_gw','cm_gx','cm_or','cm_ow','cm_ox'].forEach(id => {
-      document.getElementById(id).addEventListener('change', () => {
-        document.getElementById('chmodOctal').value = calculateOctalFromCheckboxes();
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => {
+        const oct = document.getElementById('chmodOctal');
+        if (oct) oct.value = calculateOctalFromCheckboxes();
       });
     });
 
@@ -4925,9 +4928,6 @@
         if (headline) headline.textContent = 'Update Check Failed';
         if (subtext) subtext.textContent = 'Could not retrieve update information: ' + (err.message || err);
         if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
-        addLog('Update check failed: ' + (err.message || err), 'warning');
-      }
-    }
         addLog('Update check failed: ' + (err.message || err), 'warning');
       }
     }

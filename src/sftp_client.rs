@@ -45,6 +45,7 @@ impl Handler for ClientHandler {
     }
 }
 
+#[allow(dead_code)]
 pub struct SftpClient {
     rt: Arc<Runtime>,
     sftp: SftpSession,

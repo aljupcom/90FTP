@@ -66,12 +66,13 @@ cargo test --bin ninety_ftp
 Write-Host ">>> [3/8] Building release binary..." -ForegroundColor Cyan
 cargo build --release
 
-Write-Host ">>> [4/8] Copying and signing 90FTP.exe..." -ForegroundColor Cyan
+Write-Host ">>> [4/8] Signing binaries (target\release\ninety_ftp.exe and 90FTP.exe)..." -ForegroundColor Cyan
 Stop-Process -Name "90FTP" -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 400
-Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
+Start-Sleep -Milliseconds 600
 
 $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
+& $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "target\release\ninety_ftp.exe"
+Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
 & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "90FTP.exe"
 
 Write-Host ">>> [5/8] Compiling Inno Setup installer dynamically (Version: $Version)..." -ForegroundColor Cyan
