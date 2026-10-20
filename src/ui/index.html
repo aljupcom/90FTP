@@ -574,6 +574,127 @@
     .log-msg.error { color: var(--danger); font-weight: 600; }
     .log-msg.cmd { color: #38bdf8; }
 
+    /* Bottom Panel Dual-Tab (Transfers & Activity Log) */
+    .bottom-tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      height: 24px;
+    }
+    .bottom-tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .bottom-tab-btn.active {
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.25);
+    }
+    .tab-badge {
+      font-size: 9.5px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+    .bottom-tab-btn.active .tab-badge {
+      background: var(--accent);
+      color: #000;
+    }
+    .bottom-tab-body {
+      flex: 1;
+      display: none;
+      overflow-y: auto;
+      background: var(--log-bg);
+      flex-direction: column;
+    }
+    .bottom-tab-body.active {
+      display: flex;
+    }
+
+    /* Transfers Queue Table */
+    .transfers-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+      text-align: left;
+    }
+    .transfers-table th {
+      position: sticky;
+      top: 0;
+      background: var(--bg-header);
+      color: var(--text-dim);
+      font-weight: 600;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border-color);
+      z-index: 1;
+      white-space: nowrap;
+    }
+    .transfers-table td {
+      padding: 5px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text-main);
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .transfers-table tr:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .transfer-progress-track {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      margin-top: 3px;
+    }
+    .transfer-progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #0284c7, #38bdf8);
+      transition: width 0.15s ease-out;
+    }
+    .transfer-progress-fill.completed {
+      background: #22c55e;
+    }
+    .transfer-progress-fill.failed {
+      background: #ef4444;
+    }
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+    .badge-status.running {
+      background: rgba(56, 189, 248, 0.12);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .badge-status.completed {
+      background: rgba(34, 197, 94, 0.12);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .badge-status.failed {
+      background: rgba(239, 68, 68, 0.12);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
     /* Desktop Modal Dialogs */
     .modal-overlay {
       position: fixed;
@@ -1227,7 +1348,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.6</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.7</span>
         </div>
       </div>
 
@@ -1274,7 +1395,7 @@
           <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openOptionsModal('general')">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-            <span>Options / Preferences...</span>
+            <span>Options & Preferences...</span>
             <span class="shortcut">Ctrl+,</span>
           </div>
         </div>
@@ -1296,7 +1417,7 @@
           <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="toggleLogPanel()">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
-            <span>Toggle Log Console</span>
+            <span>Toggle Bottom Panel</span>
             <span class="shortcut">Ctrl+L</span>
           </div>
           <div class="dropdown-item" onclick="toggleTheme()">
@@ -1319,7 +1440,7 @@
             <span>Download Selected File</span>
           </div>
           <div class="dropdown-separator"></div>
-          <div class="dropdown-item" onclick="promptNewFolder(false)">
+          <div class="dropdown-item" onclick="promptNewLocalFolder()">
             <span class="menu-icon">📁</span>
             <span>New Local Folder...</span>
           </div>
@@ -1338,7 +1459,7 @@
       <div class="menu-item" onclick="toggleMenu(event, 'toolsMenu')">
         <span>Tools</span>
         <div class="menu-dropdown" id="toolsMenu">
-          <div class="dropdown-item" onclick="openOptionsModal('cache')">
+          <div class="dropdown-item" onclick="openOptionsModal('security')">
             <span class="menu-icon">🧹</span>
             <span>Clear Cache & History...</span>
           </div>
@@ -1364,16 +1485,12 @@
           <div class="dropdown-item" onclick="openUpdateModal(true)">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></span>
             <span>Check for Updates...</span>
-            <span class="menu-shortcut">Ctrl+U</span>
+            <span class="shortcut">Ctrl+U</span>
           </div>
-          <div class="dropdown-divider"></div>
+          <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openAboutModal()">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
             <span>About 90FTP...</span>
-          </div>
-          <div class="dropdown-item" onclick="openOptionsModal('general')">
-            <span class="menu-icon">⚙️</span>
-            <span>Preferences & Options...</span>
           </div>
         </div>
       </div>
@@ -1588,27 +1705,86 @@
     <div class="gutter-h-grip"></div>
   </div>
 
-  <!-- Bottom: Activity Log Panel (Collapsed by default as requested) -->
+  <!-- Bottom: Dual-Tab Panel (File Transfers & Activity Log) -->
   <div class="log-panel collapsed" id="logPanel" style="height: 34px;">
-    <div class="log-header" onclick="toggleLogPanel()">
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-        <span>Activity Log & Console</span>
+    <div class="log-header" onclick="handleLogHeaderClick(event)">
+      <!-- Left: Dual Tabs -->
+      <div style="display: flex; align-items: center; gap: 4px;" onclick="event.stopPropagation()">
+        <button type="button" class="bottom-tab-btn active" id="tabTransfers" onclick="switchBottomTab('transfers', event)">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/>
+            <polyline points="17 14 12 9 7 14"/><line x1="12" y1="21" x2="12" y2="9"/>
+          </svg>
+          <span>File Transfers</span>
+          <span class="tab-badge" id="transfersBadge">0</span>
+        </button>
+
+        <button type="button" class="bottom-tab-btn" id="tabActivityLog" onclick="switchBottomTab('log', event)">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          <span>Activity Log</span>
+        </button>
       </div>
+
+      <!-- Right: Actions & Collapse Button -->
       <div style="display: flex; align-items: center; gap: 6px;">
-        <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); copyAllLogs()" style="padding: 2px 9px; font-size: 11px; display: flex; align-items: center; gap: 4px;" title="Copy all log output">
-          <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          Copy All
+        <!-- Transfer Actions -->
+        <div id="transfersActions" style="display: flex; align-items: center; gap: 6px;" onclick="event.stopPropagation()">
+          <span id="transfersSummaryText" style="font-size: 11px; color: var(--text-dim); margin-right: 4px;">Queue idle</span>
+          <button type="button" class="btn btn-secondary" onclick="clearCompletedTransfers()" style="padding: 2px 8px; font-size: 11px;" title="Clear completed transfers">
+            Clear Finished
+          </button>
+        </div>
+
+        <!-- Log Actions -->
+        <div id="logActions" style="display: none; align-items: center; gap: 6px;" onclick="event.stopPropagation()">
+          <button type="button" class="btn btn-secondary" onclick="copyAllLogs()" style="padding: 2px 9px; font-size: 11px; display: flex; align-items: center; gap: 4px;" title="Copy all log output">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy All
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="clearLogs()" style="padding: 2px 8px; font-size: 11px;" title="Clear console">
+            Clear
+          </button>
+        </div>
+
+        <!-- Expand / Collapse Gutter Toggle -->
+        <button type="button" class="btn btn-secondary" onclick="toggleLogPanel()" title="Toggle Bottom Panel (Ctrl+L)" style="padding: 2px 6px;">
+          <span id="logToggleIcon" style="display: flex; align-items: center;">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+          </span>
         </button>
-        <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); clearLogs()" style="padding: 2px 8px; font-size: 11px;" title="Clear console">
-          Clear
-        </button>
-        <span id="logToggleIcon" style="margin-left: 4px; display: flex; align-items: center;">
-          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-        </span>
       </div>
     </div>
-    <div class="log-body" id="logBody"></div>
+
+    <!-- Body Tab 1: Transfers Queue -->
+    <div class="bottom-tab-body active" id="transfersBodyContainer">
+      <table class="transfers-table">
+        <thead>
+          <tr>
+            <th style="width: 34px; text-align: center;">#</th>
+            <th style="width: 70px;">Type</th>
+            <th style="width: 200px;">File Name</th>
+            <th>Source &rarr; Target</th>
+            <th style="width: 80px; text-align: right;">Size</th>
+            <th style="width: 190px;">Progress</th>
+            <th style="width: 90px; text-align: center;">Status</th>
+          </tr>
+        </thead>
+        <tbody id="transfersList">
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 22px 10px;">
+              No active or queued file transfers
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Body Tab 2: Activity Log & Console -->
+    <div class="bottom-tab-body" id="logBodyContainer">
+      <div class="log-body" id="logBody"></div>
+    </div>
   </div>
 
   <!-- Modal: Built-in Code Editor & Formatter -->
@@ -1917,7 +2093,8 @@
     <div class="modal-content" style="width: 530px; max-width: 95vw;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span>Options</span>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span style="font-weight: 600;">Options & Preferences</span>
         </div>
         <div style="display: flex; align-items: center; gap: 6px;">
           <button type="button" class="btn btn-secondary" onclick="openAboutModal()" style="padding: 1px 7px; font-size: 11px;" title="Help & About">?</button>
@@ -1927,198 +2104,94 @@
       
       <div class="options-tab-bar">
         <button type="button" class="options-tab-btn active" id="tabOptGeneral" onclick="switchOptionsTab('general')">General</button>
-        <button type="button" class="options-tab-btn" id="tabOptStartup" onclick="switchOptionsTab('startup')">On Startup</button>
-        <button type="button" class="options-tab-btn" id="tabOptTransfer" onclick="switchOptionsTab('transfer')">Transfer</button>
-        <button type="button" class="options-tab-btn" id="tabOptLog" onclick="switchOptionsTab('log')">Log</button>
-        <button type="button" class="options-tab-btn" id="tabOptSecurity" onclick="switchOptionsTab('security')">Security</button>
-        <button type="button" class="options-tab-btn" id="tabOptCache" onclick="switchOptionsTab('cache')">Cache</button>
-        <button type="button" class="options-tab-btn" id="tabOptAdvanced" onclick="switchOptionsTab('advanced')">Advanced</button>
+        <button type="button" class="options-tab-btn" id="tabOptTransfer" onclick="switchOptionsTab('transfer')">Transfers</button>
+        <button type="button" class="options-tab-btn" id="tabOptSecurity" onclick="switchOptionsTab('security')">Security & Storage</button>
+        <button type="button" class="options-tab-btn" id="tabOptInterface" onclick="switchOptionsTab('interface')">Interface & Console</button>
       </div>
 
-      <div class="modal-body" style="padding: 12px; max-height: 440px; overflow-y: auto;">
+      <div class="modal-body" style="padding: 14px; max-height: 440px; overflow-y: auto;">
         
         <!-- Tab 1: General -->
         <div class="options-pane active" id="paneOptGeneral">
           <div class="options-groupbox">
-            <div class="options-groupbox-legend">Options</div>
+            <div class="options-groupbox-legend">File Browser</div>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optDelFinished" checked>
-              <span>Delete finished transfers from the transfer queue</span>
+              <input type="checkbox" id="optShowHidden" onchange="toggleHiddenFiles(this.checked)">
+              <span>Show hidden files and dotfiles (.git, .env, etc.)</span>
             </label>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optNaturalSort" checked>
-              <span>Use natural order sort</span>
+              <input type="checkbox" id="optShowFullPath">
+              <span>Show full absolute path in local directory bar</span>
             </label>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optShowHidden" checked onchange="toggleHiddenFiles(this.checked)">
-              <span>Show hidden files (dotfiles)</span>
+              <input type="checkbox" id="optAutoCheckUpdates">
+              <span>Check for updates automatically on startup</span>
             </label>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optShowWelcome">
-              <span>Show welcome message</span>
-            </label>
-            <label class="options-checkbox-row">
-              <input type="checkbox" id="optShowFullPath" checked>
-              <span>Show full path in the local address bar</span>
-            </label>
-            <label class="options-checkbox-row">
-              <input type="checkbox" id="optUseHomePath" checked>
-              <span>Use Home (~) path as SFTP default directory</span>
-            </label>
-            <label class="options-checkbox-row">
-              <input type="checkbox" id="optConfirmDisconnect" checked>
-              <span>Confirm to disconnect when 90FTP is terminated</span>
+              <input type="checkbox" id="optConfirmDisconnect">
+              <span>Confirm before disconnecting from active server</span>
             </label>
           </div>
 
           <div class="options-groupbox">
-            <div class="options-groupbox-legend">Mouse</div>
+            <div class="options-groupbox-legend">Mouse Action Shortcuts</div>
             <div class="options-select-row">
-              <span style="color: var(--text-muted);">Double-click Local:</span>
+              <span style="color: var(--text-muted);">Double-click Local File:</span>
               <select id="optDblLocal" style="width: 180px;">
                 <option value="edit">Open in Code Editor</option>
                 <option value="transfer">Transfer (Upload)</option>
               </select>
             </div>
             <div class="options-select-row">
-              <span style="color: var(--text-muted);">Double-click Remote:</span>
+              <span style="color: var(--text-muted);">Double-click Remote File:</span>
               <select id="optDblRemote" style="width: 180px;">
                 <option value="edit">Open in Code Editor</option>
                 <option value="transfer">Transfer (Download)</option>
               </select>
             </div>
-            <div class="options-select-row">
-              <span style="color: var(--text-muted);">Right-click Menu:</span>
-              <select id="optRightClickMenu" style="width: 180px;">
-                <option value="custom">90FTP Desktop Menu</option>
-                <option value="native">Native System</option>
-              </select>
-            </div>
-            <div class="options-select-row">
-              <span style="color: var(--text-muted);">Drag and Drop Action:</span>
-              <select id="optDragDropAction" style="width: 180px;">
-                <option value="confirm">Confirm When Move</option>
-                <option value="direct">Transfer Directly</option>
-              </select>
-            </div>
           </div>
         </div>
 
-        <!-- Tab 2: On Startup -->
-        <div class="options-pane" id="paneOptStartup">
-          <div class="options-groupbox">
-            <div class="options-groupbox-legend">Startup Folders & Panes</div>
-            <div class="options-select-row">
-              <span style="color: var(--text-muted);">Default Local Directory:</span>
-              <input type="text" id="optStartupLocal" style="width: 260px;" placeholder="Leave empty for Desktop">
-            </div>
-            <div class="options-select-row">
-              <span style="color: var(--text-muted);">Remote Startup Path:</span>
-              <select id="optStartupRemote" style="width: 260px;">
-                <option value="home">Default User Home (~)</option>
-                <option value="last">Remember Last Visited Path</option>
-                <option value="root">Server Root (/)</option>
-              </select>
-            </div>
-            <label class="options-checkbox-row" style="margin-top: 8px;">
-              <input type="checkbox" id="optOpenSiteManagerOnLaunch">
-              <span>Automatically show Site Manager when starting 90FTP</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Tab 3: Transfer -->
+        <!-- Tab 2: Transfers -->
         <div class="options-pane" id="paneOptTransfer">
           <div class="options-groupbox">
-            <div class="options-groupbox-legend">File Transfer Pipeline</div>
-            <div class="options-select-row">
-              <span style="color: var(--text-muted);">Concurrent Transfer Streams:</span>
-              <input type="number" id="optConcurrentTransfers" value="2" min="1" max="8" style="width: 80px; text-align: center;">
-            </div>
-            <div class="options-select-row">
-              <span style="color: var(--text-muted);">Existing File Collision:</span>
-              <select id="optFileCollision" style="width: 200px;">
-                <option value="overwrite">Overwrite if newer or size differs</option>
-                <option value="prompt">Prompt for user confirmation</option>
-                <option value="always">Always overwrite</option>
-                <option value="skip">Skip existing files</option>
-              </select>
-            </div>
-            <div class="options-select-row">
-              <span style="color: var(--text-muted);">I/O Buffer Size:</span>
-              <select id="optBufferSize" style="width: 200px;">
-                <option value="64">64 KB (Optimized High-Speed)</option>
-                <option value="32">32 KB (Standard)</option>
-                <option value="128">128 KB (Gigabit Networks)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 4: Log -->
-        <div class="options-pane" id="paneOptLog">
-          <div class="options-groupbox">
-            <div class="options-groupbox-legend">Activity Log & Console</div>
-            <div class="options-select-row">
-              <span style="color: var(--text-muted);">Maximum Console Lines:</span>
-              <input type="number" id="optMaxLogLines" value="500" min="50" max="5000" style="width: 100px; text-align: center;">
-            </div>
+            <div class="options-groupbox-legend">Transfer Queue & Automation</div>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optLogAutoScroll" checked>
-              <span>Auto-scroll console window to newest messages</span>
+              <input type="checkbox" id="optDelFinished">
+              <span>Automatically remove finished items from Transfers Queue</span>
             </label>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optLogTimestamps" checked>
-              <span>Include local timestamps [HH:MM:SS] on each line</span>
+              <input type="checkbox" id="optAutoSwitchTransfers">
+              <span>Automatically switch to Transfers tab when upload or download begins</span>
             </label>
             <div class="options-select-row" style="margin-top: 10px;">
-              <span style="color: var(--text-muted);">Console Actions:</span>
-              <div style="display: flex; gap: 6px;">
-                <button type="button" class="btn btn-secondary" onclick="clearLogs()" style="font-size: 11px; padding: 3px 8px;">Clear Logs</button>
-                <button type="button" class="btn btn-secondary" onclick="copyAllLogs()" style="font-size: 11px; padding: 3px 8px;">Copy All</button>
-              </div>
+              <span style="color: var(--text-muted);">File Collision Handling:</span>
+              <select id="optFileCollision" style="width: 200px;">
+                <option value="overwrite">Overwrite automatically</option>
+                <option value="prompt">Prompt for user confirmation</option>
+                <option value="skip">Skip if same size</option>
+              </select>
             </div>
           </div>
         </div>
 
-        <!-- Tab 5: Security -->
+        <!-- Tab 3: Security & Storage -->
         <div class="options-pane" id="paneOptSecurity">
           <div class="options-groupbox">
-            <div class="options-groupbox-legend">Cryptographic & Host Key Security</div>
-            <label class="options-checkbox-row">
-              <input type="checkbox" id="optStrictHostKey" checked>
-              <span>Strict Host Key Checking (Prompt on new fingerprint)</span>
-            </label>
-            <label class="options-checkbox-row">
-              <input type="checkbox" id="optEncryptPasswords" checked>
-              <span>Encrypted Vault storage in %APPDATA%\90FTP (AES-256-GCM authenticated)</span>
-            </label>
+            <div class="options-groupbox-legend">Session Security</div>
             <label class="options-checkbox-row">
               <input type="checkbox" id="optWipeOnDisconnect">
-              <span>Wipe in-memory credentials immediately upon disconnect</span>
+              <span>Wipe in-memory credentials immediately upon server disconnect</span>
             </label>
-            <div class="options-select-row" style="margin-top: 10px;">
-              <span style="color: var(--text-muted);">SSH Cipher Preference:</span>
-              <select id="optCipherPref" style="width: 220px;">
-                <option value="auto">Modern AES-256-GCM / ChaCha20</option>
-                <option value="aes128">AES-128-CTR / AES-256-CTR</option>
-              </select>
-            </div>
           </div>
-        </div>
 
-        <!-- Tab 6: Cache -->
-        <div class="options-pane" id="paneOptCache">
           <div class="options-groupbox">
             <div class="options-groupbox-legend">Cache & Storage Management</div>
-            <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5;">
-              Manage stored server certificates, navigation paths, and temporary editor buffers:
-            </div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
                 <div>
                   <div style="font-weight: 600;">Server Host Keys Cache</div>
-                  <div style="font-size: 11px; color: var(--text-dim);">Stored SHA-256 host key fingerprints in encrypted vault (.dat)</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Stored SHA-256 host key fingerprints in encrypted vault</div>
                 </div>
                 <button type="button" class="btn btn-secondary" onclick="clearKnownHostsCache()" style="font-size: 11px; padding: 3px 8px;">Clear Cache</button>
               </div>
@@ -2126,7 +2199,7 @@
               <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
                 <div>
                   <div style="font-weight: 600;">Remote Navigation History</div>
-                  <div style="font-size: 11px; color: var(--text-dim);">Recent path history entries in encrypted vault (.dat)</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Saved recent server folder paths</div>
                 </div>
                 <button type="button" class="btn btn-secondary" onclick="clearRemoteHistoryCache()" style="font-size: 11px; padding: 3px 8px;">Clear History</button>
               </div>
@@ -2142,28 +2215,31 @@
           </div>
         </div>
 
-        <!-- Tab 7: Advanced -->
-        <div class="options-pane" id="paneOptAdvanced">
+        <!-- Tab 4: Interface & Console -->
+        <div class="options-pane" id="paneOptInterface">
           <div class="options-groupbox">
-            <div class="options-groupbox-legend">Network & Engine Keep-Alive</div>
-            <div class="options-select-row">
-              <span style="color: var(--text-muted);">TCP Keep-Alive Heartbeat:</span>
-              <select id="optKeepAlive" style="width: 180px;">
-                <option value="30">Every 30 Seconds</option>
-                <option value="60">Every 60 Seconds</option>
-                <option value="0">Disabled</option>
-              </select>
+            <div class="options-groupbox-legend">Theme & Layout</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div>
+                <div style="font-weight: 600;">Color Theme</div>
+                <div style="font-size: 11px; color: var(--text-dim);">Switch between Dark and Light mode</div>
+              </div>
+              <button type="button" class="btn btn-secondary" onclick="toggleTheme()" style="font-size: 11px; padding: 4px 12px;">Toggle Theme</button>
             </div>
+          </div>
+
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">Activity Log & Console</div>
             <div class="options-select-row">
-              <span style="color: var(--text-muted);">Socket Connect Timeout:</span>
-              <select id="optSocketTimeout" style="width: 180px;">
-                <option value="15">15 Seconds</option>
-                <option value="30">30 Seconds</option>
-                <option value="60">60 Seconds</option>
-              </select>
+              <span style="color: var(--text-muted);">Maximum Console Lines:</span>
+              <input type="number" id="optMaxLogLines" value="500" min="50" max="5000" style="width: 90px; text-align: center;">
             </div>
-            <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
-              <button type="button" class="btn btn-danger" onclick="resetSettingsToDefault()" style="font-size: 11px; padding: 4px 10px;">Reset All Settings to Default</button>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optLogTimestamps">
+              <span>Show timestamps [HH:MM:SS] on each log entry</span>
+            </label>
+            <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+              <button type="button" class="btn btn-danger" onclick="resetSettingsToDefault()" style="font-size: 11px; padding: 4px 10px;">Reset All Settings to Defaults</button>
             </div>
           </div>
         </div>
@@ -2204,7 +2280,7 @@
         </svg>
         <div>
           <div style="font-size: 17px; font-weight: 700; color: var(--text-main);">90FTP - Modern Site Manager</div>
-          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.0.6 Dev (Windows x64)</div>
+          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.0.7 Dev (Windows x64)</div>
         </div>
         <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; max-width: 360px;">
           High-Performance Asynchronous SFTP, FTP & FTPS Transfer Engine.
@@ -2222,51 +2298,40 @@
     </div>
   </div>
 
-  <!-- Modal: Software Remote Update Dialog -->
+  <!-- Modal: Software Update Dialog -->
   <div class="modal-overlay" id="updateModal" style="z-index: 1065;">
-    <div class="modal-content" style="width: 520px; max-width: 95vw;">
+    <div class="modal-content" style="width: 530px; max-width: 95vw;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
           </svg>
-          <span style="font-weight: 600;">Check for Updates</span>
+          <span style="font-weight: 600;">تحديث البرنامج (Software Update)</span>
         </div>
         <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
       </div>
 
-      <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 14px;">
-        <!-- Status Card -->
-        <div id="updateStatusBanner" style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-color);">
+      <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+        <!-- Clean Status & Version Header -->
+        <div id="updateStatusBanner" style="display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-color);">
           <div id="updateIconContainer" style="font-size: 26px; line-height: 1; flex-shrink: 0;">
             <span class="spin-icon">↻</span>
           </div>
           <div style="flex: 1; min-width: 0;">
-            <div id="updateHeadline" style="font-size: 14px; font-weight: 700; color: var(--text-main);">Checking for updates...</div>
-            <div id="updateSubtext" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Querying GitHub releases for aljupcom/90FTP...</div>
-          </div>
-          <div id="updateCurrentBadge" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25); white-space: nowrap;">
-            Current: v0.0.0.6
+            <div id="updateHeadline" style="font-size: 14px; font-weight: 700; color: var(--text-main);">جاري التحقق من وجود تحديثات...</div>
+            <div id="updateSubtext" style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">يرجى الانتظار ثوانٍ معدودة...</div>
           </div>
         </div>
 
-        <!-- Release Info Container -->
+        <!-- Release Notes / Changelog Only Box -->
         <div id="updateDetailsBox" style="display: none; flex-direction: column; gap: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
-            <span style="font-size: 12.5px; font-weight: 600; color: var(--text-main);" id="updateReleaseTitle">Release Highlights</span>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12.5px; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 5px;">
+              <span>📋</span> سجل التغييرات والميزات الجديدة (What's New)
+            </span>
             <span style="font-size: 11px; color: var(--text-dim);" id="updateReleaseDate"></span>
           </div>
-          <div id="updateChangelog" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; font-size: 11.5px; line-height: 1.55; color: var(--text-muted); max-height: 180px; overflow-y: auto; white-space: pre-wrap; font-family: var(--font-mono, monospace);">
-          </div>
-        </div>
-
-        <!-- Direct Release / Download Info -->
-        <div id="updateActionContainer" style="display: none; background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 10px 12px; font-size: 11.5px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main);">
-              <strong>Release Asset:</strong> <span id="updateAssetName" style="color: var(--accent);">90FTP-Setup.exe</span>
-            </div>
-            <button type="button" class="btn btn-secondary" onclick="copyUpdateDownloadUrl()" style="padding: 2px 8px; font-size: 10.5px;" title="Copy Download Link to Clipboard">📋 Copy Link</button>
+          <div id="updateChangelog" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 14px; font-size: 12px; line-height: 1.6; color: var(--text-main); max-height: 220px; overflow-y: auto;">
           </div>
         </div>
 
@@ -2275,12 +2340,12 @@
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span id="dlStatusIcon" class="spin-icon" style="color: var(--accent); font-size: 15px;">↻</span>
-              <span id="dlStatusText" style="font-size: 12.5px; font-weight: 600; color: var(--text-main);">Downloading update directly...</span>
+              <span id="dlStatusText" style="font-size: 12.5px; font-weight: 600; color: var(--text-main);">جاري تنزيل التحديث مباشرة...</span>
             </div>
-            <span id="dlPercentBadge" style="font-size: 12.5px; font-weight: 700; color: var(--accent); font-family: var(--font-mono, monospace);">0%</span>
+            <span id="dlPercentBadge" style="font-size: 13px; font-weight: 700; color: var(--accent); font-family: var(--font-mono, monospace);">0%</span>
           </div>
 
-          <!-- Glowing Smooth Progress Bar -->
+          <!-- Glowing Progress Bar -->
           <div style="height: 10px; width: 100%; background: rgba(255, 255, 255, 0.08); border-radius: 5px; overflow: hidden; position: relative;">
             <div id="dlProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0284c7, #38bdf8); border-radius: 5px; transition: width 0.1s linear; box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);"></div>
           </div>
@@ -2295,32 +2360,23 @@
         <div id="updateReadyCard" style="display: none; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 8px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3);">
           <div style="display: flex; align-items: center; gap: 8px; color: #22c55e; font-weight: 700; font-size: 13px;">
             <span>✓</span>
-            <span>Update Download Complete!</span>
+            <span>اكتمل تنزيل التحديث بنجاح!</span>
           </div>
           <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5;">
-            The installer is verified and ready on disk. Click <strong>Install & Upgrade</strong> to launch setup and update automatically.
+            ملف التثبيت جاهز على الجهاز. انقر على <strong>تثبيت التحديث والترقية الآن</strong> لتحديث البرنامج فوراً.
           </div>
         </div>
-
-        <!-- Notice Message -->
-        <div id="updateActionMsg" style="font-size: 11px; color: var(--text-dim); text-align: center;"></div>
       </div>
 
-      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border-color); background: var(--bg-panel);">
-        <span style="font-size: 10.5px; color: var(--text-dim);">Repository: <strong style="color: var(--text-muted);">aljupcom/90FTP</strong></span>
-        <div style="display: flex; gap: 8px;">
-          <button type="button" class="btn btn-secondary" onclick="checkForUpdates(true)" id="btnCheckAgain" style="display: none; padding: 4px 12px;">Check Again</button>
-          <button type="button" class="btn btn-primary" onclick="startInAppDownload()" id="btnStartDownload" style="display: none; padding: 5px 16px; font-weight: 600; gap: 6px;">
-            ⬇️ Download & Install Update
-          </button>
-          <button type="button" class="btn btn-primary" onclick="launchDownloadedInstaller()" id="btnLaunchInstaller" style="display: none; padding: 5px 16px; font-weight: 600; background: #16a34a; border-color: #22c55e; gap: 6px;">
-            🚀 Install & Upgrade Now
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="openDownloadedFolder()" id="btnOpenFolder" style="display: none; padding: 4px 12px;">
-            📁 Open Folder
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()" id="btnCloseUpdate" style="padding: 4px 16px;">Close</button>
-        </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border-color); background: var(--bg-panel);">
+        <button type="button" class="btn btn-secondary" onclick="checkForUpdates(true)" id="btnCheckAgain" style="display: none; padding: 4px 14px;">التحقق مجدداً</button>
+        <button type="button" class="btn btn-primary" onclick="startInAppDownload()" id="btnStartDownload" style="display: none; padding: 5px 18px; font-weight: 600; gap: 6px;">
+          ⬇️ تنزيل وتثبيت التحديث
+        </button>
+        <button type="button" class="btn btn-primary" onclick="launchDownloadedInstaller()" id="btnLaunchInstaller" style="display: none; padding: 5px 18px; font-weight: 600; background: #16a34a; border-color: #22c55e; gap: 6px;">
+          🚀 تثبيت التحديث والترقية الآن
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()" id="btnCloseUpdate" style="padding: 4px 16px;">إغلاق</button>
       </div>
     </div>
   </div>
@@ -2391,7 +2447,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.6';
+    let APP_CURRENT_VERSION = '0.0.0.7';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -2495,11 +2551,17 @@
     // Logging (Supports bilingual output with Arabic/English)
     function addLog(msg, type = 'info') {
       const body = document.getElementById('logBody');
-      const time = new Date().toLocaleTimeString();
+      if (!body) return;
+      const timeStr = (appOptions && appOptions.logTimestamps === false) ? '' : '<span class="log-time">[' + new Date().toLocaleTimeString() + ']</span> ';
       const div = document.createElement('div');
       div.className = 'log-line';
-      div.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-msg ${type}">${escapeHtml(msg)}</span>`;
+      div.innerHTML = timeStr + '<span class="log-msg ' + type + '">' + escapeHtml(msg) + '</span>';
       body.appendChild(div);
+
+      const maxLines = (appOptions && appOptions.maxLogLines) || 500;
+      while (body.children.length > maxLines) {
+        body.removeChild(body.firstChild);
+      }
       body.scrollTop = body.scrollHeight;
     }
 
@@ -2992,7 +3054,11 @@
       if (item.is_dir) {
         await navigateLocal(item.path);
       } else {
-        openLocalFileInEditor(item.path);
+        if (appOptions && appOptions.dblLocal === 'transfer') {
+          uploadFileDirect(item.path, item.name);
+        } else {
+          openLocalFileInEditor(item.path);
+        }
       }
     }
 
@@ -3099,7 +3165,11 @@
       if (item.is_dir) {
         await navigateRemote(item.path);
       } else {
-        openRemoteFileInEditor(item.path);
+        if (appOptions && appOptions.dblRemote === 'transfer') {
+          downloadFileDirect(item.path, item.name);
+        } else {
+          openRemoteFileInEditor(item.path);
+        }
       }
     }
 
@@ -3288,48 +3358,124 @@
     }
 
     // Transfers & Drag-Drop Helpers
+    function disconnect() {
+      handleDisconnect();
+    }
+
     async function uploadFileDirect(localPath, fileName) {
       if (!isConnected) {
         alert('Please connect to a server first');
         return;
       }
 
+      // File collision check
+      if (appOptions && appOptions.fileCollision === 'prompt') {
+        const existing = remoteFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
+        if (existing && !confirm("File '" + fileName + "' already exists on remote server. Overwrite it?")) {
+          addLog("Upload cancelled by user: " + fileName, 'info');
+          return;
+        }
+      } else if (appOptions && appOptions.fileCollision === 'skip') {
+        const existing = remoteFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
+        if (existing && existing.size === selectedLocalFile?.size) {
+          addLog("Skipped upload (file already exists with matching size): " + fileName, 'info');
+          return;
+        }
+      }
+
       const remoteDest = currentRemotePath.endsWith('/') 
         ? currentRemotePath + fileName 
         : currentRemotePath + '/' + fileName;
 
-      addLog(`Uploading '${fileName}' to ${remoteDest}...`, 'cmd');
+      addLog("Uploading '" + fileName + "' to " + remoteDest + "...", 'cmd');
+      const tx = addTransferItem('upload', fileName, localPath, remoteDest, 'Processing...');
+
+      let simPercent = 20;
+      const progressTimer = setInterval(() => {
+        if (simPercent < 85) {
+          simPercent += 15;
+          updateTransferItem(tx.id, { percent: simPercent });
+        }
+      }, 250);
 
       try {
         const res = await sendRust('upload', {
           local_path: localPath,
           remote_path: remoteDest,
         });
+        clearInterval(progressTimer);
+        const formattedSize = formatBytes(res.bytes);
+        updateTransferItem(tx.id, { 
+          percent: 100, 
+          status: 'completed', 
+          size: formattedSize 
+        });
         renderRemoteFiles(res.files || []);
-        addLog(`Upload completed: ${fileName} (${formatBytes(res.bytes)})`, 'success');
+        addLog("Upload completed: " + fileName + " (" + formattedSize + ")", 'success');
       } catch (err) {
-        addLog(`Upload failed: ${err.message}`, 'error');
-        alert('Upload Error:\n' + err.message);
+        clearInterval(progressTimer);
+        updateTransferItem(tx.id, { 
+          status: 'failed', 
+          error: err.message || err 
+        });
+        addLog("Upload failed: " + (err.message || err), 'error');
+        alert("Upload Error:\n" + (err.message || err));
       }
     }
 
     async function downloadFileDirect(remotePath, fileName) {
+      // File collision check
+      if (appOptions && appOptions.fileCollision === 'prompt') {
+        const existing = localFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
+        if (existing && !confirm("File '" + fileName + "' already exists locally. Overwrite it?")) {
+          addLog("Download cancelled by user: " + fileName, 'info');
+          return;
+        }
+      } else if (appOptions && appOptions.fileCollision === 'skip') {
+        const existing = localFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
+        if (existing && existing.size === selectedRemoteFile?.size) {
+          addLog("Skipped download (file already exists with matching size): " + fileName, 'info');
+          return;
+        }
+      }
+
       const localDest = currentLocalPath.endsWith('\\') 
         ? currentLocalPath + fileName 
         : currentLocalPath + '\\' + fileName;
 
-      addLog(`Downloading '${fileName}' to ${localDest}...`, 'cmd');
+      addLog("Downloading '" + fileName + "' to " + localDest + "...", 'cmd');
+      const tx = addTransferItem('download', fileName, remotePath, localDest, 'Processing...');
+
+      let simPercent = 20;
+      const progressTimer = setInterval(() => {
+        if (simPercent < 85) {
+          simPercent += 15;
+          updateTransferItem(tx.id, { percent: simPercent });
+        }
+      }, 250);
 
       try {
         const res = await sendRust('download', {
           remote_path: remotePath,
           local_path: localDest,
         });
+        clearInterval(progressTimer);
+        const formattedSize = formatBytes(res.bytes);
+        updateTransferItem(tx.id, { 
+          percent: 100, 
+          status: 'completed', 
+          size: formattedSize 
+        });
         refreshLocal();
-        addLog(`Download completed: ${fileName} (${formatBytes(res.bytes)})`, 'success');
+        addLog("Download completed: " + fileName + " (" + formattedSize + ")", 'success');
       } catch (err) {
-        addLog(`Download failed: ${err.message}`, 'error');
-        alert('Download Error:\n' + err.message);
+        clearInterval(progressTimer);
+        updateTransferItem(tx.id, { 
+          status: 'failed', 
+          error: err.message || err 
+        });
+        addLog("Download failed: " + (err.message || err), 'error');
+        alert("Download Error:\n" + (err.message || err));
       }
     }
 
@@ -4216,6 +4362,164 @@
 
     let lastLogHeight = 160;
 
+    // Dual-Tab Bottom Panel Management (Transfers & Activity Log)
+    let activeBottomTab = 'transfers';
+    let transferQueue = [];
+    let transferSeq = 0;
+
+    function switchBottomTab(tab, event) {
+      if (event) {
+        event.stopPropagation();
+      }
+      activeBottomTab = tab;
+      const isTransfers = tab === 'transfers';
+      
+      const tabTx = document.getElementById('tabTransfers');
+      const tabLog = document.getElementById('tabActivityLog');
+      const bodyTx = document.getElementById('transfersBodyContainer');
+      const bodyLog = document.getElementById('logBodyContainer');
+      const actTx = document.getElementById('transfersActions');
+      const actLog = document.getElementById('logActions');
+
+      if (tabTx) tabTx.classList.toggle('active', isTransfers);
+      if (tabLog) tabLog.classList.toggle('active', !isTransfers);
+      if (bodyTx) bodyTx.classList.toggle('active', isTransfers);
+      if (bodyLog) bodyLog.classList.toggle('active', !isTransfers);
+      if (actTx) actTx.style.display = isTransfers ? 'flex' : 'none';
+      if (actLog) actLog.style.display = !isTransfers ? 'flex' : 'none';
+
+      // If panel is collapsed, expand it when user clicks tab
+      const panel = document.getElementById('logPanel');
+      if (panel && panel.classList.contains('collapsed')) {
+        toggleLogPanel();
+      }
+    }
+
+    function handleLogHeaderClick(e) {
+      if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+      toggleLogPanel();
+    }
+
+    function addTransferItem(type, fileName, src, dest, sizeStr) {
+      transferSeq++;
+      const item = {
+        id: 'tx_' + transferSeq,
+        type: type, // 'upload' or 'download'
+        name: fileName,
+        src: src,
+        dest: dest,
+        size: sizeStr || '...',
+        percent: 15,
+        status: 'running', // 'running', 'completed', 'failed'
+        error: null,
+        startedAt: Date.now()
+      };
+      transferQueue.unshift(item);
+      renderTransfersTable();
+      updateTransfersBadge();
+
+      if (appOptions && appOptions.autoSwitchTransfers !== false) {
+        switchBottomTab('transfers');
+      }
+      return item;
+    }
+
+    function updateTransferItem(id, updates) {
+      const item = transferQueue.find(t => t.id === id);
+      if (!item) return;
+      Object.assign(item, updates);
+      renderTransfersTable();
+      updateTransfersBadge();
+
+      if (item.status === 'completed' && appOptions && appOptions.delFinished) {
+        setTimeout(() => {
+          const idx = transferQueue.findIndex(t => t.id === id);
+          if (idx !== -1 && transferQueue[idx].status === 'completed') {
+            transferQueue.splice(idx, 1);
+            renderTransfersTable();
+            updateTransfersBadge();
+          }
+        }, 4000);
+      }
+    }
+
+    function clearCompletedTransfers() {
+      transferQueue = transferQueue.filter(t => t.status === 'running');
+      renderTransfersTable();
+      updateTransfersBadge();
+    }
+
+    function updateTransfersBadge() {
+      const badge = document.getElementById('transfersBadge');
+      const summary = document.getElementById('transfersSummaryText');
+      const activeCount = transferQueue.filter(t => t.status === 'running').length;
+      const completedCount = transferQueue.filter(t => t.status === 'completed').length;
+      const failedCount = transferQueue.filter(t => t.status === 'failed').length;
+
+      if (badge) {
+        badge.textContent = activeCount > 0 ? activeCount : transferQueue.length;
+      }
+      if (summary) {
+        if (activeCount > 0) {
+          summary.innerHTML = '<span style="color: var(--accent); font-weight: 600;">⚡ ' + activeCount + ' transferring...</span>';
+        } else if (transferQueue.length > 0) {
+          summary.textContent = completedCount + ' completed' + (failedCount > 0 ? ', ' + failedCount + ' failed' : '');
+        } else {
+          summary.textContent = 'Queue idle';
+        }
+      }
+    }
+
+    function renderTransfersTable() {
+      const tbody = document.getElementById('transfersList');
+      if (!tbody) return;
+      if (transferQueue.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 22px 10px;">No active or queued file transfers</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = transferQueue.map((item, idx) => {
+        const isUpload = item.type === 'upload';
+        const typeBadge = isUpload 
+          ? '<span style="color: #38bdf8; font-weight: 700; font-size: 11px;">▲ UP</span>' 
+          : '<span style="color: #4ade80; font-weight: 700; font-size: 11px;">▼ DOWN</span>';
+
+        let statusBadge = '';
+        let barClass = '';
+        if (item.status === 'running') {
+          statusBadge = '<span class="badge-status running"><span class="spin-icon">↻</span> ' + item.percent + '%</span>';
+        } else if (item.status === 'completed') {
+          statusBadge = '<span class="badge-status completed">✓ Done</span>';
+          barClass = 'completed';
+        } else {
+          statusBadge = '<span class="badge-status failed" title="' + escapeHtml(item.error || 'Transfer failed') + '">✕ Failed</span>';
+          barClass = 'failed';
+        }
+
+        return '<tr>' +
+          '<td style="text-align: center; color: var(--text-dim); font-size: 11px;">' + (idx + 1) + '</td>' +
+          '<td>' + typeBadge + '</td>' +
+          '<td style="font-weight: 600; color: var(--text-main); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(item.name) + '">' +
+            (isUpload ? '📄 ' : '📥 ') + escapeHtml(item.name) +
+          '</td>' +
+          '<td style="color: var(--text-dim); font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(item.src) + ' ➔ ' + escapeHtml(item.dest) + '">' +
+            escapeHtml(item.src) + ' &rarr; ' + escapeHtml(item.dest) +
+          '</td>' +
+          '<td style="text-align: right; font-family: var(--font-mono); color: var(--text-muted); font-size: 11px;">' + escapeHtml(item.size) + '</td>' +
+          '<td>' +
+            '<div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);">' +
+              '<span>' + (item.status === 'running' ? item.percent + '%' : (item.status === 'completed' ? '100%' : 'Error')) + '</span>' +
+              '<span>' + (item.status === 'running' ? 'Active' : '') + '</span>' +
+            '</div>' +
+            '<div class="transfer-progress-track">' +
+              '<div class="transfer-progress-fill ' + barClass + '" style="width: ' + item.percent + '%;"></div>' +
+            '</div>' +
+          '</td>' +
+          '<td style="text-align: center;">' + statusBadge + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
     function toggleLogPanel() {
       const panel = document.getElementById('logPanel');
       const iconSpan = document.getElementById('logToggleIcon');
@@ -4515,34 +4819,20 @@
       }
     }
 
-    // Options & Preferences Management
+    // Options & Preferences Management (100% Functional & Persistent)
     const defaultOptions = {
-      delFinished: true,
-      naturalSort: true,
       showHidden: true,
-      showWelcome: false,
       showFullPath: true,
-      useHomePath: true,
+      autoCheckUpdates: true,
       confirmDisconnect: true,
       dblLocal: 'edit',
       dblRemote: 'edit',
-      rightClickMenu: 'custom',
-      dragDropAction: 'direct',
-      startupLocal: '',
-      startupRemote: 'home',
-      openSiteManagerOnLaunch: false,
-      concurrentTransfers: 2,
+      delFinished: false,
+      autoSwitchTransfers: true,
       fileCollision: 'overwrite',
-      bufferSize: '64',
-      maxLogLines: 500,
-      logAutoScroll: true,
-      logTimestamps: true,
-      strictHostKey: true,
-      encryptPasswords: true,
       wipeOnDisconnect: false,
-      cipherPref: 'auto',
-      keepAlive: '30',
-      socketTimeout: '15'
+      maxLogLines: 500,
+      logTimestamps: true
     };
 
     let appOptions = Object.assign({}, defaultOptions);
@@ -4571,38 +4861,25 @@
         if (el && val !== undefined) el.value = val;
       };
 
-      setCheck('optDelFinished', appOptions.delFinished);
-      setCheck('optNaturalSort', appOptions.naturalSort);
+      // Tab 1: General
       setCheck('optShowHidden', appOptions.showHidden);
-      setCheck('optShowWelcome', appOptions.showWelcome);
       setCheck('optShowFullPath', appOptions.showFullPath);
-      setCheck('optUseHomePath', appOptions.useHomePath);
+      setCheck('optAutoCheckUpdates', appOptions.autoCheckUpdates);
       setCheck('optConfirmDisconnect', appOptions.confirmDisconnect);
-
       setVal('optDblLocal', appOptions.dblLocal);
       setVal('optDblRemote', appOptions.dblRemote);
-      setVal('optRightClickMenu', appOptions.rightClickMenu);
-      setVal('optDragDropAction', appOptions.dragDropAction);
 
-      setVal('optStartupLocal', appOptions.startupLocal);
-      setVal('optStartupRemote', appOptions.startupRemote);
-      setCheck('optOpenSiteManagerOnLaunch', appOptions.openSiteManagerOnLaunch);
-
-      setVal('optConcurrentTransfers', appOptions.concurrentTransfers);
+      // Tab 2: Transfers
+      setCheck('optDelFinished', appOptions.delFinished);
+      setCheck('optAutoSwitchTransfers', appOptions.autoSwitchTransfers);
       setVal('optFileCollision', appOptions.fileCollision);
-      setVal('optBufferSize', appOptions.bufferSize);
 
-      setVal('optMaxLogLines', appOptions.maxLogLines);
-      setCheck('optLogAutoScroll', appOptions.logAutoScroll);
-      setCheck('optLogTimestamps', appOptions.logTimestamps);
-
-      setCheck('optStrictHostKey', appOptions.strictHostKey);
-      setCheck('optEncryptPasswords', appOptions.encryptPasswords);
+      // Tab 3: Security & Storage
       setCheck('optWipeOnDisconnect', appOptions.wipeOnDisconnect);
-      setVal('optCipherPref', appOptions.cipherPref);
 
-      setVal('optKeepAlive', appOptions.keepAlive);
-      setVal('optSocketTimeout', appOptions.socketTimeout);
+      // Tab 4: Interface & Console
+      setVal('optMaxLogLines', appOptions.maxLogLines);
+      setCheck('optLogTimestamps', appOptions.logTimestamps);
     }
 
     function openOptionsModal(tab) {
@@ -4621,7 +4898,7 @@
     }
 
     function switchOptionsTab(tabName) {
-      const tabs = ['general', 'startup', 'transfer', 'log', 'security', 'cache', 'advanced'];
+      const tabs = ['general', 'transfer', 'security', 'interface'];
       tabs.forEach(t => {
         const btn = document.getElementById('tabOpt' + t.charAt(0).toUpperCase() + t.slice(1));
         const pane = document.getElementById('paneOpt' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -4641,32 +4918,18 @@
       };
 
       appOptions = {
-        delFinished: getCheck('optDelFinished', true),
-        naturalSort: getCheck('optNaturalSort', true),
         showHidden: getCheck('optShowHidden', true),
-        showWelcome: getCheck('optShowWelcome', false),
         showFullPath: getCheck('optShowFullPath', true),
-        useHomePath: getCheck('optUseHomePath', true),
+        autoCheckUpdates: getCheck('optAutoCheckUpdates', true),
         confirmDisconnect: getCheck('optConfirmDisconnect', true),
         dblLocal: getVal('optDblLocal', 'edit'),
         dblRemote: getVal('optDblRemote', 'edit'),
-        rightClickMenu: getVal('optRightClickMenu', 'custom'),
-        dragDropAction: getVal('optDragDropAction', 'direct'),
-        startupLocal: getVal('optStartupLocal', ''),
-        startupRemote: getVal('optStartupRemote', 'home'),
-        openSiteManagerOnLaunch: getCheck('optOpenSiteManagerOnLaunch', false),
-        concurrentTransfers: parseInt(getVal('optConcurrentTransfers', '2'), 10) || 2,
+        delFinished: getCheck('optDelFinished', false),
+        autoSwitchTransfers: getCheck('optAutoSwitchTransfers', true),
         fileCollision: getVal('optFileCollision', 'overwrite'),
-        bufferSize: getVal('optBufferSize', '64'),
-        maxLogLines: parseInt(getVal('optMaxLogLines', '500'), 10) || 500,
-        logAutoScroll: getCheck('optLogAutoScroll', true),
-        logTimestamps: getCheck('optLogTimestamps', true),
-        strictHostKey: getCheck('optStrictHostKey', true),
-        encryptPasswords: getCheck('optEncryptPasswords', true),
         wipeOnDisconnect: getCheck('optWipeOnDisconnect', false),
-        cipherPref: getVal('optCipherPref', 'auto'),
-        keepAlive: getVal('optKeepAlive', '30'),
-        socketTimeout: getVal('optSocketTimeout', '15')
+        maxLogLines: parseInt(getVal('optMaxLogLines', '500'), 10) || 500,
+        logTimestamps: getCheck('optLogTimestamps', true)
       };
 
       try {
@@ -4678,7 +4941,7 @@
       if (menuCheck) menuCheck.textContent = showHiddenFilesState ? '✓' : ' ';
 
       if (showNotice) {
-        addLog('Options and preferences saved successfully', 'success');
+        addLog('Preferences saved successfully', 'success');
       }
     }
 
@@ -4943,6 +5206,9 @@
     }
 
     async function checkUpdatesSilentlyOnStartup() {
+      if (appOptions && appOptions.autoCheckUpdates === false) {
+        return; // User disabled auto updates check in Options
+      }
       try {
         const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO_PATH + '/releases/latest', {
           headers: { 'Accept': 'application/vnd.github.v3+json' }
@@ -4963,32 +5229,49 @@
       }
     }
 
+    function formatChangelogHtml(rawText) {
+      if (!rawText || !rawText.trim()) {
+        return '<div style="color: var(--text-dim); text-align: center; padding: 12px;">سجل التغييرات متاح في صفحة الإصدار الرسمي.</div>';
+      }
+      const lines = rawText.split('\n');
+      let out = '';
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          out += '<div style="height: 6px;"></div>';
+        } else if (trimmed.startsWith('### ') || trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
+          const heading = trimmed.replace(/^#+\s*/, '');
+          out += '<div style="font-weight: 700; color: var(--accent); margin-top: 10px; margin-bottom: 5px; font-size: 13px; display: flex; align-items: center; gap: 5px;"><span>✦</span><span>' + escapeHtml(heading) + '</span></div>';
+        } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('+ ')) {
+          const bullet = trimmed.substring(2);
+          out += '<div style="display: flex; gap: 7px; margin-bottom: 5px; align-items: baseline;"><span style="color: #38bdf8; font-size: 11px;">●</span><span style="color: var(--text-main); font-size: 12px; line-height: 1.5;">' + escapeHtml(bullet) + '</span></div>';
+        } else {
+          out += '<div style="margin-bottom: 5px; color: var(--text-muted); font-size: 12px; line-height: 1.5;">' + escapeHtml(trimmed) + '</div>';
+        }
+      });
+      return out;
+    }
+
     async function checkForUpdates(manualTrigger = false) {
       const iconContainer = document.getElementById('updateIconContainer');
       const headline = document.getElementById('updateHeadline');
       const subtext = document.getElementById('updateSubtext');
       const detailsBox = document.getElementById('updateDetailsBox');
-      const actionContainer = document.getElementById('updateActionContainer');
       const dlCard = document.getElementById('updateDownloadCard');
       const readyCard = document.getElementById('updateReadyCard');
       const btnCheckAgain = document.getElementById('btnCheckAgain');
       const btnStart = document.getElementById('btnStartDownload');
       const btnLaunch = document.getElementById('btnLaunchInstaller');
-      const btnOpen = document.getElementById('btnOpenFolder');
-      const actionMsg = document.getElementById('updateActionMsg');
 
       if (iconContainer) iconContainer.innerHTML = '<span class="spin-icon">↻</span>';
-      if (headline) headline.textContent = 'Checking for updates...';
-      if (subtext) subtext.textContent = 'Connecting to GitHub releases for ' + GITHUB_REPO_PATH + '...';
+      if (headline) headline.textContent = 'جاري التحقق من وجود تحديثات...';
+      if (subtext) subtext.textContent = 'يرجى الانتظار ثوانٍ معدودة...';
       if (detailsBox) detailsBox.style.display = 'none';
-      if (actionContainer) actionContainer.style.display = 'none';
       if (dlCard) dlCard.style.display = 'none';
       if (readyCard) readyCard.style.display = 'none';
       if (btnCheckAgain) btnCheckAgain.style.display = 'none';
       if (btnStart) btnStart.style.display = 'none';
       if (btnLaunch) btnLaunch.style.display = 'none';
-      if (btnOpen) btnOpen.style.display = 'none';
-      if (actionMsg) actionMsg.textContent = '';
 
       try {
         const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO_PATH + '/releases/latest', {
@@ -4999,15 +5282,15 @@
 
         if (resp.status === 404) {
           if (iconContainer) iconContainer.innerHTML = '✅';
-          if (headline) headline.textContent = 'You are running the latest version';
-          if (subtext) subtext.textContent = '90FTP v' + APP_CURRENT_VERSION + ' is up to date. No remote release has been tagged on GitHub yet.';
+          if (headline) headline.textContent = 'أنت تستخدم أحدث إصدار';
+          if (subtext) subtext.textContent = 'برنامج 90FTP محدث للإصدار v' + APP_CURRENT_VERSION + ' بالكامل.';
           if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
-          addLog('Update check: 90FTP v' + APP_CURRENT_VERSION + ' is up to date (no remote release found).', 'info');
+          addLog('Update check: 90FTP v' + APP_CURRENT_VERSION + ' is up to date.', 'info');
           return;
         }
 
         if (!resp.ok) {
-          throw new Error('GitHub API responded with HTTP ' + resp.status + ' (' + resp.statusText + ')');
+          throw new Error('HTTP ' + resp.status + ' (' + resp.statusText + ')');
         }
 
         const data = await resp.json();
@@ -5018,18 +5301,16 @@
         if (cmp > 0) {
           // Newer version found
           if (iconContainer) iconContainer.innerHTML = '🚀';
-          if (headline) headline.textContent = 'New Version Available: ' + (latestTag.startsWith('v') ? latestTag : 'v' + latestTag);
-          if (subtext) subtext.textContent = 'A new release is available on GitHub. Current: v' + APP_CURRENT_VERSION + ' ➔ Latest: ' + latestTag;
+          if (headline) headline.textContent = 'إصدار جديد متاح: ' + (latestTag.startsWith('v') ? latestTag : 'v' + latestTag);
+          if (subtext) subtext.innerHTML = 'الإصدار الحالي: <strong>v' + APP_CURRENT_VERSION + '</strong> &nbsp;➔&nbsp; الإصدار الجديد: <strong style="color: #22c55e;">' + (latestTag.startsWith('v') ? latestTag : 'v' + latestTag) + '</strong>';
 
-          const titleElem = document.getElementById('updateReleaseTitle');
           const dateElem = document.getElementById('updateReleaseDate');
           const changelogElem = document.getElementById('updateChangelog');
-          if (titleElem) titleElem.textContent = data.name || ('Release ' + latestTag);
           if (dateElem && data.published_at) {
             dateElem.textContent = new Date(data.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
           }
           if (changelogElem) {
-            changelogElem.textContent = data.body || 'No release notes provided for this release.';
+            changelogElem.innerHTML = formatChangelogHtml(data.body);
           }
           if (detailsBox) detailsBox.style.display = 'flex';
 
@@ -5046,26 +5327,20 @@
           currentDownloadFilename = assetName;
           currentLatestVersion = cleanLatest;
 
-          const assetElem = document.getElementById('updateAssetName');
-          if (assetElem) assetElem.textContent = assetName;
-          if (actionContainer) actionContainer.style.display = 'block';
-
           if (btnStart) btnStart.style.display = 'inline-flex';
-          if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
-
-          addLog('Update available: New version ' + latestTag + ' ready to download from GitHub.', 'success');
+          addLog('New update available: ' + latestTag, 'success');
         } else {
           // Up to date
           if (iconContainer) iconContainer.innerHTML = '✅';
-          if (headline) headline.textContent = '90FTP is Up to Date';
-          if (subtext) subtext.textContent = 'You have the latest version installed (v' + APP_CURRENT_VERSION + ').';
+          if (headline) headline.textContent = 'أنت تستخدم أحدث إصدار';
+          if (subtext) subtext.textContent = 'برنامج 90FTP محدث للإصدار v' + APP_CURRENT_VERSION + ' بالكامل.';
           if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
           addLog('Update check: 90FTP v' + APP_CURRENT_VERSION + ' is up to date.', 'info');
         }
       } catch (err) {
         if (iconContainer) iconContainer.innerHTML = '⚠️';
-        if (headline) headline.textContent = 'Update Check Failed';
-        if (subtext) subtext.textContent = 'Could not retrieve update information: ' + (err.message || err);
+        if (headline) headline.textContent = 'تعذر التحقق من التحديثات';
+        if (subtext) subtext.textContent = 'يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.';
         if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
         addLog('Update check failed: ' + (err.message || err), 'warning');
       }
