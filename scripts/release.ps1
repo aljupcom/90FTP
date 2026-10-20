@@ -96,7 +96,7 @@ $payloadObj = @{
     name = "90FTP v$Version Dev - $Message"
     body = $releaseNotes
     draft = $false
-    prerelease = $true
+    prerelease = $false
 }
 
 $payloadJson = $payloadObj | ConvertTo-Json

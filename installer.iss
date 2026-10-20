@@ -3,7 +3,7 @@
 
 #define MyAppName "90FTP"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.0.1"
+  #define MyAppVersion "0.0.2"
 #endif
 #define MyAppPublisher "aljailane"
 #define MyAppURL "https://github.com/aljupcom/90FTP"
@@ -13,6 +13,11 @@
 AppId={{E6F7A9C0-3D5B-4C91-8D92-7E1A2B3C4D5E}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} v{#MyAppVersion}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoProductName={#MyAppName}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoCopyright=Copyright (C) 2026 {#MyAppPublisher}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
