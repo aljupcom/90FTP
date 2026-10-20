@@ -90,17 +90,20 @@ $Message
 - Military-grade AES-256-GCM encrypted vault storage.
 "@
 
-$payload = @{
+$payloadObj = @{
     tag_name = "v$Version"
     target_commitish = "main"
-    name = "90FTP v$Version Pro - $Message"
+    name = "90FTP v$Version Dev - $Message"
     body = $releaseNotes
     draft = $false
-    prerelease = $false
-} | ConvertTo-Json
+    prerelease = $true
+}
+
+$payloadJson = $payloadObj | ConvertTo-Json
+$payloadBytes = [System.Text.Encoding]::UTF8.GetBytes($payloadJson)
 
 try {
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases" -Method Post -Headers $headers -Body $payload -ContentType "application/json"
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases" -Method Post -Headers $headers -Body $payloadBytes -ContentType "application/json; charset=utf-8"
     $releaseId = $release.id
     Write-Host "Release created: ID $releaseId" -ForegroundColor Green
 
