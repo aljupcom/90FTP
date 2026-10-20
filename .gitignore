@@ -1,0 +1,17 @@
+# Rust build artifacts
+/target
+/dist
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+WinSCP-*.exe
+
+# Private keys & certificates (sensitive)
+*.key
+*.pfx
+
+# Temporary extraction files
+/extracted_resources

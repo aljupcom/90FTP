@@ -1,0 +1,4681 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <title>90FTP - Modern Site Manager</title>
+  <style>
+    :root, [data-theme="dark"] {
+      --bg-app: #18181b;
+      --bg-panel: #202024;
+      --bg-card: #27272b;
+      --bg-card-hover: #323238;
+      --bg-header: #1c1c1f;
+      --bg-input: #141416;
+      --border-color: #333338;
+      --border-focus: #0078d4;
+      --accent: #0078d4;
+      --accent-glow: rgba(0, 120, 212, 0.25);
+      --accent-hover: #106ebe;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --text-main: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+      --folder-color: #f59e0b;
+      --table-th-bg: #202024;
+      --table-tr-even: rgba(255, 255, 255, 0.015);
+      --table-tr-hover: #27272d;
+      --log-bg: #111113;
+      --log-text: #f4f4f5;
+      --scrollbar-thumb: #3f3f46;
+      --scrollbar-thumb-hover: #52525b;
+      --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace;
+    }
+
+    [data-theme="light"] {
+      --bg-app: #f1f3f6;
+      --bg-panel: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f1f5f9;
+      --bg-header: #f8fafc;
+      --bg-input: #ffffff;
+      --border-color: #d8dde6;
+      --border-focus: #0078d4;
+      --accent: #0078d4;
+      --accent-glow: rgba(0, 120, 212, 0.15);
+      --accent-hover: #106ebe;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #94a3b8;
+      --folder-color: #d97706;
+      --table-th-bg: #f1f5f9;
+      --table-tr-even: #fbfcfe;
+      --table-tr-hover: #edf2f7;
+      --log-bg: #1e1e24;
+      --log-text: #e2e8f0;
+      --scrollbar-thumb: #cbd5e1;
+      --scrollbar-thumb-hover: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    
+    body {
+      background: var(--bg-app);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-size: 12.5px;
+      direction: ltr;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Native Desktop Scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-panel); }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+    /* SVG Icon utility */
+    .icon {
+      width: 15px;
+      height: 15px;
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: middle;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .icon-sm { width: 13px; height: 13px; }
+    .icon-lg { width: 18px; height: 18px; }
+
+    /* Top Application Header */
+    header {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      z-index: 50;
+      flex-shrink: 0;
+    }
+
+    .top-menu-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 14px;
+      border-bottom: 1px solid var(--border-color);
+      height: 38px;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-logo-img {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .brand-text {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #ffffff;
+    }
+    .brand-badge {
+      font-size: 10.5px;
+      font-weight: 600;
+      background: rgba(0, 120, 212, 0.12);
+      border: 1px solid rgba(0, 120, 212, 0.35);
+      color: #60a5fa;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.3px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-weight: 500;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      height: 26px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+    .status-dot.connected { background: var(--success); box-shadow: 0 0 8px rgba(34, 197, 94, 0.7); }
+    .status-dot.connecting { background: var(--warning); animation: pulse 1s infinite alternate; }
+
+    @keyframes pulse {
+      from { opacity: 0.3; }
+      to { opacity: 1; }
+    }
+
+    /* Quick Connect Bar */
+    .quick-connect-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      background: var(--bg-panel);
+      height: 36px;
+    }
+
+    .qc-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .qc-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    input, select, textarea {
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      height: 26px;
+      transition: border-color 0.1s;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 1px var(--border-focus);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 0 11px;
+      height: 26px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.1s;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent);
+      border-color: #006bbd;
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary {
+      background: var(--bg-card);
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+    .btn-secondary:hover { background: var(--bg-card-hover); border-color: #4a4a52; }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+
+    .btn-tool {
+      width: 25px;
+      height: 25px;
+      padding: 0;
+      border-radius: 3px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s;
+    }
+    .btn-tool:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+
+    /* Main Workspace Layout (Resizable Split Panes) */
+    .workspace-area {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+    }
+
+    .file-pane-wrapper {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-panel);
+      overflow: hidden;
+      min-width: 200px;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .pane-toolbar {
+      padding: 5px 10px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .pane-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 24px;
+    }
+    .pane-heading {
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-main);
+    }
+
+    .path-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .path-input {
+      flex: 1;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      height: 25px;
+    }
+
+    /* Center Dual-Pane Divider with Drag Handle */
+    .gutter-vertical {
+      width: 5px;
+      background: var(--border-color);
+      cursor: col-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .gutter-vertical:hover, .gutter-vertical.dragging {
+      background: var(--accent);
+    }
+    .gutter-grip-dots {
+      width: 1px;
+      height: 24px;
+      background: var(--text-dim);
+    }
+
+    /* File Table Views (Desktop ListView) */
+    .table-container {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: var(--bg-app);
+      min-height: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    th {
+      background: var(--table-th-bg);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border-color);
+      border-right: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      height: 24px;
+    }
+    th:first-child, td:first-child {
+      padding-left: 18px !important;
+    }
+    th:last-child, td:last-child {
+      padding-right: 14px;
+      border-right: none;
+    }
+
+    td {
+      padding: 3px 8px;
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      height: 24px;
+    }
+
+    tr {
+      cursor: pointer;
+      transition: background 0.05s;
+    }
+    tr:nth-child(even) {
+      background: var(--table-tr-even);
+    }
+    tr:hover { background: var(--table-tr-hover); }
+    tr.selected {
+      background: #005a9e !important;
+      color: #ffffff !important;
+    }
+    tr.selected td {
+      color: #ffffff !important;
+    }
+    tr.selected .mono-cell {
+      color: #e4e4e7 !important;
+    }
+
+    .file-cell {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .file-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    .file-icon.folder { color: var(--folder-color); }
+    .file-icon.code { color: #38bdf8; }
+    .file-icon.image { color: #34d399; }
+    .file-icon.archive { color: #fb923c; }
+    .file-icon.config { color: #e879f9; }
+    .file-icon.doc { color: #94a3b8; }
+
+    .mono-cell {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    /* Bottom Resizable Log Console */
+    .gutter-horizontal {
+      height: 5px;
+      background: var(--bg-app);
+      border-top: 1px solid var(--border-color);
+      cursor: row-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    .gutter-horizontal:hover, .gutter-horizontal.dragging {
+      background: var(--accent);
+    }
+    .gutter-h-grip {
+      width: 24px;
+      height: 1px;
+      background: var(--text-dim);
+    }
+
+    .log-panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-panel);
+      height: 140px;
+      min-height: 30px;
+      max-height: 500px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .log-panel.collapsed {
+      height: 30px !important;
+    }
+
+    .log-header {
+      padding: 0 10px;
+      height: 30px;
+      background: var(--bg-header);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .log-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 10px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.5;
+      background: var(--log-bg);
+      color: var(--log-text);
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+
+    .log-line {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 1px;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+    .log-time {
+      color: var(--text-dim);
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      flex-shrink: 0;
+    }
+    .log-msg {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      word-break: break-all;
+    }
+    .log-msg.info { color: var(--text-main); }
+    .log-msg.success { color: var(--success); }
+    .log-msg.error { color: var(--danger); font-weight: 600; }
+    .log-msg.cmd { color: #38bdf8; }
+
+    /* Desktop Modal Dialogs */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(3px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-overlay.active { display: flex; }
+
+    .modal-content {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      width: 820px;
+      max-width: 92vw;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 13px;
+      background: var(--bg-header);
+    }
+
+    .modal-body {
+      padding: 14px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .modal-footer {
+      padding: 8px 14px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      background: var(--bg-header);
+    }
+
+    /* 90FTP Desktop-Style Site Manager Architecture */
+    .site-manager-layout {
+      display: flex;
+      gap: 12px;
+      height: 380px;
+    }
+
+    .site-sidebar {
+      width: 190px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-card);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .site-sidebar-header {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      font-size: 11px;
+      background: rgba(24, 34, 53, 0.5);
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .site-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .site-tree-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 12px;
+      color: var(--text-main);
+      transition: all 0.12s ease;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .site-tree-item:hover {
+      background: var(--bg-card-hover);
+    }
+    .site-tree-item.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .site-tree-item.active .site-tree-icon {
+      stroke: #fff;
+    }
+    .site-tree-item.new-site-entry {
+      color: var(--accent);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 4px;
+      padding-bottom: 7px;
+    }
+    .site-tree-item.new-site-entry.active {
+      color: #fff;
+      background: var(--accent);
+    }
+
+    .site-sidebar-footer {
+      padding: 6px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 6px;
+      background: rgba(15, 23, 42, 0.4);
+    }
+
+    .site-form-panel {
+      flex: 1;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-card);
+      padding: 10px 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .desktop-groupbox {
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      padding: 8px 10px 9px 10px;
+      background: rgba(15, 23, 42, 0.3);
+    }
+    .desktop-groupbox-legend {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .desktop-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 6px;
+      align-items: center;
+    }
+    .desktop-row:last-child {
+      margin-bottom: 0;
+    }
+    .desktop-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .desktop-field label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .desktop-field input, .desktop-field select {
+      padding: 4px 8px;
+      height: 29px;
+      font-size: 12px;
+    }
+
+    /* Small Authentication Tabs (SSH Key vs Password) */
+    .auth-tab-bar {
+      display: flex;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      padding: 2px;
+      gap: 3px;
+    }
+    .auth-tab-btn {
+      flex: 1;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all 0.15s;
+    }
+    .auth-tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* Code Editor Modal Textarea */
+    .editor-textarea {
+      width: 100%;
+      height: 500px;
+      background: #080c14;
+      border: 1px solid var(--border-color);
+      color: #f8fafc;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.6;
+      padding: 14px;
+      border-radius: 8px;
+      resize: none;
+      tab-size: 4;
+      user-select: text;
+    }
+
+    /* Drag and Drop Visual Feedback */
+    .pane.drag-target {
+      outline: 2px dashed var(--accent) !important;
+      outline-offset: -3px;
+      background-color: rgba(59, 130, 246, 0.05) !important;
+    }
+    tr.dragging {
+      opacity: 0.45;
+      background: var(--bg-hover) !important;
+    }
+
+    /* Elegant Connection Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(10, 15, 29, 0.78);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1200;
+      transition: opacity 0.2s ease;
+    }
+    .loading-overlay.active { display: flex; }
+    .loading-card {
+      background: #0f172a;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      border-radius: 14px;
+      padding: 32px 44px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      min-width: 330px;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 35px rgba(59, 130, 246, 0.25);
+      animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3.5px solid rgba(59, 130, 246, 0.2);
+      border-top-color: #38bdf8;
+      border-right-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .loading-title {
+      font-size: 15.5px;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    .loading-sub {
+      font-size: 12.5px;
+      color: #94a3b8;
+      max-width: 320px;
+      line-height: 1.45;
+    }
+
+    /* Loading Mini Live Status Stream */
+    .loading-log-box {
+      width: 100%;
+      background: #080c14;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      text-align: left;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      margin-top: 4px;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+    .loading-log-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #94a3b8;
+      transition: all 0.25s ease;
+    }
+    .loading-log-line.active {
+      color: #38bdf8;
+      font-weight: 600;
+    }
+    .loading-log-line.done {
+      color: #22c55e;
+    }
+    .loading-log-line.final-success {
+      color: #4ade80;
+      font-weight: 700;
+      font-size: 12.5px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.12);
+      margin-top: 3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: popIn 0.3s ease;
+    }
+    .spin-icon {
+      display: inline-block;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Custom Right-Click Context Menu */
+    .context-menu {
+      position: fixed;
+      display: none;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 9px;
+      box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      min-width: 230px;
+      z-index: 3000;
+      padding: 6px;
+      font-size: 13px;
+      color: var(--text-main);
+      animation: contextMenuPop 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+      user-select: none;
+    }
+    @keyframes contextMenuPop {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .context-menu.active {
+      display: block;
+    }
+    .context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+      color: #e2e8f0;
+      font-size: 12.5px;
+    }
+    .context-menu-item:hover {
+      background: var(--accent);
+      color: #ffffff;
+    }
+    .context-menu-item.danger:hover {
+      background: #ef4444;
+      color: #ffffff;
+    }
+    .context-menu-item .icon {
+      width: 15px;
+      height: 15px;
+      opacity: 0.85;
+      flex-shrink: 0;
+    }
+    .context-menu-item:hover .icon {
+      opacity: 1;
+    }
+    .context-menu-item .shortcut {
+      margin-left: auto;
+      font-size: 11px;
+      opacity: 0.55;
+      font-family: var(--font-mono);
+    }
+    .context-menu-separator {
+      height: 1px;
+      background: var(--border-color);
+      margin: 4px 6px;
+    }
+    .context-menu-header {
+      padding: 5px 12px 4px;
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Native Desktop Menubar & Dropdowns */
+    .desktop-menubar {
+      display: flex;
+      align-items: center;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 8px;
+      height: 25px;
+      font-size: 11.5px;
+      position: relative;
+      z-index: 60;
+    }
+
+    .menu-item {
+      position: relative;
+      padding: 3px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      color: var(--text-main);
+      user-select: none;
+      transition: background 0.1s;
+    }
+    .menu-item:hover, .menu-item.active {
+      background: var(--bg-card-hover);
+    }
+
+    .menu-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 220px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      padding: 4px 0;
+      display: none;
+      z-index: 100;
+    }
+    .menu-item.active .menu-dropdown {
+      display: block;
+    }
+
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: background 0.08s;
+    }
+    .dropdown-item:hover {
+      background: var(--accent);
+      color: #ffffff;
+    }
+    .dropdown-item:hover .menu-icon svg {
+      stroke: #ffffff;
+    }
+    .dropdown-item .menu-icon {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dropdown-item .shortcut {
+      margin-left: auto;
+      font-size: 10.5px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+    .dropdown-item:hover .shortcut {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .dropdown-separator {
+      height: 1px;
+      background: var(--border-color);
+      margin: 4px 0;
+    }
+
+    /* Options Tabs & Dialog Styling matching native desktop */
+    .options-tab-bar {
+      display: flex;
+      gap: 2px;
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 4px;
+      background: var(--bg-header);
+    }
+    .options-tab-btn {
+      padding: 6px 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: 4px 4px 0 0;
+      background: transparent;
+      cursor: pointer;
+      margin-bottom: -1px;
+      transition: all 0.1s;
+    }
+    .options-tab-btn:hover {
+      color: var(--text-main);
+      background: var(--bg-card-hover);
+    }
+    .options-tab-btn.active {
+      color: var(--accent);
+      background: var(--bg-panel);
+      border-color: var(--border-color);
+      border-bottom: 1px solid var(--bg-panel);
+    }
+
+    .options-pane {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px 6px;
+    }
+    .options-pane.active {
+      display: flex;
+    }
+
+    .options-groupbox {
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      padding: 10px 14px;
+      background: var(--bg-card);
+      position: relative;
+    }
+    .options-groupbox-legend {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .options-checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 7px;
+      font-size: 12px;
+      color: var(--text-main);
+      cursor: pointer;
+      user-select: none;
+    }
+    .options-checkbox-row:last-child {
+      margin-bottom: 0;
+    }
+    .options-checkbox-row input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+
+    .options-select-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .options-select-row select, .options-select-row input {
+      height: 26px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top App Navigation & 90FTP Brand Bar -->
+  <header>
+    <div class="top-menu-bar">
+      <div class="brand-group">
+        <svg class="brand-logo-img" viewBox="0 0 32 32" fill="none">
+          <defs>
+            <linearGradient id="logoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#0284c7"/>
+              <stop offset="100%" stop-color="#0369a1"/>
+            </linearGradient>
+          </defs>
+          <rect x="2" y="2" width="28" height="28" rx="6" fill="url(#logoGrad)" stroke="#38bdf8" stroke-width="1.2"/>
+          <path d="M7 11.5A2.5 2.5 0 0 1 9.5 9h2a2.5 2.5 0 0 1 2.5 2.5v1.5a2.5 2.5 0 0 1-2.5 2.5h-1.5v4.5H7v-8.5zm2.5 0h2v1.5h-2v-1.5z" fill="#ffffff"/>
+          <path d="M16 11.5a2.5 2.5 0 0 1 2.5-2.5h2a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-2a2.5 2.5 0 0 1-2.5-2.5v-6zm2.5 0h2v6h-2v-6z" fill="#ffffff"/>
+          <path d="M11.5 25.5l3.5-3v6l-3.5-3z" fill="#38bdf8"/>
+          <path d="M20.5 6.5l-3.5 3v-6l3.5 3z" fill="#facc15"/>
+        </svg>
+        <div class="brand-text">
+          <span>90FTP</span>
+          <span class="brand-badge">Modern Site Manager</span>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <button class="btn btn-secondary" onclick="openOptionsModal('general')" title="Application Settings & Options" style="padding: 0 9px; gap: 5px;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
+        <button class="btn btn-secondary" id="btnThemeToggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" style="padding: 0 8px;">
+          <svg class="icon icon-sm" id="themeIcon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <button class="btn btn-secondary" onclick="openSitesModal()" title="Site Manager (Ctrl+S)" style="gap: 5px;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          <span>Site Manager</span>
+        </button>
+        <div class="status-badge">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Disconnected</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Native Desktop Menu Bar -->
+    <div class="desktop-menubar">
+      <div class="menu-item" onclick="toggleMenu(event, 'fileMenu')">
+        <span>File</span>
+        <div class="menu-dropdown" id="fileMenu">
+          <div class="dropdown-item" onclick="openSitesModal()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+            <span>Site Manager...</span>
+            <span class="shortcut">Ctrl+S</span>
+          </div>
+          <div class="dropdown-item" onclick="focusQuickConnect()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+            <span>Quick Connect</span>
+            <span class="shortcut">Ctrl+Q</span>
+          </div>
+          <div class="dropdown-separator"></div>
+          <div class="dropdown-item" onclick="disconnect()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/></svg></span>
+            <span>Disconnect</span>
+            <span class="shortcut">Ctrl+D</span>
+          </div>
+          <div class="dropdown-separator"></div>
+          <div class="dropdown-item" onclick="openOptionsModal('general')">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+            <span>Options / Preferences...</span>
+            <span class="shortcut">Ctrl+,</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-item" onclick="toggleMenu(event, 'viewMenu')">
+        <span>View</span>
+        <div class="menu-dropdown" id="viewMenu">
+          <div class="dropdown-item" onclick="refreshBothPanes()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+            <span>Refresh Both Panes</span>
+            <span class="shortcut">F5</span>
+          </div>
+          <div class="dropdown-item" onclick="toggleHiddenFiles()">
+            <span class="menu-icon" id="menuCheckHidden">✓</span>
+            <span>Show Hidden Files</span>
+            <span class="shortcut">Ctrl+H</span>
+          </div>
+          <div class="dropdown-separator"></div>
+          <div class="dropdown-item" onclick="toggleLogPanel()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+            <span>Toggle Log Console</span>
+            <span class="shortcut">Ctrl+L</span>
+          </div>
+          <div class="dropdown-item" onclick="toggleTheme()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/></svg></span>
+            <span>Toggle Light / Dark Theme</span>
+            <span class="shortcut">Ctrl+T</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-item" onclick="toggleMenu(event, 'transferMenu')">
+        <span>Transfer</span>
+        <div class="menu-dropdown" id="transferMenu">
+          <div class="dropdown-item" onclick="transferUpload()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+            <span>Upload Selected File</span>
+          </div>
+          <div class="dropdown-item" onclick="transferDownload()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+            <span>Download Selected File</span>
+          </div>
+          <div class="dropdown-separator"></div>
+          <div class="dropdown-item" onclick="promptNewFolder(false)">
+            <span class="menu-icon">📁</span>
+            <span>New Local Folder...</span>
+          </div>
+          <div class="dropdown-item" onclick="promptNewRemoteFolder()">
+            <span class="menu-icon">📂</span>
+            <span>New Remote Folder...</span>
+          </div>
+          <div class="dropdown-separator"></div>
+          <div class="dropdown-item" onclick="openChmodModal()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <span>Set Permissions (CHMOD)...</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-item" onclick="toggleMenu(event, 'toolsMenu')">
+        <span>Tools</span>
+        <div class="menu-dropdown" id="toolsMenu">
+          <div class="dropdown-item" onclick="openOptionsModal('cache')">
+            <span class="menu-icon">🧹</span>
+            <span>Clear Cache & History...</span>
+          </div>
+          <div class="dropdown-item" onclick="openStorageFolder()">
+            <span class="menu-icon">📂</span>
+            <span>Open Storage Folder</span>
+          </div>
+          <div class="dropdown-separator"></div>
+          <div class="dropdown-item" onclick="copyAllLogs()">
+            <span class="menu-icon">📋</span>
+            <span>Copy All Logs</span>
+          </div>
+          <div class="dropdown-item" onclick="clearLogs()">
+            <span class="menu-icon">🗑️</span>
+            <span>Clear Log Console</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-item" onclick="toggleMenu(event, 'helpMenu')">
+        <span>Help</span>
+        <div class="menu-dropdown" id="helpMenu">
+          <div class="dropdown-item" onclick="openAboutModal()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+            <span>About 90FTP...</span>
+          </div>
+          <div class="dropdown-item" onclick="openOptionsModal('general')">
+            <span class="menu-icon">⚙️</span>
+            <span>Preferences & Options...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Connect Header Row with Server Selector -->
+    <div class="quick-connect-bar">
+      <!-- Server Dropdown Selector (Sites from Site Manager) -->
+      <div class="qc-item">
+        <span class="qc-label">Server:</span>
+        <select id="quickSiteSelect" onchange="onQuickSiteSelect(this.value)" style="min-width: 175px; max-width: 230px; font-weight: 600; color: #38bdf8;">
+          <option value="manual">⚡ Manual Input...</option>
+        </select>
+      </div>
+
+      <!-- Manual Connection Fields (Hidden when a saved server is selected) -->
+      <div id="manualFieldsGroup" style="display: flex; align-items: center; gap: 8px; flex: 1;">
+        <div class="qc-item">
+          <span class="qc-label">Protocol:</span>
+          <select id="connProtocol" onchange="updateDefaultPort()" style="width: 120px;">
+            <option value="sftp">SFTP (SSH)</option>
+            <option value="ftp">FTP (Plain)</option>
+            <option value="ftps">FTPS (SSL)</option>
+          </select>
+        </div>
+
+        <div class="qc-item" style="flex: 2;">
+          <span class="qc-label">Host:</span>
+          <input type="text" id="connHost" placeholder="ftp.example.com or IP" style="width: 100%;">
+        </div>
+
+        <div class="qc-item" style="width: 85px;">
+          <span class="qc-label">Port:</span>
+          <input type="number" id="connPort" value="22" style="width: 100%; text-align: center;">
+        </div>
+
+        <div class="qc-item" style="flex: 1.2;">
+          <span class="qc-label">User:</span>
+          <input type="text" id="connUser" placeholder="username" style="width: 100%;">
+        </div>
+
+        <div class="qc-item" style="flex: 1.2;">
+          <span class="qc-label">Password:</span>
+          <input type="password" id="connPass" placeholder="••••••••" style="width: 100%;">
+        </div>
+      </div>
+
+      <!-- Selected Saved Server Badge (Shown when a saved server is selected) -->
+      <div id="selectedSiteBadge" style="display: none; align-items: center; justify-content: space-between; gap: 12px; flex: 1; padding: 5px 14px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.28); border-radius: 6px; font-size: 12.5px;">
+        <div id="selectedSiteBadgeInfo" style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
+        <button type="button" class="btn btn-secondary" onclick="resetQuickSiteSelect()" style="padding: 2px 8px; font-size: 11px; white-space: nowrap;">Manual Mode</button>
+      </div>
+
+      <button class="btn btn-primary" id="btnConnect" onclick="handleConnectClick()">
+        <svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span>Connect</span>
+      </button>
+      <button class="btn btn-danger" id="btnDisconnect" onclick="handleDisconnect()" style="display: none;">
+        <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <span>Disconnect</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Dual Panes Workspace (Horizontally Resizable via Gutter) -->
+  <div class="workspace-area" id="workspaceArea">
+
+    <!-- Left: Local Files Panel -->
+    <div class="file-pane-wrapper" id="leftPane" style="width: 50%;">
+      <div class="pane-toolbar">
+        <div class="pane-title-row">
+          <div class="pane-heading">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span>Local PC</span>
+            <select id="driveSelect" onchange="onDriveChange()" style="padding: 2px 8px; font-size: 12px; margin-left: 8px;">
+              <option value="C:\">C:\</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn-tool" style="color: var(--accent);" title="Upload Selected File to Remote Server" onclick="transferUpload()">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
+            <button class="btn-tool" title="Go to Parent Folder" onclick="localNavigateUp()">
+              <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </button>
+            <button class="btn-tool" title="Refresh" onclick="refreshLocal()">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+            <button class="btn-tool" title="New Folder" onclick="promptNewLocalFolder()">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+            </button>
+            <button class="btn-tool" title="New File" onclick="promptNewLocalFile()">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="path-bar-row">
+          <input type="text" id="localPathInput" class="path-input" placeholder="C:\Users\aljailane\Desktop" onkeydown="if(event.key==='Enter') navigateLocal(this.value)">
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50%;">Name</th>
+              <th style="width: 15%;">Size</th>
+              <th style="width: 20%;">Modified</th>
+              <th style="width: 15%;">Type</th>
+            </tr>
+          </thead>
+          <tbody id="localFileList">
+            <tr>
+              <td colspan="4" style="text-align:center; color: var(--text-dim); padding: 30px 10px;">
+                <span class="spinner" style="display:inline-block; vertical-align:middle; margin-right:6px;"></span> Loading local directory...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Resizable Vertical Split Gutter -->
+    <div class="gutter-vertical" id="verticalSplitGutter" title="Drag left or right to resize panes">
+      <div class="gutter-grip-dots"></div>
+    </div>
+
+    <!-- Right: Remote Files Panel -->
+    <div class="file-pane-wrapper" id="rightPane" style="flex: 1;">
+      <div class="pane-toolbar">
+        <div class="pane-title-row">
+          <div class="pane-heading">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Remote Server</span>
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn-tool" style="color: var(--accent);" title="Download Selected File to Local PC" onclick="transferDownload()">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+            <button class="btn-tool" title="Go to Parent Folder" onclick="remoteNavigateUp()">
+              <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </button>
+            <button class="btn-tool" title="Refresh" onclick="refreshRemote()">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+            <button class="btn-tool" title="New Folder" onclick="promptNewRemoteFolder()">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+            </button>
+            <button class="btn-tool" title="Edit in Code Editor" onclick="editSelectedRemoteFile()">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-tool" title="CHMOD Permissions" onclick="openChmodModal()">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </button>
+            <button class="btn-tool" style="color: #f87171;" title="Delete" onclick="deleteSelectedRemote()">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="path-bar-row" style="display: flex; gap: 6px; align-items: center;">
+          <input type="text" id="remotePathInput" class="path-input" style="flex: 1;" placeholder="Not connected" list="remoteHistoryDatalist" onkeydown="if(event.key==='Enter') navigateRemote(this.value)">
+          <datalist id="remoteHistoryDatalist"></datalist>
+          <select id="remoteHistorySelect" class="path-input" style="width: auto; max-width: 175px; flex-shrink: 0; background: var(--bg-card); cursor: pointer;" onchange="onRemoteHistorySelected(this.value)" title="Recent Remote Directories">
+            <option value="" disabled selected>🕒 Recent Paths</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 45%;">Name</th>
+              <th style="width: 15%;">Size</th>
+              <th style="width: 25%;">Modified</th>
+              <th style="width: 15%;">Permissions</th>
+            </tr>
+          </thead>
+          <tbody id="remoteFileList">
+            <tr>
+              <td colspan="4" style="text-align: center; color: var(--text-dim); padding: 50px;">
+                <svg class="icon icon-lg" viewBox="0 0 24 24" style="margin-bottom: 8px; opacity: 0.5;"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg><br>
+                Enter connection credentials above or open Site Manager to connect
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Resizable Horizontal Split Gutter for Bottom Console -->
+  <div class="gutter-horizontal" id="horizontalSplitGutter" title="Drag up or down to resize console log">
+    <div class="gutter-h-grip"></div>
+  </div>
+
+  <!-- Bottom: Activity Log Panel (Collapsed by default as requested) -->
+  <div class="log-panel collapsed" id="logPanel" style="height: 34px;">
+    <div class="log-header" onclick="toggleLogPanel()">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        <span>Activity Log & Console</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); copyAllLogs()" style="padding: 2px 9px; font-size: 11px; display: flex; align-items: center; gap: 4px;" title="Copy all log output">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy All
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); clearLogs()" style="padding: 2px 8px; font-size: 11px;" title="Clear console">
+          Clear
+        </button>
+        <span id="logToggleIcon" style="margin-left: 4px; display: flex; align-items: center;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+        </span>
+      </div>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+
+  <!-- Modal: Built-in Code Editor & Formatter -->
+  <div class="modal-overlay" id="editorModal">
+    <div class="modal-content" style="width: 950px; max-width: 95vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span id="editorTitle">Quick Code Editor</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button type="button" class="btn btn-secondary" onclick="formatEditorCode()" style="padding: 3px 10px; font-size: 11.5px; display: flex; align-items: center; gap: 5px;" title="Format & Beautify Code (JSON, HTML, JS, CSS)">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            Beautify / Format
+          </button>
+          <span id="editorStats" style="font-size: 11.5px; color: var(--text-dim); font-family: var(--font-mono);"></span>
+          <span id="editorStatus" style="font-size: 12px; color: var(--accent); font-weight: 600;"></span>
+        </div>
+      </div>
+      <div class="modal-body" style="padding: 12px;">
+        <textarea id="editorTextarea" class="editor-textarea" spellcheck="false" oninput="updateEditorStats()"></textarea>
+      </div>
+      <div class="modal-footer">
+        <span style="margin-right: auto; font-size: 12px; color: var(--text-dim);">Shortcuts: Ctrl+S to Save & Upload | Tab to Indent | Format Button</span>
+        <button class="btn btn-secondary" onclick="closeEditorModal()">Close</button>
+        <button class="btn btn-primary" onclick="saveEditorContent()">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Save & Upload
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: CHMOD Permissions -->
+  <div class="modal-overlay" id="chmodModal">
+    <div class="modal-content" style="width: 460px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>CHMOD Permissions</span>
+        </div>
+      </div>
+      <div class="modal-body">
+        <p id="chmodFilename" style="color: var(--accent); font-weight: 600; font-family: var(--font-mono);"></p>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 10px; background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div>
+            <strong style="color: var(--text-main); font-size: 13px;">Owner</strong><br><br>
+            <label style="display:block; margin-bottom: 6px;"><input type="checkbox" id="cm_ur"> Read (r)</label>
+            <label style="display:block; margin-bottom: 6px;"><input type="checkbox" id="cm_uw"> Write (w)</label>
+            <label style="display:block;"><input type="checkbox" id="cm_ux"> Execute (x)</label>
+          </div>
+          <div>
+            <strong style="color: var(--text-main); font-size: 13px;">Group</strong><br><br>
+            <label style="display:block; margin-bottom: 6px;"><input type="checkbox" id="cm_gr"> Read (r)</label>
+            <label style="display:block; margin-bottom: 6px;"><input type="checkbox" id="cm_gw"> Write (w)</label>
+            <label style="display:block;"><input type="checkbox" id="cm_gx"> Execute (x)</label>
+          </div>
+          <div>
+            <strong style="color: var(--text-main); font-size: 13px;">Public</strong><br><br>
+            <label style="display:block; margin-bottom: 6px;"><input type="checkbox" id="cm_or"> Read (r)</label>
+            <label style="display:block; margin-bottom: 6px;"><input type="checkbox" id="cm_ow"> Write (w)</label>
+            <label style="display:block;"><input type="checkbox" id="cm_ox"> Execute (x)</label>
+          </div>
+        </div>
+        <div style="margin-top: 16px; display: flex; align-items: center; justify-content: space-between;">
+          <label style="font-weight: 600;">Octal Value:</label>
+          <input type="text" id="chmodOctal" value="0644" style="width: 110px; text-align: center; font-family: var(--font-mono); font-size: 14px;" onkeyup="updateChmodFromOctal()">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeChmodModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="applyChmod()">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Apply Permissions
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 90FTP Native Desktop Login & Site Manager -->
+  <div class="modal-overlay" id="sitesModal">
+    <div class="modal-content" style="width: 640px; max-width: 95vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          <span>Login & Site Manager</span>
+        </div>
+        <button class="btn btn-secondary" onclick="closeSitesModal()" style="padding: 2px 7px; font-size: 11px;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 10px;">
+        <div class="site-manager-layout">
+
+          <!-- Left column: Stored sites list -->
+          <div class="site-sidebar">
+            <div class="site-sidebar-header">
+              <span>Saved Sites</span>
+            </div>
+            <div class="site-list" id="sitesList">
+              <!-- Site entries injected here -->
+            </div>
+            <div class="site-sidebar-footer">
+              <button type="button" class="btn btn-secondary" onclick="resetSiteForm()" style="flex: 1; padding: 4px 6px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px;" title="New connection site">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New
+              </button>
+              <button type="button" class="btn btn-danger" onclick="deleteCurrentSelectedSite()" style="flex: 1; padding: 4px 6px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px;" title="Delete selected site">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Delete
+              </button>
+            </div>
+          </div>
+
+          <!-- Right column: Desktop Groupboxes -->
+          <div class="site-form-panel">
+            <input type="hidden" id="siteId">
+            <input type="hidden" id="siteAuthType" value="password">
+
+            <!-- Groupbox 1: Server Connection -->
+            <div class="desktop-groupbox">
+              <div class="desktop-groupbox-legend">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                Server Connection
+              </div>
+              <div class="desktop-row">
+                <div class="desktop-field" style="flex: 1.3;">
+                  <label>File Protocol:</label>
+                  <select id="siteProtocol" onchange="onSiteProtocolChange()">
+                    <option value="sftp">SFTP - SSH File Transfer</option>
+                    <option value="ftp">FTP - File Transfer Protocol</option>
+                    <option value="ftps">FTPS - FTP with TLS/SSL</option>
+                  </select>
+                </div>
+                <div class="desktop-field" style="flex: 0.7;">
+                  <label>Port:</label>
+                  <input type="number" id="sitePort" value="22">
+                </div>
+              </div>
+              <div class="desktop-row">
+                <div class="desktop-field" style="flex: 1;">
+                  <label>Host Name / IP Address:</label>
+                  <input type="text" id="siteHost" placeholder="ftp.example.com or 192.168.1.10">
+                </div>
+              </div>
+              <div class="desktop-row">
+                <div class="desktop-field" style="flex: 1;">
+                  <label>User Name:</label>
+                  <input type="text" id="siteUser" placeholder="username / root">
+                </div>
+                <div class="desktop-field" style="flex: 1;" id="sitePassField">
+                  <label>Password:</label>
+                  <input type="password" id="sitePass" placeholder="••••••••••••">
+                </div>
+              </div>
+            </div>
+
+            <!-- Groupbox 2: Authentication -->
+            <div class="desktop-groupbox">
+              <div class="desktop-groupbox-legend">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Authentication
+              </div>
+              <div class="desktop-row">
+                <div class="auth-tab-bar" style="width: 100%;">
+                  <button type="button" class="auth-tab-btn active" id="tabAuthPass" onclick="switchSiteAuth('password')">
+                    Password
+                  </button>
+                  <button type="button" class="auth-tab-btn" id="tabAuthKey" onclick="switchSiteAuth('key')">
+                    SSH Private Key File
+                  </button>
+                </div>
+              </div>
+              <div id="siteKeyBlock" style="display: none; margin-top: 6px;">
+                <div class="desktop-row">
+                  <div class="desktop-field" style="flex: 1;">
+                    <label>Private Key File:</label>
+                    <div style="display: flex; gap: 4px;">
+                      <input type="text" id="siteKeyPath" placeholder="C:\Users\...\.ssh\id_rsa" style="flex: 1;">
+                      <button type="button" class="btn btn-secondary" onclick="browseSshKeyFile()" style="padding: 3px 8px; font-size: 11px;">Browse...</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="desktop-row">
+                  <div class="desktop-field" style="flex: 1;">
+                    <label>Passphrase (Optional):</label>
+                    <input type="password" id="sitePassphrase" placeholder="Leave blank if unencrypted">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Groupbox 3: Environment & Label -->
+            <div class="desktop-groupbox">
+              <div class="desktop-groupbox-legend">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Session Information
+              </div>
+              <div class="desktop-row">
+                <div class="desktop-field" style="flex: 1;">
+                  <label>Site Name / Label:</label>
+                  <input type="text" id="siteName" placeholder="e.g. Production Webserver">
+                </div>
+                <div class="desktop-field" style="flex: 1;">
+                  <label>Default Remote Directory:</label>
+                  <input type="text" id="siteRemoteDir" placeholder="/var/www/html or /public_html">
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;">
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted);">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#22c55e" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span style="font-family: var(--font-mono); font-size: 10.5px;">sites.json</span>
+          <button type="button" class="btn btn-secondary" onclick="openStorageFolder()" style="padding: 1px 6px; font-size: 10px;">Open</button>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-primary" onclick="connectCurrentFormSite()" style="padding: 5px 14px; font-weight: 600;">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Login
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="saveSiteFromForm()" style="padding: 5px 12px;">
+            Save
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeSitesModal()" style="padding: 5px 12px;">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 90FTP Server Host Key / Certificate Verification -->
+  <div class="modal-overlay" id="hostKeyModal" style="z-index: 1050;">
+    <div class="modal-content" style="width: 560px; border-top: 4px solid #f59e0b;">
+      <div class="modal-header" style="background: rgba(245, 158, 11, 0.08);">
+        <div style="display: flex; align-items: center; gap: 10px; color: #f59e0b; font-weight: 700;">
+          <svg class="icon" viewBox="0 0 24 24" style="stroke: #f59e0b; width: 22px; height: 22px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span style="font-size: 15px;">Warning: Unknown Server Host Key</span>
+        </div>
+      </div>
+      <div class="modal-body" style="padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; font-size: 13px; line-height: 1.55;">
+        <div style="font-weight: 600; color: var(--text-main); font-size: 13.5px;">
+          The server's host key was not found in the cache!
+        </div>
+        <div style="color: var(--text-muted);">
+          You have no guarantee that the server is the computer you think it is.<br>
+          If you trust this host, select <strong>Yes</strong> to add the key to 90FTP's cache and carry on connecting.<br>
+          If you do not trust this host, select <strong>No</strong> to abort the connection.
+        </div>
+
+        <div style="background: #080c14; border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; font-family: var(--font-mono); font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+          <div><strong style="color: var(--text-dim);">Server Host:</strong> <span id="hostKeyServer" style="color: #38bdf8;"></span></div>
+          <div><strong style="color: var(--text-dim);">Key Algorithm:</strong> <span id="hostKeyAlgorithm" style="color: #f1f5f9;"></span></div>
+          <div style="word-break: break-all;"><strong style="color: var(--text-dim);">SHA-256 Fingerprint:</strong><br><span id="hostKeyFingerprint" style="color: #22c55e; font-weight: 600;"></span></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; background: rgba(0,0,0,0.2);">
+        <button class="btn btn-secondary" onclick="rejectHostKey()" style="padding: 7px 18px; min-width: 80px;">No (Cancel)</button>
+        <button class="btn btn-primary" onclick="acceptHostKey()" style="padding: 7px 22px; min-width: 110px; background: #0284c7;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Yes (Trust & Connect)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: File & Directory Properties -->
+  <div class="modal-overlay" id="propertiesModal">
+    <div class="modal-content" style="width: 490px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span id="propTitle">Properties</span>
+        </div>
+      </div>
+      <div class="modal-body" style="padding: 20px; gap: 14px; font-size: 13px;">
+        <div style="display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border-color);">
+          <span id="propIcon" style="font-size: 32px; line-height: 1;">📄</span>
+          <div style="overflow: hidden;">
+            <div id="propName" style="font-weight: 700; font-size: 15px; color: var(--text-main); word-break: break-all;"></div>
+            <div id="propType" style="color: var(--text-dim); font-size: 12px; margin-top: 2px;"></div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 100px 1fr; gap: 10px 12px; font-family: var(--font-mono); font-size: 12px; background: #080c14; padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+          <span style="color: var(--text-dim);">Location:</span>
+          <span id="propPath" style="word-break: break-all; color: #38bdf8;"></span>
+          <span style="color: var(--text-dim);">Size:</span>
+          <span id="propSize" style="color: var(--text-main);"></span>
+          <span style="color: var(--text-dim);">Permissions:</span>
+          <span id="propPerms" style="color: #4ade80;"></span>
+          <span style="color: var(--text-dim);">Modified:</span>
+          <span id="propModified" style="color: var(--text-main);"></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closePropertiesModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 90FTP Options & Preferences Dialog -->
+  <div class="modal-overlay" id="optionsModal" style="z-index: 1040;">
+    <div class="modal-content" style="width: 530px; max-width: 95vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span>Options</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button type="button" class="btn btn-secondary" onclick="openAboutModal()" style="padding: 1px 7px; font-size: 11px;" title="Help & About">?</button>
+          <button type="button" class="btn btn-secondary" onclick="closeOptionsModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+        </div>
+      </div>
+      
+      <div class="options-tab-bar">
+        <button type="button" class="options-tab-btn active" id="tabOptGeneral" onclick="switchOptionsTab('general')">General</button>
+        <button type="button" class="options-tab-btn" id="tabOptStartup" onclick="switchOptionsTab('startup')">On Startup</button>
+        <button type="button" class="options-tab-btn" id="tabOptTransfer" onclick="switchOptionsTab('transfer')">Transfer</button>
+        <button type="button" class="options-tab-btn" id="tabOptLog" onclick="switchOptionsTab('log')">Log</button>
+        <button type="button" class="options-tab-btn" id="tabOptSecurity" onclick="switchOptionsTab('security')">Security</button>
+        <button type="button" class="options-tab-btn" id="tabOptCache" onclick="switchOptionsTab('cache')">Cache</button>
+        <button type="button" class="options-tab-btn" id="tabOptAdvanced" onclick="switchOptionsTab('advanced')">Advanced</button>
+      </div>
+
+      <div class="modal-body" style="padding: 12px; max-height: 440px; overflow-y: auto;">
+        
+        <!-- Tab 1: General -->
+        <div class="options-pane active" id="paneOptGeneral">
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">Options</div>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optDelFinished" checked>
+              <span>Delete finished transfers from the transfer queue</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optNaturalSort" checked>
+              <span>Use natural order sort</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optShowHidden" checked onchange="toggleHiddenFiles(this.checked)">
+              <span>Show hidden files (dotfiles)</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optShowWelcome">
+              <span>Show welcome message</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optShowFullPath" checked>
+              <span>Show full path in the local address bar</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optUseHomePath" checked>
+              <span>Use Home (~) path as SFTP default directory</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optConfirmDisconnect" checked>
+              <span>Confirm to disconnect when 90FTP is terminated</span>
+            </label>
+          </div>
+
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">Mouse</div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Double-click Local:</span>
+              <select id="optDblLocal" style="width: 180px;">
+                <option value="edit">Open in Code Editor</option>
+                <option value="transfer">Transfer (Upload)</option>
+              </select>
+            </div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Double-click Remote:</span>
+              <select id="optDblRemote" style="width: 180px;">
+                <option value="edit">Open in Code Editor</option>
+                <option value="transfer">Transfer (Download)</option>
+              </select>
+            </div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Right-click Menu:</span>
+              <select id="optRightClickMenu" style="width: 180px;">
+                <option value="custom">90FTP Desktop Menu</option>
+                <option value="native">Native System</option>
+              </select>
+            </div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Drag and Drop Action:</span>
+              <select id="optDragDropAction" style="width: 180px;">
+                <option value="confirm">Confirm When Move</option>
+                <option value="direct">Transfer Directly</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: On Startup -->
+        <div class="options-pane" id="paneOptStartup">
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">Startup Folders & Panes</div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Default Local Directory:</span>
+              <input type="text" id="optStartupLocal" style="width: 260px;" placeholder="Leave empty for Desktop">
+            </div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Remote Startup Path:</span>
+              <select id="optStartupRemote" style="width: 260px;">
+                <option value="home">Default User Home (~)</option>
+                <option value="last">Remember Last Visited Path</option>
+                <option value="root">Server Root (/)</option>
+              </select>
+            </div>
+            <label class="options-checkbox-row" style="margin-top: 8px;">
+              <input type="checkbox" id="optOpenSiteManagerOnLaunch">
+              <span>Automatically show Site Manager when starting 90FTP</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Tab 3: Transfer -->
+        <div class="options-pane" id="paneOptTransfer">
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">File Transfer Pipeline</div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Concurrent Transfer Streams:</span>
+              <input type="number" id="optConcurrentTransfers" value="2" min="1" max="8" style="width: 80px; text-align: center;">
+            </div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Existing File Collision:</span>
+              <select id="optFileCollision" style="width: 200px;">
+                <option value="overwrite">Overwrite if newer or size differs</option>
+                <option value="prompt">Prompt for user confirmation</option>
+                <option value="always">Always overwrite</option>
+                <option value="skip">Skip existing files</option>
+              </select>
+            </div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">I/O Buffer Size:</span>
+              <select id="optBufferSize" style="width: 200px;">
+                <option value="64">64 KB (Optimized High-Speed)</option>
+                <option value="32">32 KB (Standard)</option>
+                <option value="128">128 KB (Gigabit Networks)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Log -->
+        <div class="options-pane" id="paneOptLog">
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">Activity Log & Console</div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Maximum Console Lines:</span>
+              <input type="number" id="optMaxLogLines" value="500" min="50" max="5000" style="width: 100px; text-align: center;">
+            </div>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optLogAutoScroll" checked>
+              <span>Auto-scroll console window to newest messages</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optLogTimestamps" checked>
+              <span>Include local timestamps [HH:MM:SS] on each line</span>
+            </label>
+            <div class="options-select-row" style="margin-top: 10px;">
+              <span style="color: var(--text-muted);">Console Actions:</span>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" class="btn btn-secondary" onclick="clearLogs()" style="font-size: 11px; padding: 3px 8px;">Clear Logs</button>
+                <button type="button" class="btn btn-secondary" onclick="copyAllLogs()" style="font-size: 11px; padding: 3px 8px;">Copy All</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 5: Security -->
+        <div class="options-pane" id="paneOptSecurity">
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">Cryptographic & Host Key Security</div>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optStrictHostKey" checked>
+              <span>Strict Host Key Checking (Prompt on new fingerprint)</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optEncryptPasswords" checked>
+              <span>Secure credential storage in %APPDATA%\90FTP\sites.json</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optWipeOnDisconnect">
+              <span>Wipe in-memory credentials immediately upon disconnect</span>
+            </label>
+            <div class="options-select-row" style="margin-top: 10px;">
+              <span style="color: var(--text-muted);">SSH Cipher Preference:</span>
+              <select id="optCipherPref" style="width: 220px;">
+                <option value="auto">Modern AES-256-GCM / ChaCha20</option>
+                <option value="aes128">AES-128-CTR / AES-256-CTR</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 6: Cache -->
+        <div class="options-pane" id="paneOptCache">
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">Cache & Storage Management</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5;">
+              Manage stored server certificates, navigation paths, and temporary editor buffers:
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <div>
+                  <div style="font-weight: 600;">Server Host Keys Cache</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Stored SHA-256 host key fingerprints in known_hosts.json</div>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="clearKnownHostsCache()" style="font-size: 11px; padding: 3px 8px;">Clear Cache</button>
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <div>
+                  <div style="font-weight: 600;">Remote Navigation History</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Recent path history entries in history.json</div>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="clearRemoteHistoryCache()" style="font-size: 11px; padding: 3px 8px;">Clear History</button>
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 4px;">
+                <div>
+                  <div style="font-weight: 600;">Configuration Directory</div>
+                  <div style="font-size: 11px; color: var(--text-dim); font-family: var(--font-mono);">%APPDATA%\90FTP</div>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="openStorageFolder()" style="font-size: 11px; padding: 3px 8px;">Open Folder</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 7: Advanced -->
+        <div class="options-pane" id="paneOptAdvanced">
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">Network & Engine Keep-Alive</div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">TCP Keep-Alive Heartbeat:</span>
+              <select id="optKeepAlive" style="width: 180px;">
+                <option value="30">Every 30 Seconds</option>
+                <option value="60">Every 60 Seconds</option>
+                <option value="0">Disabled</option>
+              </select>
+            </div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);">Socket Connect Timeout:</span>
+              <select id="optSocketTimeout" style="width: 180px;">
+                <option value="15">15 Seconds</option>
+                <option value="30">30 Seconds</option>
+                <option value="60">60 Seconds</option>
+              </select>
+            </div>
+            <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+              <button type="button" class="btn btn-danger" onclick="resetSettingsToDefault()" style="font-size: 11px; padding: 4px 10px;">Reset All Settings to Default</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 8px 14px;">
+        <button type="button" class="btn btn-primary" onclick="saveOptionsAndClose()" style="padding: 4px 16px;">OK</button>
+        <button type="button" class="btn btn-secondary" onclick="closeOptionsModal()" style="padding: 4px 14px;">Cancel</button>
+        <button type="button" class="btn btn-secondary" onclick="saveOptions(false)" style="padding: 4px 14px;">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: About 90FTP Desktop Dialog -->
+  <div class="modal-overlay" id="aboutModal" style="z-index: 1060;">
+    <div class="modal-content" style="width: 440px; max-width: 95vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>About 90FTP</span>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeAboutModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;">
+        <svg viewBox="0 0 32 32" width="56" height="56" fill="none">
+          <defs>
+            <linearGradient id="aboutLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#0284c7"/>
+              <stop offset="100%" stop-color="#0369a1"/>
+            </linearGradient>
+          </defs>
+          <rect x="2" y="2" width="28" height="28" rx="7" fill="url(#aboutLogoGrad)" stroke="#38bdf8" stroke-width="1.2"/>
+          <path d="M7 11.5A2.5 2.5 0 0 1 9.5 9h2a2.5 2.5 0 0 1 2.5 2.5v1.5a2.5 2.5 0 0 1-2.5 2.5h-1.5v4.5H7v-8.5zm2.5 0h2v1.5h-2v-1.5z" fill="#ffffff"/>
+          <path d="M16 11.5a2.5 2.5 0 0 1 2.5-2.5h2a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-2a2.5 2.5 0 0 1-2.5-2.5v-6zm2.5 0h2v6h-2v-6z" fill="#ffffff"/>
+          <path d="M11.5 25.5l3.5-3v6l-3.5-3z" fill="#38bdf8"/>
+          <path d="M20.5 6.5l-3.5 3v-6l3.5 3z" fill="#facc15"/>
+        </svg>
+        <div>
+          <div style="font-size: 17px; font-weight: 700; color: var(--text-main);">90FTP - Modern Site Manager</div>
+          <div style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 2.5.0 Pro (Windows x64)</div>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; max-width: 360px;">
+          High-Performance Asynchronous SFTP, FTP & FTPS Transfer Engine.
+          Engineered with Rust, Tao & Wry WebView2 for ultra-fast, low-latency file operations.
+        </div>
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); width: 100%; text-align: left;">
+          <div><strong>Core:</strong> Rust 1.99 / ssh2 / suppaftp / wry</div>
+          <div><strong>Platform:</strong> Windows x86_64 MSVC</div>
+          <div><strong>Storage:</strong> %APPDATA%\90FTP</div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: center; padding: 8px 14px;">
+        <button type="button" class="btn btn-primary" onclick="closeAboutModal()" style="padding: 4px 24px;">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Elegant Right-Click Context Menu -->
+  <div id="customContextMenu" class="context-menu"></div>
+
+  <!-- Elegant Connection Loading Spinner Overlay with Live Status Stream -->
+  <div class="loading-overlay" id="connectionLoadingOverlay">
+    <div class="loading-card" style="width: 440px; max-width: 92vw;">
+      <div class="loading-spinner" id="loadingSpinner"></div>
+      <div class="loading-title" id="loadingTitle">Connecting to Server...</div>
+      <div class="loading-sub" id="loadingSubtitle">Establishing secure connection</div>
+
+      <!-- Mini Live Status Stream -->
+      <div class="loading-log-box" id="loadingLogBox">
+        <div class="loading-log-line" id="loadStep1"><span>○</span> <span>🌐 Initializing socket connection...</span></div>
+        <div class="loading-log-line" id="loadStep2"><span>○</span> <span>🔐 Negotiating protocol & cipher exchange...</span></div>
+        <div class="loading-log-line" id="loadStep3"><span>○</span> <span>🔑 Verifying credentials & host fingerprint...</span></div>
+        <div class="loading-log-line" id="loadStep4"><span>○</span> <span>📁 Loading remote directory tree...</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.onerror = function(msg, url, line, col, error) {
+      console.error(`JS error at ${line}:${col} - ${msg}`, error);
+    };
+
+    // Safe In-Memory / LocalStorage Abstraction (Prevents WebView2 SecurityError on opaque origin)
+    const appStorage = {
+      _data: {},
+      getItem: function(key) {
+        try {
+          const ls = window.localStorage;
+          if (ls) {
+            const v = ls.getItem(key);
+            if (v !== null) return v;
+          }
+        } catch (_) {}
+        return this._data[key] || null;
+      },
+      setItem: function(key, val) {
+        this._data[key] = val;
+        try {
+          const ls = window.localStorage;
+          if (ls) ls.setItem(key, val);
+        } catch (_) {}
+      },
+      removeItem: function(key) {
+        delete this._data[key];
+        try {
+          const ls = window.localStorage;
+          if (ls) ls.removeItem(key);
+        } catch (_) {}
+      }
+    };
+
+    // State
+    let currentLocalPath = '';
+    let currentRemotePath = '';
+    let localFiles = [];
+    let remoteFiles = [];
+    let selectedLocalFile = null;
+    let selectedRemoteFile = null;
+    let isConnected = false;
+    let savedSites = [];
+    let selectedQuickSite = null;
+
+    // Editor state
+    let activeEditingPath = '';
+    let activeEditingIsRemote = false;
+
+    // Resizing State (Panes & Log Console)
+    let isDraggingVertical = false;
+    let isDraggingHorizontal = false;
+
+    // IPC Communication
+    let reqCounter = 0;
+    const pendingCallbacks = new Map();
+
+    async function ensureIpcReady() {
+      let attempts = 0;
+      while ((!window.ipc || typeof window.ipc.postMessage !== 'function') && attempts < 60) {
+        await new Promise(r => setTimeout(r, 50));
+        attempts++;
+      }
+      return !!(window.ipc && typeof window.ipc.postMessage === 'function');
+    }
+
+    async function sendRust(action, payload = {}) {
+      const ready = await ensureIpcReady();
+      if (!ready) {
+        throw new Error('IPC bridge between WebView and Native Rust engine is not ready.');
+      }
+      return new Promise((resolve, reject) => {
+        const id = 'req_' + (++reqCounter);
+        // Generous timeouts for network / file operations: 120s for connect/transfers, 30s for local operations
+        const timeoutMs = ['connect', 'upload', 'download', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'init'].includes(action) 
+          ? 120000 
+          : 30000;
+
+        const timer = setTimeout(() => {
+          if (pendingCallbacks.has(id)) {
+            pendingCallbacks.delete(id);
+            reject(new Error(`Request '${action}' timed out after ${timeoutMs / 1000}s`));
+          }
+        }, timeoutMs);
+
+        pendingCallbacks.set(id, {
+          resolve: (data) => {
+            clearTimeout(timer);
+            resolve(data);
+          },
+          reject: (err) => {
+            clearTimeout(timer);
+            reject(err);
+          }
+        });
+
+        try {
+          window.ipc.postMessage(JSON.stringify({ id, action, payload }));
+        } catch (e) {
+          clearTimeout(timer);
+          pendingCallbacks.delete(id);
+          reject(e);
+        }
+      });
+    }
+
+    window.onRustResponse = function(resp) {
+      if (typeof resp === 'string') {
+        try {
+          resp = JSON.parse(resp);
+        } catch (e) {
+          console.error('Failed to parse onRustResponse JSON string:', e);
+          return;
+        }
+      }
+      if (!resp || !resp.id) return;
+      const cb = pendingCallbacks.get(resp.id);
+      if (cb) {
+        pendingCallbacks.delete(resp.id);
+        if (resp.success) {
+          cb.resolve(resp.data);
+        } else {
+          cb.reject(new Error(resp.error || 'Unknown error'));
+        }
+      }
+    };
+
+    // Logging (Supports bilingual output with Arabic/English)
+    function addLog(msg, type = 'info') {
+      const body = document.getElementById('logBody');
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = 'log-line';
+      div.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-msg ${type}">${escapeHtml(msg)}</span>`;
+      body.appendChild(div);
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function copyAllLogs() {
+      const body = document.getElementById('logBody');
+      const lines = Array.from(body.querySelectorAll('.log-line'))
+        .map(l => l.innerText)
+        .join('\n');
+      if (!lines) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(lines).then(() => {
+          addLog('All logs copied to clipboard!', 'success');
+        }).catch(() => {
+          fallbackCopyText(lines);
+        });
+      } else {
+        fallbackCopyText(lines);
+      }
+    }
+
+    function fallbackCopyText(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      addLog('All logs copied to clipboard!', 'success');
+    }
+
+    function clearLogs() {
+      document.getElementById('logBody').innerHTML = '';
+      addLog('Console cleared.', 'info');
+    }
+
+    function escapeHtml(text) {
+      const d = document.createElement('div');
+      d.innerText = text;
+      return d.innerHTML;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    // Remote History Management
+    function updateRemoteHistory(historyList) {
+      if (!Array.isArray(historyList)) return;
+      const datalist = document.getElementById('remoteHistoryDatalist');
+      const select = document.getElementById('remoteHistorySelect');
+      if (datalist) {
+        datalist.innerHTML = '';
+        historyList.forEach(path => {
+          const opt = document.createElement('option');
+          opt.value = path;
+          datalist.appendChild(opt);
+        });
+      }
+      if (select) {
+        select.innerHTML = '<option value="" disabled selected>🕒 Recent Paths</option>';
+        historyList.forEach(path => {
+          const opt = document.createElement('option');
+          opt.value = path;
+          opt.textContent = path;
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    function onRemoteHistorySelected(path) {
+      if (!path) return;
+      document.getElementById('remotePathInput').value = path;
+      if (isConnected) {
+        navigateRemote(path);
+      }
+    }
+
+    // Quick Connect Server Selector (Sites from Site Manager)
+    function updateQuickSiteSelect() {
+      const sel = document.getElementById('quickSiteSelect');
+      if (!sel) return;
+      const currentVal = sel.value;
+      sel.innerHTML = '<option value="manual">⚡ Manual Input...</option>';
+
+      if (savedSites && savedSites.length > 0) {
+        savedSites.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = `${s.name} (${s.host})`;
+          sel.appendChild(opt);
+        });
+      }
+
+      if (currentVal && currentVal !== 'manual' && savedSites.some(s => s.id === currentVal)) {
+        sel.value = currentVal;
+        onQuickSiteSelect(currentVal);
+      } else if (selectedQuickSite && savedSites.some(s => s.id === selectedQuickSite.id)) {
+        sel.value = selectedQuickSite.id;
+        onQuickSiteSelect(selectedQuickSite.id);
+      } else {
+        sel.value = 'manual';
+        onQuickSiteSelect('manual');
+      }
+    }
+
+    function onQuickSiteSelect(val) {
+      const manualGroup = document.getElementById('manualFieldsGroup');
+      const siteBadge = document.getElementById('selectedSiteBadge');
+      const badgeInfo = document.getElementById('selectedSiteBadgeInfo');
+
+      if (val === 'manual' || !val) {
+        selectedQuickSite = null;
+        if (manualGroup) manualGroup.style.display = 'flex';
+        if (siteBadge) siteBadge.style.display = 'none';
+        return;
+      }
+
+      const site = savedSites.find(s => s.id === val);
+      if (!site) return;
+
+      selectedQuickSite = site;
+      if (manualGroup) manualGroup.style.display = 'none';
+      if (siteBadge && badgeInfo) {
+        siteBadge.style.display = 'flex';
+        const authDesc = site.auth_type === 'key' ? 'SSH Key' : 'Password';
+        badgeInfo.innerHTML = `
+          <svg class="icon icon-sm" viewBox="0 0 24 24" style="color:#38bdf8; flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span style="color:#f8fafc; font-weight:700;">${escapeHtml(site.name)}</span>
+          <span style="color:var(--text-dim);">&bull;</span>
+          <span style="color:#38bdf8; font-family:var(--font-mono); font-size:12px;">${site.protocol.toUpperCase()}://${site.username}@${site.host}:${site.port}</span>
+          <span style="background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.3); padding:1px 7px; border-radius:4px; font-size:11px; color:#4ade80;">${authDesc}</span>
+        `;
+      }
+    }
+
+    function resetQuickSiteSelect() {
+      const sel = document.getElementById('quickSiteSelect');
+      if (sel) sel.value = 'manual';
+      onQuickSiteSelect('manual');
+    }
+
+    // Loading overlay controls & live step progression
+    let connectionStepTimers = [];
+
+    function clearLoadingTimers() {
+      connectionStepTimers.forEach(t => clearTimeout(t));
+      connectionStepTimers = [];
+    }
+
+    function setLoadStep(step, text, state) {
+      const el = document.getElementById('loadStep' + step);
+      if (!el) return;
+      if (state === 'active') {
+        el.className = 'loading-log-line active';
+        el.innerHTML = `<span class="spin-icon">↻</span> <span>${text}</span>`;
+      } else if (state === 'done') {
+        el.className = 'loading-log-line done';
+        el.innerHTML = `<span style="color:#22c55e;">✓</span> <span>${text}</span>`;
+      } else if (state === 'success') {
+        el.className = 'loading-log-line final-success';
+        el.innerHTML = `<span>✨</span> <span style="color:#4ade80; font-weight:700;">${text}</span>`;
+      } else {
+        el.className = 'loading-log-line';
+        el.innerHTML = `<span style="opacity:0.35;">○</span> <span>${text}</span>`;
+      }
+    }
+
+    function showConnectionLoading(params) {
+      clearLoadingTimers();
+      const overlay = document.getElementById('connectionLoadingOverlay');
+      if (!overlay) return;
+
+      const host = params.host || 'Server';
+      const port = params.port || 22;
+      const proto = (params.protocol || 'SFTP').toUpperCase();
+      const user = params.username || 'user';
+
+      document.getElementById('loadingTitle').innerText = `Connecting to ${host}...`;
+      document.getElementById('loadingSubtitle').innerText = `Authenticating (${user}) via ${proto} protocol`;
+
+      const spinner = document.getElementById('loadingSpinner');
+      spinner.style.borderColor = 'rgba(59, 130, 246, 0.2)';
+      spinner.style.borderTopColor = '#38bdf8';
+
+      const existingFinal = document.getElementById('loadFinalSuccess');
+      if (existingFinal) existingFinal.remove();
+
+      setLoadStep(1, `🌐 Initializing socket connection: ${host}:${port}`, 'active');
+      setLoadStep(2, `🔐 Negotiating ${proto} cryptographic handshake`, 'pending');
+      setLoadStep(3, `🔑 Authenticating credentials & verifying host key`, 'pending');
+      setLoadStep(4, `📁 Retrieving remote directory tree`, 'pending');
+
+      overlay.classList.add('active');
+
+      connectionStepTimers.push(setTimeout(() => {
+        if (pendingConnection) {
+          setLoadStep(1, `🌐 Connected to port ${port} (${host})`, 'done');
+          setLoadStep(2, `🔐 Negotiating ${proto} protocol handshake...`, 'active');
+        }
+      }, 350));
+
+      connectionStepTimers.push(setTimeout(() => {
+        if (pendingConnection) {
+          setLoadStep(2, `🔐 Cryptographic handshake complete with server`, 'done');
+          setLoadStep(3, `🔑 Verifying credentials for user '${user}'...`, 'active');
+        }
+      }, 750));
+    }
+
+    function finishConnectionSuccess(remotePwd) {
+      clearLoadingTimers();
+      setLoadStep(1, `🌐 Connected to remote port successfully`, 'done');
+      setLoadStep(2, `🔐 Cryptographic handshake secured`, 'done');
+      setLoadStep(3, `🔑 User credentials authenticated`, 'done');
+      setLoadStep(4, `📁 Remote working directory loaded: ${remotePwd || '/'}`, 'done');
+
+      document.getElementById('loadingTitle').innerText = 'Connection Established!';
+      document.getElementById('loadingSubtitle').innerText = 'Session initialized and ready for file transfers';
+
+      const spinner = document.getElementById('loadingSpinner');
+      if (spinner) {
+        spinner.style.borderColor = 'rgba(34, 197, 94, 0.2)';
+        spinner.style.borderTopColor = '#22c55e';
+      }
+
+      const box = document.getElementById('loadingLogBox');
+      let finalEl = document.getElementById('loadFinalSuccess');
+      if (!finalEl) {
+        finalEl = document.createElement('div');
+        finalEl.id = 'loadFinalSuccess';
+        finalEl.className = 'loading-log-line final-success';
+        finalEl.innerHTML = `<span>✨</span> <span>Connection Linked Successfully</span>`;
+        box.appendChild(finalEl);
+      }
+
+      setTimeout(() => {
+        hideConnectionLoading();
+      }, 850);
+    }
+
+    function hideConnectionLoading() {
+      clearLoadingTimers();
+      const overlay = document.getElementById('connectionLoadingOverlay');
+      if (overlay) {
+        overlay.classList.remove('active');
+      }
+    }
+
+    // Drag and Drop Initialization
+    function setupDragAndDrop() {
+      const leftPane = document.getElementById('leftPane');
+      const rightPane = document.getElementById('rightPane');
+
+      // Local Drop Target (Downloads from Remote)
+      leftPane.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        leftPane.classList.add('drag-target');
+      });
+      leftPane.addEventListener('dragleave', (e) => {
+        if (!leftPane.contains(e.relatedTarget)) {
+          leftPane.classList.remove('drag-target');
+        }
+      });
+      leftPane.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        leftPane.classList.remove('drag-target');
+        const text = e.dataTransfer.getData('text/plain');
+        if (!text) return;
+        try {
+          const data = JSON.parse(text);
+          if (data.source === 'remote') {
+            if (data.is_dir) {
+              alert('Folder download via drag & drop is not supported. Please select individual files.');
+              return;
+            }
+            await downloadFileDirect(data.path, data.name);
+          }
+        } catch (_) {}
+      });
+
+      // Remote Drop Target (Uploads from Local)
+      rightPane.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        rightPane.classList.add('drag-target');
+      });
+      rightPane.addEventListener('dragleave', (e) => {
+        if (!rightPane.contains(e.relatedTarget)) {
+          rightPane.classList.remove('drag-target');
+        }
+      });
+      rightPane.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        rightPane.classList.remove('drag-target');
+        const text = e.dataTransfer.getData('text/plain');
+        if (!text) return;
+        try {
+          const data = JSON.parse(text);
+          if (data.source === 'local') {
+            if (!isConnected) {
+              alert('Please connect to a server before dropping files to upload');
+              return;
+            }
+            if (data.is_dir) {
+              alert('Folder upload via drag & drop is not supported. Please select individual files.');
+              return;
+            }
+            await uploadFileDirect(data.path, data.name);
+          }
+        } catch (_) {}
+      });
+    }
+
+    // App Initialization
+    async function initApp() {
+      initTheme();
+      initOptions();
+      addLog('Starting 90FTP Modern Site Manager...', 'info');
+      setupDragAndDrop();
+
+      // Setup Pane-level right click for blank areas
+      const leftPane = document.getElementById('leftPane');
+      const rightPane = document.getElementById('rightPane');
+      if (leftPane) {
+        leftPane.addEventListener('contextmenu', (e) => {
+          if (e.target.closest('tr')) return;
+          e.preventDefault();
+          openContextMenu(e, 'local_blank');
+        });
+      }
+      if (rightPane) {
+        rightPane.addEventListener('contextmenu', (e) => {
+          if (e.target.closest('tr')) return;
+          e.preventDefault();
+          openContextMenu(e, 'remote_blank');
+        });
+      }
+
+      // Close menubar dropdowns when clicking anywhere outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.desktop-menubar')) {
+          closeAllMenus();
+        }
+      });
+
+      // Brief delay to allow WebView2 native message loop to attach
+      await new Promise(r => setTimeout(r, 80));
+
+      let loaded = false;
+      try {
+        const data = await sendRust('init');
+        if (data) {
+          if (data.initial_dir) {
+            currentLocalPath = data.initial_dir;
+            const pathInp = document.getElementById('localPathInput');
+            if (pathInp) pathInp.value = currentLocalPath;
+          }
+
+          if (data.drives && data.drives.length > 0) {
+            const driveSelect = document.getElementById('driveSelect');
+            if (driveSelect) {
+              driveSelect.innerHTML = '';
+              data.drives.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.innerText = d;
+                driveSelect.appendChild(opt);
+              });
+              if (currentLocalPath) {
+                const dl = currentLocalPath.substring(0, 3).toUpperCase();
+                driveSelect.value = dl;
+              }
+            }
+          }
+
+          if (data.remote_history) {
+            updateRemoteHistory(data.remote_history);
+          }
+
+          savedSites = data.sites || [];
+          updateQuickSiteSelect();
+          if (data.local_files && Array.isArray(data.local_files)) {
+            renderLocalFiles(data.local_files);
+            loaded = true;
+          }
+          addLog('Local file manager initialized. Ready to connect.', 'success');
+        }
+      } catch (err) {
+        addLog('Initialization notice: ' + err.message, 'warning');
+      }
+
+      // If initial files were not loaded, trigger resilient navigateLocal fallback
+      if (!loaded || !localFiles || localFiles.length === 0) {
+        try {
+          const fallbackPath = currentLocalPath || 'C:\\Users\\aljailane\\Desktop';
+          await navigateLocal(fallbackPath);
+        } catch (_) {
+          try {
+            await navigateLocal('C:\\');
+          } catch (_) {}
+        }
+      }
+    }
+
+    // Local Directory Listing
+    function renderLocalFiles(files) {
+      localFiles = files || [];
+      const tbody = document.getElementById('localFileList');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (localFiles.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 30px 10px;">Folder is empty</td></tr>`;
+        return;
+      }
+
+      localFiles.forEach((f, idx) => {
+        try {
+          const tr = document.createElement('tr');
+          tr.draggable = true;
+          tr.ondragstart = (e) => {
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+              source: 'local',
+              path: f.path,
+              name: f.name,
+              is_dir: f.is_dir
+            }));
+            tr.classList.add('dragging');
+          };
+          tr.ondragend = () => {
+            tr.classList.remove('dragging');
+          };
+          tr.onclick = () => selectLocalRow(idx);
+          tr.ondblclick = () => openLocalItem(f);
+          tr.oncontextmenu = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            selectLocalRow(idx);
+            openContextMenu(e, 'local', f, idx);
+          };
+
+          const fileName = (f.name || '').toString();
+          const { svg, iconClass } = getFileIcon(fileName, !!f.is_dir);
+
+          tr.innerHTML = `
+            <td>
+              <div class="file-cell">
+                <span class="file-icon ${iconClass}">${svg}</span>
+                <span>${escapeHtml(fileName)}</span>
+              </div>
+            </td>
+            <td class="mono-cell">${f.is_dir ? '-' : formatBytes(f.size || 0)}</td>
+            <td class="mono-cell">${f.modified || '-'}</td>
+            <td class="mono-cell">${f.is_dir ? 'Directory' : 'File'}</td>
+          `;
+          tbody.appendChild(tr);
+        } catch (itemErr) {
+          console.error('Error rendering file item:', f, itemErr);
+        }
+      });
+    }
+
+    function selectLocalRow(idx) {
+      const rows = document.querySelectorAll('#localFileList tr');
+      rows.forEach((r, i) => r.classList.toggle('selected', i === idx));
+      selectedLocalFile = localFiles[idx];
+    }
+
+    async function openLocalItem(item) {
+      if (item.is_dir) {
+        await navigateLocal(item.path);
+      } else {
+        openLocalFileInEditor(item.path);
+      }
+    }
+
+    async function navigateLocal(path) {
+      if (!path) path = currentLocalPath || 'C:\\Users\\aljailane\\Desktop';
+      try {
+        const data = await sendRust('local_list', { path });
+        currentLocalPath = data.path;
+        const pathInp = document.getElementById('localPathInput');
+        if (pathInp) pathInp.value = currentLocalPath;
+        const driveSelect = document.getElementById('driveSelect');
+        if (driveSelect && currentLocalPath) {
+          const dl = currentLocalPath.substring(0, 3).toUpperCase();
+          for (let opt of driveSelect.options) {
+            if (opt.value.toUpperCase() === dl) {
+              driveSelect.value = opt.value;
+              break;
+            }
+          }
+        }
+        renderLocalFiles(data.files);
+      } catch (err) {
+        addLog('Cannot open local folder: ' + err.message, 'error');
+      }
+    }
+
+    function localNavigateUp() {
+      if (!currentLocalPath) {
+        navigateLocal('C:\\');
+        return;
+      }
+      const parent = currentLocalPath.replace(/\\[^\\]+$/, '') || 'C:\\';
+      navigateLocal(parent);
+    }
+
+    function refreshLocal() {
+      navigateLocal(currentLocalPath || 'C:\\');
+    }
+
+    function onDriveChange() {
+      const drive = document.getElementById('driveSelect').value;
+      navigateLocal(drive);
+    }
+
+    // Remote Directory Listing
+    function renderRemoteFiles(files) {
+      remoteFiles = files;
+      const tbody = document.getElementById('remoteFileList');
+      tbody.innerHTML = '';
+
+      if (files.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 25px;">Empty Directory</td></tr>`;
+        return;
+      }
+
+      files.forEach((f, idx) => {
+        const tr = document.createElement('tr');
+        tr.draggable = true;
+        tr.ondragstart = (e) => {
+          e.dataTransfer.setData('text/plain', JSON.stringify({
+            source: 'remote',
+            path: f.path,
+            name: f.name,
+            is_dir: f.is_dir
+          }));
+          tr.classList.add('dragging');
+        };
+        tr.ondragend = () => {
+          tr.classList.remove('dragging');
+        };
+        tr.onclick = () => selectRemoteRow(idx);
+        tr.ondblclick = () => openRemoteItem(f);
+        tr.oncontextmenu = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          selectRemoteRow(idx);
+          openContextMenu(e, 'remote', f, idx);
+        };
+
+        const { svg, iconClass } = getFileIcon(f.name, f.is_dir);
+
+        tr.innerHTML = `
+          <td>
+            <div class="file-cell">
+              <span class="file-icon ${iconClass}">${svg}</span>
+              <span>${escapeHtml(f.name)}</span>
+            </div>
+          </td>
+          <td class="mono-cell">${f.is_dir ? '-' : formatBytes(f.size)}</td>
+          <td class="mono-cell">${f.modified}</td>
+          <td class="mono-cell">${f.permissions}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function selectRemoteRow(idx) {
+      const rows = document.querySelectorAll('#remoteFileList tr');
+      rows.forEach((r, i) => r.classList.toggle('selected', i === idx));
+      selectedRemoteFile = remoteFiles[idx];
+    }
+
+    async function openRemoteItem(item) {
+      if (item.is_dir) {
+        await navigateRemote(item.path);
+      } else {
+        openRemoteFileInEditor(item.path);
+      }
+    }
+
+    async function navigateRemote(path) {
+      if (!isConnected) return;
+      try {
+        addLog('CWD -> ' + path, 'cmd');
+        const data = await sendRust('remote_cd', { path });
+        currentRemotePath = data.pwd;
+        document.getElementById('remotePathInput').value = currentRemotePath;
+        if (data.remote_history) updateRemoteHistory(data.remote_history);
+        renderRemoteFiles(data.files);
+      } catch (err) {
+        addLog('Remote navigation error: ' + err.message, 'error');
+      }
+    }
+
+    function remoteNavigateUp() {
+      if (!isConnected) return;
+      let parent = currentRemotePath.replace(/\/[^\/]+$/, '');
+      if (!parent) parent = '/';
+      navigateRemote(parent);
+    }
+
+    function refreshRemote() {
+      if (!isConnected) return;
+      navigateRemote(currentRemotePath);
+    }
+
+    // Connect & Disconnect Logic with Host Key Verification Support
+    let pendingConnection = null;
+
+    function promptHostKeyVerification(info) {
+      hideConnectionLoading();
+      document.getElementById('hostKeyServer').textContent = `${info.host}:${info.port}`;
+      document.getElementById('hostKeyAlgorithm').textContent = info.key_type;
+      document.getElementById('hostKeyFingerprint').textContent = info.fingerprint;
+      document.getElementById('hostKeyModal').classList.add('active');
+    }
+
+    async function acceptHostKey() {
+      document.getElementById('hostKeyModal').classList.remove('active');
+      if (!pendingConnection) return;
+      addLog(`Host key accepted for ${pendingConnection.host}. Saving to cache and connecting...`, 'success');
+      pendingConnection.trust_host = true;
+      executeConnect(pendingConnection);
+    }
+
+    function rejectHostKey() {
+      document.getElementById('hostKeyModal').classList.remove('active');
+      hideConnectionLoading();
+      setConnectedState(false);
+      addLog('Connection cancelled: Server host key was not trusted.', 'error');
+      pendingConnection = null;
+    }
+
+    async function executeConnect(params) {
+      setConnectingState(true);
+      showConnectionLoading(params);
+      pendingConnection = params;
+
+      try {
+        const res = await sendRust('connect', params);
+
+        if (res && res.status === 'host_key_prompt') {
+          // Open Host Key Verification Dialog (Yes / No)
+          promptHostKeyVerification(res);
+          return;
+        }
+
+        isConnected = true;
+        currentRemotePath = res.pwd;
+        document.getElementById('remotePathInput').value = currentRemotePath;
+        if (res.remote_history) updateRemoteHistory(res.remote_history);
+        renderRemoteFiles(res.files || []);
+
+        const label = params.site_name ? `${params.site_name} (${params.host})` : `${params.protocol.toUpperCase()}://${params.host}`;
+        setConnectedState(true, label);
+        addLog(`Connected successfully to ${params.host}! Remote directory: ${currentRemotePath}`, 'success');
+        pendingConnection = null;
+        finishConnectionSuccess(res.pwd);
+      } catch (err) {
+        hideConnectionLoading();
+        setConnectedState(false);
+        pendingConnection = null;
+        addLog(`Connection failed: ${err.message}`, 'error');
+        setTimeout(() => {
+          alert('Connection Failed:\n' + err.message);
+        }, 60);
+      }
+    }
+
+    async function handleConnectClick() {
+      if (selectedQuickSite) {
+        addLog(`Connecting to saved site: ${selectedQuickSite.name} (${selectedQuickSite.host})...`, 'info');
+        executeConnect({
+          protocol: selectedQuickSite.protocol,
+          host: selectedQuickSite.host,
+          port: selectedQuickSite.port,
+          username: selectedQuickSite.username,
+          password: selectedQuickSite.password,
+          auth_type: selectedQuickSite.auth_type || 'password',
+          key_path: selectedQuickSite.key_path,
+          passphrase: selectedQuickSite.passphrase,
+          remote_dir: selectedQuickSite.remote_dir,
+          site_name: selectedQuickSite.name
+        });
+        return;
+      }
+
+      const protocol = document.getElementById('connProtocol').value;
+      const host = document.getElementById('connHost').value.trim();
+      const port = parseInt(document.getElementById('connPort').value) || 22;
+      const username = document.getElementById('connUser').value.trim();
+      const password = document.getElementById('connPass').value;
+
+      if (!host) {
+        alert('Please enter a Hostname or IP address');
+        return;
+      }
+
+      addLog(`Connecting to ${protocol.toUpperCase()}://${host}:${port} as '${username || 'anonymous'}'...`, 'info');
+      executeConnect({
+        protocol,
+        host,
+        port,
+        username,
+        password,
+        auth_type: 'password'
+      });
+    }
+
+    async function handleDisconnect() {
+      try {
+        await sendRust('disconnect');
+      } catch (e) {}
+      isConnected = false;
+      setConnectedState(false);
+      remoteFiles = [];
+      selectedRemoteFile = null;
+      document.getElementById('remotePathInput').value = 'Not connected';
+      document.getElementById('remoteFileList').innerHTML = `
+        <tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 50px;">Disconnected from server.</td></tr>
+      `;
+      addLog('Disconnected from server.', 'info');
+    }
+
+    function setConnectingState(isConnecting) {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      if (isConnecting) {
+        dot.className = 'status-dot connecting';
+        text.innerText = 'Connecting...';
+      }
+    }
+
+    function setConnectedState(connected, title = '') {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      const btnConn = document.getElementById('btnConnect');
+      const btnDisc = document.getElementById('btnDisconnect');
+
+      if (connected) {
+        dot.className = 'status-dot connected';
+        text.innerText = 'Connected: ' + title;
+        btnConn.style.display = 'none';
+        btnDisc.style.display = 'inline-flex';
+      } else {
+        dot.className = 'status-dot';
+        text.innerText = 'Disconnected';
+        btnConn.style.display = 'inline-flex';
+        btnDisc.style.display = 'none';
+      }
+    }
+
+    function updateDefaultPort() {
+      const proto = document.getElementById('connProtocol').value;
+      const portInput = document.getElementById('connPort');
+      portInput.value = proto === 'sftp' ? '22' : '21';
+    }
+
+    function onSiteProtocolChange() {
+      const proto = document.getElementById('siteProtocol').value;
+      const portInput = document.getElementById('sitePort');
+      portInput.value = proto === 'sftp' ? '22' : '21';
+    }
+
+    // Transfers & Drag-Drop Helpers
+    async function uploadFileDirect(localPath, fileName) {
+      if (!isConnected) {
+        alert('Please connect to a server first');
+        return;
+      }
+
+      const remoteDest = currentRemotePath.endsWith('/') 
+        ? currentRemotePath + fileName 
+        : currentRemotePath + '/' + fileName;
+
+      addLog(`Uploading '${fileName}' to ${remoteDest}...`, 'cmd');
+
+      try {
+        const res = await sendRust('upload', {
+          local_path: localPath,
+          remote_path: remoteDest,
+        });
+        renderRemoteFiles(res.files || []);
+        addLog(`Upload completed: ${fileName} (${formatBytes(res.bytes)})`, 'success');
+      } catch (err) {
+        addLog(`Upload failed: ${err.message}`, 'error');
+        alert('Upload Error:\n' + err.message);
+      }
+    }
+
+    async function downloadFileDirect(remotePath, fileName) {
+      const localDest = currentLocalPath.endsWith('\\') 
+        ? currentLocalPath + fileName 
+        : currentLocalPath + '\\' + fileName;
+
+      addLog(`Downloading '${fileName}' to ${localDest}...`, 'cmd');
+
+      try {
+        const res = await sendRust('download', {
+          remote_path: remotePath,
+          local_path: localDest,
+        });
+        refreshLocal();
+        addLog(`Download completed: ${fileName} (${formatBytes(res.bytes)})`, 'success');
+      } catch (err) {
+        addLog(`Download failed: ${err.message}`, 'error');
+        alert('Download Error:\n' + err.message);
+      }
+    }
+
+    async function transferUpload() {
+      if (!selectedLocalFile) {
+        alert('Please select a local file to upload');
+        return;
+      }
+      await uploadFileDirect(selectedLocalFile.path, selectedLocalFile.name);
+    }
+
+    async function transferDownload() {
+      if (!selectedRemoteFile) {
+        alert('Please select a remote file to download');
+        return;
+      }
+      await downloadFileDirect(selectedRemoteFile.path, selectedRemoteFile.name);
+    }
+
+    // Code Editor & Formatter
+    function updateEditorStats() {
+      const textarea = document.getElementById('editorTextarea');
+      const text = textarea ? textarea.value : '';
+      const lines = text ? text.split('\n').length : 0;
+      const chars = text.length;
+      const statsEl = document.getElementById('editorStats');
+      if (statsEl) {
+        statsEl.innerText = `Lines: ${lines} | Chars: ${chars.toLocaleString()}`;
+      }
+    }
+
+    function formatEditorCode() {
+      const textarea = document.getElementById('editorTextarea');
+      const code = textarea.value;
+      const status = document.getElementById('editorStatus');
+      if (!code.trim()) return;
+
+      const ext = (activeEditingPath.split('.').pop() || '').toLowerCase();
+
+      // JSON Beautifier
+      if (ext === 'json' || code.trim().startsWith('{') || code.trim().startsWith('[')) {
+        try {
+          const parsed = JSON.parse(code);
+          textarea.value = JSON.stringify(parsed, null, 2);
+          updateEditorStats();
+          status.innerText = 'JSON Beautified ✓';
+          setTimeout(() => status.innerText = '', 2000);
+          return;
+        } catch (_) {}
+      }
+
+      // XML / HTML Beautifier
+      if (['html', 'htm', 'xml', 'svg'].includes(ext) || code.trim().startsWith('<')) {
+        try {
+          textarea.value = formatXmlHtml(code);
+          updateEditorStats();
+          status.innerText = 'HTML/XML Beautified ✓';
+          setTimeout(() => status.innerText = '', 2000);
+          return;
+        } catch (_) {}
+      }
+
+      // Generic indentation formatter
+      textarea.value = formatGenericCode(code);
+      updateEditorStats();
+      status.innerText = 'Code Beautified ✓';
+      setTimeout(() => status.innerText = '', 2000);
+    }
+
+    function formatXmlHtml(xml) {
+      let formatted = '';
+      let indent = 0;
+      const tab = '  ';
+      const nodes = xml.split(/>\s*</);
+      nodes.forEach(function(node) {
+        if (node.match(/^\/\w/)) indent = Math.max(0, indent - 1);
+        formatted += tab.repeat(indent) + '<' + node + '>\r\n';
+        if (node.match(/^<?\w[^>]*[^\/]$/) && !node.startsWith("input") && !node.startsWith("img") && !node.startsWith("br") && !node.startsWith("hr") && !node.startsWith("meta") && !node.startsWith("link")) {
+          indent++;
+        }
+      });
+      return formatted.substring(1, formatted.length - 3);
+    }
+
+    function formatGenericCode(code) {
+      const lines = code.split('\n');
+      let indent = 0;
+      const tab = '  ';
+      const out = [];
+
+      for (let rawLine of lines) {
+        let line = rawLine.trim();
+        if (!line) {
+          out.push('');
+          continue;
+        }
+
+        if (line.startsWith('}') || line.startsWith(']') || line.startsWith(')')) {
+          indent = Math.max(0, indent - 1);
+        }
+
+        out.push(tab.repeat(indent) + line);
+
+        const opens = (line.match(/[{(\[]/g) || []).length;
+        const closes = (line.match(/[})\]]/g) || []).length;
+        indent += Math.max(0, opens - closes);
+      }
+      return out.join('\n');
+    }
+
+    async function openRemoteFileInEditor(path) {
+      addLog(`Loading remote file: ${path}...`, 'cmd');
+      try {
+        const res = await sendRust('remote_read', { path });
+        activeEditingPath = path;
+        activeEditingIsRemote = true;
+        document.getElementById('editorTitle').innerText = 'Editing Remote: ' + path;
+        document.getElementById('editorTextarea').value = res.content;
+        document.getElementById('editorStatus').innerText = 'Loaded (' + formatBytes(res.size) + ')';
+        updateEditorStats();
+        document.getElementById('editorModal').classList.add('active');
+      } catch (err) {
+        addLog('Cannot open remote file: ' + err.message, 'error');
+        alert('Failed to open file:\n' + err.message);
+      }
+    }
+
+    async function openLocalFileInEditor(path) {
+      try {
+        const res = await sendRust('local_read', { path });
+        activeEditingPath = path;
+        activeEditingIsRemote = false;
+        document.getElementById('editorTitle').innerText = 'Editing Local: ' + path;
+        document.getElementById('editorTextarea').value = res.content;
+        document.getElementById('editorStatus').innerText = 'Local File';
+        updateEditorStats();
+        document.getElementById('editorModal').classList.add('active');
+      } catch (err) {
+        alert('Cannot open file:\n' + err.message);
+      }
+    }
+
+    async function saveEditorContent() {
+      const content = document.getElementById('editorTextarea').value;
+      const status = document.getElementById('editorStatus');
+      status.innerText = 'Saving & Uploading...';
+
+      try {
+        if (activeEditingIsRemote) {
+          await sendRust('remote_write', { path: activeEditingPath, content });
+          addLog(`Saved and uploaded changes to ${activeEditingPath}`, 'success');
+        } else {
+          await sendRust('local_write', { path: activeEditingPath, content });
+          addLog(`Saved local file ${activeEditingPath}`, 'success');
+        }
+        status.innerText = 'Saved successfully ✓';
+        setTimeout(() => status.innerText = '', 2000);
+      } catch (err) {
+        status.innerText = 'Save error!';
+        addLog('Save failed: ' + err.message, 'error');
+        alert('Error saving file:\n' + err.message);
+      }
+    }
+
+    function closeEditorModal() {
+      document.getElementById('editorModal').classList.remove('active');
+    }
+
+    document.getElementById('editorTextarea').addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveEditorContent();
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+        this.selectionStart = this.selectionEnd = start + 2;
+        updateEditorStats();
+      }
+    });
+
+    // Custom Context Menu & Properties Management
+    let contextTarget = null;
+
+    function openContextMenu(e, type, item = null, index = null) {
+      e.preventDefault();
+      contextTarget = { type, item, index };
+      const menu = document.getElementById('customContextMenu');
+      if (!menu) return;
+
+      renderContextMenuItems(type, item);
+
+      menu.classList.add('active');
+
+      const menuWidth = 230;
+      const menuHeight = 280;
+      let x = e.clientX;
+      let y = e.clientY;
+
+      if (x + menuWidth > window.innerWidth) {
+        x = window.innerWidth - menuWidth - 10;
+      }
+      if (y + menuHeight > window.innerHeight) {
+        y = window.innerHeight - menuHeight - 10;
+      }
+
+      menu.style.left = `${Math.max(10, x)}px`;
+      menu.style.top = `${Math.max(10, y)}px`;
+    }
+
+    function closeContextMenu() {
+      const menu = document.getElementById('customContextMenu');
+      if (menu) menu.classList.remove('active');
+    }
+
+    window.addEventListener('click', () => closeContextMenu());
+    window.addEventListener('blur', () => closeContextMenu());
+
+    function renderContextMenuItems(type, item) {
+      const menu = document.getElementById('customContextMenu');
+      if (!menu) return;
+
+      const isRemote = type.startsWith('remote');
+      const isBlank = type.endsWith('_blank');
+
+      let html = '';
+
+      if (isBlank) {
+        const dirPath = isRemote ? currentRemotePath : currentLocalPath;
+        html += `<div class="context-menu-header">${isRemote ? 'Remote Directory' : 'Local Directory'}</div>`;
+        html += `
+          <div class="context-menu-item" onclick="promptNewFile(${isRemote})">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            <span>New File...</span>
+          </div>
+          <div class="context-menu-item" onclick="promptNewFolder(${isRemote})">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+            <span>New Folder...</span>
+          </div>
+          <div class="context-menu-separator"></div>
+          <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(dirPath)}')">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copy Directory Path</span>
+          </div>
+          <div class="context-menu-item" onclick="${isRemote ? 'refreshRemote()' : 'refreshLocal()'}">
+            <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span>Refresh</span>
+            <span class="shortcut">F5</span>
+          </div>
+        `;
+      } else if (item) {
+        html += `<div class="context-menu-header">${item.is_dir ? 'Folder: ' : 'File: '} ${escapeHtml(item.name.length > 20 ? item.name.substring(0, 18) + '...' : item.name)}</div>`;
+
+        if (item.is_dir) {
+          html += `
+            <div class="context-menu-item" onclick="${isRemote ? `navigateRemote('${escapeJsString(item.path)}')` : `navigateLocal('${escapeJsString(item.path)}')`}">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Open Folder</span>
+              <span class="shortcut">Enter</span>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="context-menu-item" onclick="${isRemote ? `openRemoteFileInEditor('${escapeJsString(item.path)}')` : `openLocalFileInEditor('${escapeJsString(item.path)}')`}">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              <span>Edit in Code Editor</span>
+            </div>
+          `;
+        }
+
+        if (isRemote) {
+          html += `
+            <div class="context-menu-item" onclick="downloadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+              <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Download to Local</span>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="context-menu-item" onclick="uploadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+              <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>Upload to Server</span>
+            </div>
+          `;
+        }
+
+        html += `<div class="context-menu-separator"></div>`;
+
+        html += `
+          <div class="context-menu-item" onclick="promptRename('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            <span>Rename...</span>
+            <span class="shortcut">F2</span>
+          </div>
+        `;
+
+        if (isRemote) {
+          html += `
+            <div class="context-menu-item" onclick="openChmodForItem('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', '${escapeJsString(item.permissions || '0644')}')">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>Permissions (CHMOD)...</span>
+            </div>
+          `;
+        }
+
+        html += `
+          <div class="context-menu-item danger" onclick="confirmDelete('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${item.is_dir}, ${isRemote})">
+            <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>Delete</span>
+            <span class="shortcut">Del</span>
+          </div>
+        `;
+
+        html += `<div class="context-menu-separator"></div>`;
+
+        html += `
+          <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(item.path)}')">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copy Full Path</span>
+          </div>
+          <div class="context-menu-item" onclick='showPropertiesModal(${JSON.stringify(item)}, ${isRemote})'>
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Properties & Info...</span>
+          </div>
+        `;
+      }
+
+      menu.innerHTML = html;
+    }
+
+    function escapeJsString(str) {
+      if (!str) return '';
+      return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    async function promptNewFile(isRemote) {
+      closeContextMenu();
+      const fileName = prompt('Enter new file name (e.g. index.php, config.json):');
+      if (!fileName || !fileName.trim()) return;
+      const cleanName = fileName.trim();
+
+      if (isRemote) {
+        if (!isConnected) { alert('Please connect to server first'); return; }
+        const fullPath = currentRemotePath.endsWith('/') ? currentRemotePath + cleanName : currentRemotePath + '/' + cleanName;
+        try {
+          const res = await sendRust('remote_create_file', { path: fullPath });
+          renderRemoteFiles(res.files || []);
+          addLog(`Created remote file: ${fullPath}`, 'success');
+        } catch (e) {
+          alert('Failed to create file: ' + e.message);
+        }
+      } else {
+        const fullPath = currentLocalPath.endsWith('\\') ? currentLocalPath + cleanName : currentLocalPath + '\\' + cleanName;
+        try {
+          await sendRust('local_create_file', { path: fullPath });
+          refreshLocal();
+          addLog(`Created local file: ${fullPath}`, 'success');
+        } catch (e) {
+          alert('Failed to create file: ' + e.message);
+        }
+      }
+    }
+
+    async function promptNewFolder(isRemote) {
+      closeContextMenu();
+      const folderName = prompt('Enter new folder name:');
+      if (!folderName || !folderName.trim()) return;
+      const cleanName = folderName.trim();
+
+      if (isRemote) {
+        if (!isConnected) { alert('Please connect to server first'); return; }
+        const fullPath = currentRemotePath.endsWith('/') ? currentRemotePath + cleanName : currentRemotePath + '/' + cleanName;
+        try {
+          const res = await sendRust('remote_create_dir', { path: fullPath });
+          renderRemoteFiles(res.files || []);
+          addLog(`Created remote directory: ${fullPath}`, 'success');
+        } catch (e) {
+          alert('Failed to create directory: ' + e.message);
+        }
+      } else {
+        const fullPath = currentLocalPath.endsWith('\\') ? currentLocalPath + cleanName : currentLocalPath + '\\' + cleanName;
+        try {
+          await sendRust('local_create_dir', { path: fullPath });
+          refreshLocal();
+          addLog(`Created local directory: ${fullPath}`, 'success');
+        } catch (e) {
+          alert('Failed to create directory: ' + e.message);
+        }
+      }
+    }
+
+    async function promptRename(oldPath, oldName, isRemote) {
+      closeContextMenu();
+      const newName = prompt(`Rename '${oldName}' to:`, oldName);
+      if (!newName || !newName.trim() || newName.trim() === oldName) return;
+      const cleanName = newName.trim();
+
+      if (isRemote) {
+        const parent = oldPath.replace(/\/[^\/]+$/, '') || '/';
+        const newPath = parent.endsWith('/') ? parent + cleanName : parent + '/' + cleanName;
+        try {
+          const res = await sendRust('remote_rename', { old_path: oldPath, new_path: newPath });
+          renderRemoteFiles(res.files || []);
+          addLog(`Renamed remote '${oldName}' to '${cleanName}'`, 'success');
+        } catch (e) {
+          alert('Rename failed: ' + e.message);
+        }
+      } else {
+        const parent = oldPath.replace(/\\[^\\]+$/, '');
+        const newPath = parent ? parent + '\\' + cleanName : cleanName;
+        try {
+          await sendRust('local_rename', { old_path: oldPath, new_path: newPath });
+          refreshLocal();
+          addLog(`Renamed local '${oldName}' to '${cleanName}'`, 'success');
+        } catch (e) {
+          alert('Rename failed: ' + e.message);
+        }
+      }
+    }
+
+    async function confirmDelete(path, name, isDir, isRemote) {
+      closeContextMenu();
+      const kind = isDir ? 'directory' : 'file';
+      if (!confirm(`Are you sure you want to delete this ${kind}?\n\n${name}`)) return;
+
+      if (isRemote) {
+        try {
+          const res = await sendRust('remote_delete', { path, is_dir: isDir });
+          renderRemoteFiles(res.files || []);
+          addLog(`Deleted remote ${kind}: ${name}`, 'success');
+        } catch (e) {
+          alert('Delete failed: ' + e.message);
+        }
+      } else {
+        try {
+          await sendRust('local_delete', { path });
+          refreshLocal();
+          addLog(`Deleted local ${kind}: ${name}`, 'success');
+        } catch (e) {
+          alert('Delete failed: ' + e.message);
+        }
+      }
+    }
+
+    function copyItemPath(path) {
+      closeContextMenu();
+      if (!path) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(path).then(() => {
+          addLog(`Copied to clipboard: ${path}`, 'info');
+        }).catch(() => fallbackCopyText(path));
+      } else {
+        fallbackCopyText(path);
+      }
+    }
+
+    function openChmodForItem(path, name, perms) {
+      closeContextMenu();
+      selectedRemoteFile = { path, name, permissions: perms };
+      openChmodModal();
+    }
+
+    function showPropertiesModal(item, isRemote) {
+      closeContextMenu();
+      if (!item) return;
+      document.getElementById('propTitle').innerText = `${isRemote ? 'Remote' : 'Local'} Properties`;
+      document.getElementById('propIcon').innerText = item.is_dir ? '📁' : '📄';
+      document.getElementById('propName').innerText = item.name;
+      document.getElementById('propType').innerText = item.is_dir ? 'Folder / Directory' : (item.is_symlink ? 'Symlink' : 'Regular File');
+      document.getElementById('propPath').innerText = item.path;
+      document.getElementById('propSize').innerText = item.is_dir ? '-' : `${formatBytes(item.size)} (${item.size.toLocaleString()} bytes)`;
+      document.getElementById('propPerms').innerText = item.permissions || '-';
+      document.getElementById('propModified').innerText = item.modified || '-';
+      document.getElementById('propertiesModal').classList.add('active');
+    }
+
+    function closePropertiesModal() {
+      document.getElementById('propertiesModal').classList.remove('active');
+    }
+
+    // CHMOD Modal
+    function openChmodModal() {
+      if (!selectedRemoteFile) {
+        alert('Please select a remote file first');
+        return;
+      }
+      document.getElementById('chmodFilename').innerText = selectedRemoteFile.path;
+      document.getElementById('chmodOctal').value = '0644';
+      updateCheckboxesFromOctal('0644');
+      document.getElementById('chmodModal').classList.add('active');
+    }
+
+    function closeChmodModal() {
+      document.getElementById('chmodModal').classList.remove('active');
+    }
+
+    function updateCheckboxesFromOctal(octalStr) {
+      const val = parseInt(octalStr.replace('0o', ''), 8) || 0o644;
+      document.getElementById('cm_ur').checked = (val & 0o400) !== 0;
+      document.getElementById('cm_uw').checked = (val & 0o200) !== 0;
+      document.getElementById('cm_ux').checked = (val & 0o100) !== 0;
+      document.getElementById('cm_gr').checked = (val & 0o040) !== 0;
+      document.getElementById('cm_gw').checked = (val & 0o020) !== 0;
+      document.getElementById('cm_gx').checked = (val & 0o010) !== 0;
+      document.getElementById('cm_or').checked = (val & 0o004) !== 0;
+      document.getElementById('cm_ow').checked = (val & 0o002) !== 0;
+      document.getElementById('cm_ox').checked = (val & 0o001) !== 0;
+    }
+
+    function calculateOctalFromCheckboxes() {
+      let val = 0;
+      if (document.getElementById('cm_ur').checked) val |= 0o400;
+      if (document.getElementById('cm_uw').checked) val |= 0o200;
+      if (document.getElementById('cm_ux').checked) val |= 0o100;
+      if (document.getElementById('cm_gr').checked) val |= 0o040;
+      if (document.getElementById('cm_gw').checked) val |= 0o020;
+      if (document.getElementById('cm_gx').checked) val |= 0o010;
+      if (document.getElementById('cm_or').checked) val |= 0o004;
+      if (document.getElementById('cm_ow').checked) val |= 0o002;
+      if (document.getElementById('cm_ox').checked) val |= 0o001;
+      return '0' + val.toString(8);
+    }
+
+    ['cm_ur','cm_uw','cm_ux','cm_gr','cm_gw','cm_gx','cm_or','cm_ow','cm_ox'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        document.getElementById('chmodOctal').value = calculateOctalFromCheckboxes();
+      });
+    });
+
+    function updateChmodFromOctal() {
+      const oct = document.getElementById('chmodOctal').value;
+      updateCheckboxesFromOctal(oct);
+    }
+
+    async function applyChmod() {
+      const mode = document.getElementById('chmodOctal').value;
+      try {
+        const res = await sendRust('remote_chmod', {
+          path: selectedRemoteFile.path,
+          mode: mode
+        });
+        renderRemoteFiles(res.files || []);
+        addLog(`Updated permissions for '${selectedRemoteFile.name}' to ${mode}`, 'success');
+        closeChmodModal();
+      } catch (err) {
+        addLog('Failed to change permissions: ' + err.message, 'error');
+        alert('CHMOD Error:\n' + err.message);
+      }
+    }
+
+    // Delete and Edit actions
+    async function deleteSelectedRemote() {
+      if (!selectedRemoteFile) return;
+      if (!confirm(`Are you sure you want to delete '${selectedRemoteFile.name}' from the remote server?`)) return;
+
+      try {
+        const res = await sendRust('remote_delete', {
+          path: selectedRemoteFile.path,
+          is_dir: selectedRemoteFile.is_dir
+        });
+        renderRemoteFiles(res.files || []);
+        addLog(`Deleted '${selectedRemoteFile.name}' from remote server.`, 'success');
+        selectedRemoteFile = null;
+      } catch (err) {
+        addLog('Deletion failed: ' + err.message, 'error');
+        alert('Delete Error:\n' + err.message);
+      }
+    }
+
+    function editSelectedRemoteFile() {
+      if (!selectedRemoteFile) {
+        alert('Please select a file to edit');
+        return;
+      }
+      if (selectedRemoteFile.is_dir) {
+        alert('Selected item is a directory, not a file!');
+        return;
+      }
+      openRemoteFileInEditor(selectedRemoteFile.path);
+    }
+
+    async function promptNewRemoteFolder() {
+      if (!isConnected) return;
+      const name = prompt('Enter new remote folder name:');
+      if (!name) return;
+      const newPath = currentRemotePath.endsWith('/') ? currentRemotePath + name : currentRemotePath + '/' + name;
+      try {
+        const res = await sendRust('remote_create_dir', { path: newPath });
+        renderRemoteFiles(res.files || []);
+        addLog(`Created remote directory: ${name}`, 'success');
+      } catch (err) {
+        alert('Error creating folder:\n' + err.message);
+      }
+    }
+
+    async function promptNewLocalFolder() {
+      const name = prompt('Enter new local folder name:');
+      if (!name) return;
+      const newPath = currentLocalPath.endsWith('\\') ? currentLocalPath + name : currentLocalPath + '\\' + name;
+      try {
+        await sendRust('local_create_dir', { path: newPath });
+        refreshLocal();
+      } catch (err) {
+        alert('Error creating folder:\n' + err.message);
+      }
+    }
+
+    async function promptNewLocalFile() {
+      const name = prompt('Enter new local file name (e.g. index.html):');
+      if (!name) return;
+      const newPath = currentLocalPath.endsWith('\\') ? currentLocalPath + name : currentLocalPath + '\\' + name;
+      try {
+        await sendRust('local_create_file', { path: newPath });
+        refreshLocal();
+      } catch (err) {
+        alert('Error creating file:\n' + err.message);
+      }
+    }
+
+    // Site Manager Modal Logic
+    function openSitesModal() {
+      renderSitesList();
+      document.getElementById('sitesModal').classList.add('active');
+      sendRust('get_storage_info').then(info => {
+        if (info && info.path) {
+          const lbl = document.getElementById('storagePathLabel');
+          if (lbl) lbl.textContent = info.path;
+        }
+      }).catch(() => {});
+    }
+
+    function closeSitesModal() {
+      document.getElementById('sitesModal').classList.remove('active');
+    }
+
+    async function browseSshKeyFile() {
+      try {
+        const res = await sendRust('pick_ssh_key', {});
+        if (res && res.path) {
+          document.getElementById('siteKeyPath').value = res.path;
+          addLog(`Selected SSH Key: ${res.path}`, 'info');
+        }
+      } catch (err) {
+        addLog(`Error picking SSH Key file: ${err.message}`, 'error');
+      }
+    }
+
+    async function openStorageFolder() {
+      try {
+        await sendRust('open_storage_folder', {});
+        addLog('Opened configuration directory in Explorer', 'info');
+      } catch (err) {
+        addLog(`Error opening folder: ${err.message}`, 'error');
+      }
+    }
+
+    let selectedSiteId = null;
+
+    function switchSiteAuth(type) {
+      document.getElementById('siteAuthType').value = type;
+      const tabPass = document.getElementById('tabAuthPass');
+      const tabKey = document.getElementById('tabAuthKey');
+      const blockPass = document.getElementById('sitePassField');
+      const blockKey = document.getElementById('siteKeyBlock');
+
+      if (type === 'key') {
+        if (tabPass) tabPass.classList.remove('active');
+        if (tabKey) tabKey.classList.add('active');
+        if (blockPass) blockPass.style.display = 'none';
+        if (blockKey) blockKey.style.display = 'block';
+      } else {
+        if (tabKey) tabKey.classList.remove('active');
+        if (tabPass) tabPass.classList.add('active');
+        if (blockKey) blockKey.style.display = 'none';
+        if (blockPass) blockPass.style.display = 'flex';
+      }
+    }
+
+    function renderSitesList() {
+      const container = document.getElementById('sitesList');
+      container.innerHTML = '';
+
+      // Permanent top item: New Site
+      const newSiteItem = document.createElement('div');
+      newSiteItem.className = 'site-tree-item new-site-entry' + (selectedSiteId === null ? ' active' : '');
+      newSiteItem.innerHTML = `
+        <svg class="icon icon-sm site-tree-icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span style="font-weight:600;">New Site</span>
+      `;
+      newSiteItem.onclick = () => {
+        selectedSiteId = null;
+        resetSiteForm();
+      };
+      container.appendChild(newSiteItem);
+
+      if (savedSites.length === 0) {
+        return;
+      }
+
+      savedSites.forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'site-tree-item' + (selectedSiteId === s.id ? ' active' : '');
+        item.title = `${s.name} (${s.protocol}://${s.host}:${s.port})\nDouble click to connect`;
+        item.innerHTML = `
+          <svg class="icon icon-sm site-tree-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          <span style="overflow:hidden; text-overflow:ellipsis; flex:1;">${escapeHtml(s.name)}</span>
+        `;
+        item.onclick = () => {
+          selectedSiteId = s.id;
+          fillSiteForm(s);
+          renderSitesList();
+        };
+        item.ondblclick = () => {
+          selectedSiteId = s.id;
+          fillSiteForm(s);
+          connectCurrentFormSite();
+        };
+        container.appendChild(item);
+      });
+    }
+
+    function fillSiteForm(s) {
+      document.getElementById('siteId').value = s.id;
+      document.getElementById('siteName').value = s.name;
+      document.getElementById('siteProtocol').value = s.protocol;
+      document.getElementById('siteHost').value = s.host;
+      document.getElementById('sitePort').value = s.port;
+      document.getElementById('siteUser').value = s.username;
+      document.getElementById('sitePass').value = s.password || '';
+      document.getElementById('siteKeyPath').value = s.key_path || '';
+      document.getElementById('sitePassphrase').value = s.passphrase || '';
+      document.getElementById('siteRemoteDir').value = s.remote_dir || '';
+
+      switchSiteAuth(s.auth_type === 'key' ? 'key' : 'password');
+    }
+
+    function resetSiteForm() {
+      selectedSiteId = null;
+      document.getElementById('siteId').value = '';
+      document.getElementById('siteName').value = '';
+      document.getElementById('siteProtocol').value = 'sftp';
+      document.getElementById('siteHost').value = '';
+      document.getElementById('sitePort').value = '22';
+      document.getElementById('siteUser').value = '';
+      document.getElementById('sitePass').value = '';
+      document.getElementById('siteKeyPath').value = '';
+      document.getElementById('sitePassphrase').value = '';
+      document.getElementById('siteRemoteDir').value = '';
+      switchSiteAuth('password');
+      renderSitesList();
+    }
+
+    function deleteCurrentSelectedSite() {
+      const id = document.getElementById('siteId').value || selectedSiteId;
+      if (!id) {
+        alert('Please select a saved site from the list to delete.');
+        return;
+      }
+      deleteSite(id);
+    }
+
+    async function connectCurrentFormSite() {
+      const host = document.getElementById('siteHost').value.trim();
+      if (!host) {
+        alert('Please enter a Host Name before connecting.');
+        return;
+      }
+
+      const siteConfig = {
+        protocol: document.getElementById('siteProtocol').value,
+        host: host,
+        port: parseInt(document.getElementById('sitePort').value) || 22,
+        username: document.getElementById('siteUser').value.trim(),
+        password: document.getElementById('sitePass').value,
+        auth_type: document.getElementById('siteAuthType').value,
+        key_path: document.getElementById('siteKeyPath').value.trim(),
+        passphrase: document.getElementById('sitePassphrase').value,
+        remote_dir: document.getElementById('siteRemoteDir').value.trim(),
+        site_name: document.getElementById('siteName').value.trim() || host
+      };
+
+      closeSitesModal();
+
+      const siteId = document.getElementById('siteId').value;
+      const sel = document.getElementById('quickSiteSelect');
+      if (sel && siteId && savedSites.some(s => s.id === siteId)) {
+        sel.value = siteId;
+        onQuickSiteSelect(siteId);
+      }
+
+      addLog(`Connecting to: ${siteConfig.site_name} (${siteConfig.host})...`, 'info');
+      executeConnect(siteConfig);
+    }
+
+    async function saveSiteFromForm() {
+      const name = document.getElementById('siteName').value.trim();
+      const host = document.getElementById('siteHost').value.trim();
+
+      if (!host) {
+        alert('Please enter a Host Name');
+        return;
+      }
+
+      const id = document.getElementById('siteId').value || 'site_' + Date.now();
+      const site = {
+        id,
+        name: name || host,
+        protocol: document.getElementById('siteProtocol').value,
+        host: host,
+        port: parseInt(document.getElementById('sitePort').value) || 22,
+        username: document.getElementById('siteUser').value.trim(),
+        password: document.getElementById('sitePass').value,
+        auth_type: document.getElementById('siteAuthType').value,
+        key_path: document.getElementById('siteKeyPath').value.trim(),
+        passphrase: document.getElementById('sitePassphrase').value,
+        remote_dir: document.getElementById('siteRemoteDir').value.trim(),
+        local_dir: '',
+        created_at: new Date().toISOString()
+      };
+
+      try {
+        const res = await sendRust('save_site', site);
+        savedSites = res.sites || [];
+        selectedSiteId = site.id;
+        document.getElementById('siteId').value = site.id;
+        updateQuickSiteSelect();
+        renderSitesList();
+        addLog(`Site configuration saved: ${site.name}`, 'success');
+      } catch (err) {
+        alert('Failed to save site: ' + err.message);
+      }
+    }
+
+    async function deleteSite(id) {
+      if (!confirm('Are you sure you want to delete this saved site?')) return;
+      try {
+        const res = await sendRust('delete_site', { id });
+        savedSites = res.sites || [];
+        updateQuickSiteSelect();
+        selectedSiteId = null;
+        renderSitesList();
+        resetSiteForm();
+      } catch (err) {
+        alert('Failed to delete: ' + err.message);
+      }
+    }
+
+    async function loadSiteIntoBar(siteId) {
+      const site = savedSites.find(s => s.id === siteId);
+      if (!site) return;
+
+      document.getElementById('connProtocol').value = site.protocol;
+      document.getElementById('connHost').value = site.host;
+      document.getElementById('connPort').value = site.port;
+      document.getElementById('connUser').value = site.username;
+      document.getElementById('connPass').value = site.password || '';
+      closeSitesModal();
+
+      const sel = document.getElementById('quickSiteSelect');
+      if (sel) {
+        sel.value = site.id;
+        onQuickSiteSelect(site.id);
+      }
+
+      addLog(`Connecting to saved site: ${site.name} (${site.host})...`, 'info');
+
+      executeConnect({
+        protocol: site.protocol,
+        host: site.host,
+        port: site.port,
+        username: site.username,
+        password: site.password,
+        auth_type: site.auth_type || 'password',
+        key_path: site.key_path,
+        passphrase: site.passphrase,
+        remote_dir: site.remote_dir,
+        site_name: site.name
+      });
+    }
+
+    let lastLogHeight = 160;
+
+    function toggleLogPanel() {
+      const panel = document.getElementById('logPanel');
+      const iconSpan = document.getElementById('logToggleIcon');
+      if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        panel.style.height = (lastLogHeight || 160) + 'px';
+        iconSpan.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>`;
+      } else {
+        const cur = parseInt(panel.style.height);
+        if (cur && cur > 50) lastLogHeight = cur;
+        panel.classList.add('collapsed');
+        panel.style.height = '34px';
+        iconSpan.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>`;
+      }
+    }
+
+    // Dynamic Drag-to-Resize Logic for Left/Right Panes and Bottom Console
+    const workspace = document.getElementById('workspaceArea');
+    const leftPane = document.getElementById('leftPane');
+    const vGutter = document.getElementById('verticalSplitGutter');
+    const hGutter = document.getElementById('horizontalSplitGutter');
+    const logPanel = document.getElementById('logPanel');
+
+    // Vertical Gutter (Left/Right resizing)
+    vGutter.addEventListener('mousedown', function(e) {
+      isDraggingVertical = true;
+      vGutter.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      e.preventDefault();
+    });
+
+    // Horizontal Gutter (Up/Down console resizing)
+    hGutter.addEventListener('mousedown', function(e) {
+      isDraggingHorizontal = true;
+      hGutter.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (isDraggingVertical) {
+        const rect = workspace.getBoundingClientRect();
+        const offsetX = e.clientX - rect.left;
+        const totalW = rect.width;
+        let percentage = (offsetX / totalW) * 100;
+        if (percentage < 20) percentage = 20;
+        if (percentage > 80) percentage = 80;
+        leftPane.style.width = percentage + '%';
+      }
+
+      if (isDraggingHorizontal) {
+        const windowHeight = window.innerHeight;
+        const newHeight = windowHeight - e.clientY;
+        const iconSpan = document.getElementById('logToggleIcon');
+        if (newHeight <= 45) {
+          logPanel.classList.add('collapsed');
+          logPanel.style.height = '34px';
+          if (iconSpan) iconSpan.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>`;
+        } else if (newHeight <= windowHeight - 150) {
+          logPanel.classList.remove('collapsed');
+          logPanel.style.height = newHeight + 'px';
+          lastLogHeight = newHeight;
+          if (iconSpan) iconSpan.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>`;
+        }
+      }
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (isDraggingVertical) {
+        isDraggingVertical = false;
+        vGutter.classList.remove('dragging');
+        document.body.style.cursor = '';
+      }
+      if (isDraggingHorizontal) {
+        isDraggingHorizontal = false;
+        hGutter.classList.remove('dragging');
+        document.body.style.cursor = '';
+      }
+    });
+
+    // Theme Management (Light / Dark)
+    function initTheme() {
+      const savedTheme = appStorage.getItem('90ftp_theme') || 'dark';
+      applyTheme(savedTheme);
+    }
+
+    function toggleTheme() {
+      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = cur === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      appStorage.setItem('90ftp_theme', theme);
+      const icon = document.getElementById('themeIcon');
+      if (icon) {
+        if (theme === 'light') {
+          icon.innerHTML = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`;
+        } else {
+          icon.innerHTML = `<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`;
+        }
+      }
+    }
+
+    // High-Fidelity Desktop Vector Icons
+    function getFileIcon(name, isDir) {
+      if (isDir) {
+        return {
+          iconClass: 'folder',
+          svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+            <path d="M2.5 4A1.5 1.5 0 0 1 4 2.5h3.38a1.5 1.5 0 0 1 1.06.44l1.62 1.62H16A1.5 1.5 0 0 1 17.5 6V7H4A1.5 1.5 0 0 0 2.5 8.5V4z" fill="#d97706"/>
+            <path d="M2.5 8.5A1.5 1.5 0 0 1 4 7h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 16.5H4A1.5 1.5 0 0 1 2.5 15V8.5z" fill="#f59e0b"/>
+            <path d="M4 8h12v1H4z" fill="#fef3c7" opacity="0.6"/>
+          </svg>`
+        };
+      }
+
+      const safeName = (name || '').toString();
+      const ext = safeName.includes('.') ? safeName.split('.').pop().toLowerCase() : '';
+      switch (ext) {
+        case 'php':
+        case 'phtml':
+          return {
+            iconClass: 'code-php',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="#7c3aed" opacity="0.15"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="#7c3aed" stroke-width="1.2" fill="none"/>
+              <rect x="5" y="9" width="10" height="5.5" rx="1.5" fill="#7c3aed"/>
+              <text x="10" y="13.2" font-size="3.8" font-weight="900" fill="#fff" text-anchor="middle" font-family="system-ui, sans-serif">PHP</text>
+            </svg>`
+          };
+        case 'html':
+        case 'htm':
+          return {
+            iconClass: 'code-html',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="#ea580c" opacity="0.15"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="#ea580c" stroke-width="1.2" fill="none"/>
+              <rect x="5" y="9" width="10" height="5.5" rx="1.5" fill="#ea580c"/>
+              <text x="10" y="13.2" font-size="3.6" font-weight="900" fill="#fff" text-anchor="middle" font-family="system-ui, sans-serif">HTML</text>
+            </svg>`
+          };
+        case 'js':
+        case 'mjs':
+        case 'cjs':
+          return {
+            iconClass: 'code-js',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="#facc15" opacity="0.2"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="#ca8a04" stroke-width="1.2" fill="none"/>
+              <rect x="5.5" y="9" width="9" height="5.5" rx="1.5" fill="#eab308"/>
+              <text x="10" y="13.2" font-size="4" font-weight="900" fill="#000" text-anchor="middle" font-family="system-ui, sans-serif">JS</text>
+            </svg>`
+          };
+        case 'ts':
+          return {
+            iconClass: 'code-ts',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="#0284c7" opacity="0.18"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="#0284c7" stroke-width="1.2" fill="none"/>
+              <rect x="5.5" y="9" width="9" height="5.5" rx="1.5" fill="#0284c7"/>
+              <text x="10" y="13.2" font-size="4" font-weight="900" fill="#fff" text-anchor="middle" font-family="system-ui, sans-serif">TS</text>
+            </svg>`
+          };
+        case 'css':
+        case 'scss':
+        case 'sass':
+        case 'less':
+          return {
+            iconClass: 'code-css',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="#06b6d4" opacity="0.18"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="#0891b2" stroke-width="1.2" fill="none"/>
+              <rect x="5" y="9" width="10" height="5.5" rx="1.5" fill="#0891b2"/>
+              <text x="10" y="13.2" font-size="3.6" font-weight="900" fill="#fff" text-anchor="middle" font-family="system-ui, sans-serif">CSS</text>
+            </svg>`
+          };
+        case 'py':
+          return {
+            iconClass: 'code-py',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="#10b981" opacity="0.15"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="#059669" stroke-width="1.2" fill="none"/>
+              <rect x="5.5" y="9" width="9" height="5.5" rx="1.5" fill="#059669"/>
+              <text x="10" y="13.2" font-size="4" font-weight="900" fill="#fff" text-anchor="middle" font-family="system-ui, sans-serif">PY</text>
+            </svg>`
+          };
+        case 'sql':
+        case 'db':
+        case 'sqlite':
+          return {
+            iconClass: 'db',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <ellipse cx="10" cy="5" rx="6" ry="2.5" fill="#0284c7"/>
+              <path d="M4 5v5c0 1.38 2.69 2.5 6 2.5s6-1.12 6-2.5V5" stroke="#0284c7" stroke-width="1.3" fill="none"/>
+              <path d="M4 10v5c0 1.38 2.69 2.5 6 2.5s6-1.12 6-2.5V10" stroke="#0284c7" stroke-width="1.3" fill="none"/>
+            </svg>`
+          };
+        case 'json':
+        case 'xml':
+        case 'yaml':
+        case 'yml':
+        case 'env':
+        case 'conf':
+        case 'htaccess':
+        case 'ini':
+        case 'toml':
+          return {
+            iconClass: 'config',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="#ec4899" opacity="0.15"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="#db2777" stroke-width="1.2" fill="none"/>
+              <circle cx="10" cy="11.5" r="2.2" stroke="#db2777" stroke-width="1.2" fill="none"/>
+              <path d="M10 8v1.2M10 13.8V15M6.5 11.5h1.2M12.3 11.5h1.2" stroke="#db2777" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>`
+          };
+        case 'zip':
+        case 'tar':
+        case 'gz':
+        case 'rar':
+        case '7z':
+        case 'bz2':
+          return {
+            iconClass: 'archive',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <rect x="3.5" y="3" width="13" height="14" rx="2" fill="#f97316" opacity="0.2"/>
+              <rect x="3.5" y="3" width="13" height="14" rx="2" stroke="#ea580c" stroke-width="1.2" fill="none"/>
+              <path d="M10 3v14M8.5 5h3M8.5 7h3M8.5 9h3M8.5 11h3" stroke="#ea580c" stroke-width="1"/>
+              <rect x="8.5" y="13" width="3" height="3" rx="0.5" fill="#ea580c"/>
+            </svg>`
+          };
+        case 'png':
+        case 'jpg':
+        case 'jpeg':
+        case 'svg':
+        case 'gif':
+        case 'webp':
+        case 'ico':
+        case 'bmp':
+          return {
+            iconClass: 'image',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <rect x="3" y="3.5" width="14" height="13" rx="1.5" fill="#10b981" opacity="0.18"/>
+              <rect x="3" y="3.5" width="14" height="13" rx="1.5" stroke="#059669" stroke-width="1.2" fill="none"/>
+              <circle cx="7" cy="7.5" r="1.3" fill="#059669"/>
+              <path d="M4 14.5l4-4 3 3 2.5-2.5 3.5 3.5" stroke="#059669" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>`
+          };
+        case 'pdf':
+          return {
+            iconClass: 'pdf',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="#ef4444" opacity="0.15"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="#dc2626" stroke-width="1.2" fill="none"/>
+              <rect x="5.5" y="9" width="9" height="5.5" rx="1.5" fill="#dc2626"/>
+              <text x="10" y="13.2" font-size="3.8" font-weight="900" fill="#fff" text-anchor="middle" font-family="system-ui, sans-serif">PDF</text>
+            </svg>`
+          };
+        case 'pem':
+        case 'key':
+        case 'pub':
+        case 'ppk':
+        case 'crt':
+          return {
+            iconClass: 'key',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <circle cx="7.5" cy="8" r="4" stroke="#d97706" stroke-width="1.3" fill="none"/>
+              <circle cx="7.5" cy="8" r="1.5" fill="#d97706"/>
+              <path d="M10.5 10.5L16 16M13.5 13.5l1.5-1.5M15 15l1.5-1.5" stroke="#d97706" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>`
+          };
+        case 'sh':
+        case 'bash':
+        case 'bat':
+        case 'cmd':
+        case 'ps1':
+        case 'exe':
+          return {
+            iconClass: 'exec',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <rect x="2.5" y="3.5" width="15" height="13" rx="1.5" fill="#334155"/>
+              <path d="M5 8l3 2.5-3 2.5M9.5 13h4" stroke="#4ade80" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>`
+          };
+        default:
+          return {
+            iconClass: 'doc',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="currentColor" opacity="0.08"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="currentColor" stroke-width="1.2" fill="none" opacity="0.5"/>
+              <path d="M11 1v4a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.2" fill="none" opacity="0.5"/>
+              <line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" stroke-width="1" opacity="0.4"/>
+              <line x1="7" y1="13" x2="11" y2="13" stroke="currentColor" stroke-width="1" opacity="0.4"/>
+            </svg>`
+          };
+      }
+    }
+
+    // Options & Preferences Management
+    const defaultOptions = {
+      delFinished: true,
+      naturalSort: true,
+      showHidden: true,
+      showWelcome: false,
+      showFullPath: true,
+      useHomePath: true,
+      confirmDisconnect: true,
+      dblLocal: 'edit',
+      dblRemote: 'edit',
+      rightClickMenu: 'custom',
+      dragDropAction: 'direct',
+      startupLocal: '',
+      startupRemote: 'home',
+      openSiteManagerOnLaunch: false,
+      concurrentTransfers: 2,
+      fileCollision: 'overwrite',
+      bufferSize: '64',
+      maxLogLines: 500,
+      logAutoScroll: true,
+      logTimestamps: true,
+      strictHostKey: true,
+      encryptPasswords: true,
+      wipeOnDisconnect: false,
+      cipherPref: 'auto',
+      keepAlive: '30',
+      socketTimeout: '15'
+    };
+
+    let appOptions = Object.assign({}, defaultOptions);
+    let showHiddenFilesState = true;
+
+    function initOptions() {
+      try {
+        const saved = appStorage.getItem('90ftp_options');
+        if (saved) {
+          appOptions = Object.assign({}, defaultOptions, JSON.parse(saved));
+        }
+      } catch (_) {}
+      loadOptionsToForm();
+      showHiddenFilesState = !!appOptions.showHidden;
+      const menuCheck = document.getElementById('menuCheckHidden');
+      if (menuCheck) menuCheck.textContent = showHiddenFilesState ? '✓' : ' ';
+    }
+
+    function loadOptionsToForm() {
+      const setCheck = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = !!val;
+      };
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined) el.value = val;
+      };
+
+      setCheck('optDelFinished', appOptions.delFinished);
+      setCheck('optNaturalSort', appOptions.naturalSort);
+      setCheck('optShowHidden', appOptions.showHidden);
+      setCheck('optShowWelcome', appOptions.showWelcome);
+      setCheck('optShowFullPath', appOptions.showFullPath);
+      setCheck('optUseHomePath', appOptions.useHomePath);
+      setCheck('optConfirmDisconnect', appOptions.confirmDisconnect);
+
+      setVal('optDblLocal', appOptions.dblLocal);
+      setVal('optDblRemote', appOptions.dblRemote);
+      setVal('optRightClickMenu', appOptions.rightClickMenu);
+      setVal('optDragDropAction', appOptions.dragDropAction);
+
+      setVal('optStartupLocal', appOptions.startupLocal);
+      setVal('optStartupRemote', appOptions.startupRemote);
+      setCheck('optOpenSiteManagerOnLaunch', appOptions.openSiteManagerOnLaunch);
+
+      setVal('optConcurrentTransfers', appOptions.concurrentTransfers);
+      setVal('optFileCollision', appOptions.fileCollision);
+      setVal('optBufferSize', appOptions.bufferSize);
+
+      setVal('optMaxLogLines', appOptions.maxLogLines);
+      setCheck('optLogAutoScroll', appOptions.logAutoScroll);
+      setCheck('optLogTimestamps', appOptions.logTimestamps);
+
+      setCheck('optStrictHostKey', appOptions.strictHostKey);
+      setCheck('optEncryptPasswords', appOptions.encryptPasswords);
+      setCheck('optWipeOnDisconnect', appOptions.wipeOnDisconnect);
+      setVal('optCipherPref', appOptions.cipherPref);
+
+      setVal('optKeepAlive', appOptions.keepAlive);
+      setVal('optSocketTimeout', appOptions.socketTimeout);
+    }
+
+    function openOptionsModal(tab) {
+      closeAllMenus();
+      loadOptionsToForm();
+      if (tab) {
+        switchOptionsTab(tab);
+      }
+      const modal = document.getElementById('optionsModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeOptionsModal() {
+      const modal = document.getElementById('optionsModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function switchOptionsTab(tabName) {
+      const tabs = ['general', 'startup', 'transfer', 'log', 'security', 'cache', 'advanced'];
+      tabs.forEach(t => {
+        const btn = document.getElementById('tabOpt' + t.charAt(0).toUpperCase() + t.slice(1));
+        const pane = document.getElementById('paneOpt' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (btn) btn.classList.toggle('active', t === tabName);
+        if (pane) pane.classList.toggle('active', t === tabName);
+      });
+    }
+
+    function saveOptions(showNotice = true) {
+      const getCheck = (id, def) => {
+        const el = document.getElementById(id);
+        return el ? el.checked : def;
+      };
+      const getVal = (id, def) => {
+        const el = document.getElementById(id);
+        return el ? el.value : def;
+      };
+
+      appOptions = {
+        delFinished: getCheck('optDelFinished', true),
+        naturalSort: getCheck('optNaturalSort', true),
+        showHidden: getCheck('optShowHidden', true),
+        showWelcome: getCheck('optShowWelcome', false),
+        showFullPath: getCheck('optShowFullPath', true),
+        useHomePath: getCheck('optUseHomePath', true),
+        confirmDisconnect: getCheck('optConfirmDisconnect', true),
+        dblLocal: getVal('optDblLocal', 'edit'),
+        dblRemote: getVal('optDblRemote', 'edit'),
+        rightClickMenu: getVal('optRightClickMenu', 'custom'),
+        dragDropAction: getVal('optDragDropAction', 'direct'),
+        startupLocal: getVal('optStartupLocal', ''),
+        startupRemote: getVal('optStartupRemote', 'home'),
+        openSiteManagerOnLaunch: getCheck('optOpenSiteManagerOnLaunch', false),
+        concurrentTransfers: parseInt(getVal('optConcurrentTransfers', '2'), 10) || 2,
+        fileCollision: getVal('optFileCollision', 'overwrite'),
+        bufferSize: getVal('optBufferSize', '64'),
+        maxLogLines: parseInt(getVal('optMaxLogLines', '500'), 10) || 500,
+        logAutoScroll: getCheck('optLogAutoScroll', true),
+        logTimestamps: getCheck('optLogTimestamps', true),
+        strictHostKey: getCheck('optStrictHostKey', true),
+        encryptPasswords: getCheck('optEncryptPasswords', true),
+        wipeOnDisconnect: getCheck('optWipeOnDisconnect', false),
+        cipherPref: getVal('optCipherPref', 'auto'),
+        keepAlive: getVal('optKeepAlive', '30'),
+        socketTimeout: getVal('optSocketTimeout', '15')
+      };
+
+      try {
+        appStorage.setItem('90ftp_options', JSON.stringify(appOptions));
+      } catch (_) {}
+
+      showHiddenFilesState = !!appOptions.showHidden;
+      const menuCheck = document.getElementById('menuCheckHidden');
+      if (menuCheck) menuCheck.textContent = showHiddenFilesState ? '✓' : ' ';
+
+      if (showNotice) {
+        addLog('Options and preferences saved successfully', 'success');
+      }
+    }
+
+    function saveOptionsAndClose() {
+      saveOptions(true);
+      closeOptionsModal();
+    }
+
+    function resetSettingsToDefault() {
+      if (confirm('Are you sure you want to reset all preferences to factory defaults?')) {
+        appOptions = Object.assign({}, defaultOptions);
+        try {
+          appStorage.removeItem('90ftp_options');
+        } catch (_) {}
+        loadOptionsToForm();
+        addLog('Preferences reset to default values', 'info');
+      }
+    }
+
+    async function clearKnownHostsCache() {
+      if (!confirm('Clear all saved server host key fingerprints? Future connections will prompt to verify fingerprints.')) {
+        return;
+      }
+      try {
+        await sendRust('clear_known_hosts');
+        addLog('Cleared server host keys cache (%APPDATA%\\90FTP\\known_hosts.json)', 'success');
+        alert('Server host keys cache has been cleared successfully.');
+      } catch (err) {
+        addLog('Failed to clear known hosts cache: ' + err.message, 'error');
+      }
+    }
+
+    async function clearRemoteHistoryCache() {
+      if (!confirm('Clear all stored remote navigation path history?')) {
+        return;
+      }
+      try {
+        const res = await sendRust('clear_remote_history');
+        if (res && res.history) {
+          updateRemoteHistory(res.history);
+        }
+        addLog('Cleared remote path history (%APPDATA%\\90FTP\\remote_history.json)', 'success');
+        alert('Remote navigation history has been cleared.');
+      } catch (err) {
+        addLog('Failed to clear remote history: ' + err.message, 'error');
+      }
+    }
+
+    // About Dialog Management
+    function openAboutModal() {
+      closeAllMenus();
+      const modal = document.getElementById('aboutModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeAboutModal() {
+      const modal = document.getElementById('aboutModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    // Native Desktop Menubar
+    function toggleMenu(e, menuId) {
+      if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+      const targetMenu = document.getElementById(menuId);
+      if (!targetMenu) return;
+      const parentItem = targetMenu.closest('.menu-item');
+      const wasActive = parentItem && parentItem.classList.contains('active');
+      closeAllMenus();
+      if (!wasActive && parentItem) {
+        parentItem.classList.add('active');
+      }
+    }
+
+    function closeAllMenus() {
+      document.querySelectorAll('.desktop-menubar .menu-item.active').forEach(item => {
+        item.classList.remove('active');
+      });
+    }
+
+    function focusQuickConnect() {
+      closeAllMenus();
+      const sel = document.getElementById('quickSiteSelect');
+      if (sel && sel.value !== 'manual') {
+        sel.focus();
+      } else {
+        const inp = document.getElementById('qcHost');
+        if (inp) inp.focus();
+      }
+    }
+
+    function refreshBothPanes() {
+      closeAllMenus();
+      if (currentLocalPath) {
+        navigateLocal(currentLocalPath);
+      }
+      if (isConnected && currentRemotePath) {
+        navigateRemote(currentRemotePath);
+      }
+      addLog('Refreshed file panes', 'info');
+    }
+
+    function toggleHiddenFiles(val) {
+      if (val !== undefined) {
+        showHiddenFilesState = !!val;
+      } else {
+        showHiddenFilesState = !showHiddenFilesState;
+      }
+      const chk = document.getElementById('optShowHidden');
+      if (chk) chk.checked = showHiddenFilesState;
+      const menuCheck = document.getElementById('menuCheckHidden');
+      if (menuCheck) menuCheck.textContent = showHiddenFilesState ? '✓' : ' ';
+      closeAllMenus();
+      saveOptions(false);
+      if (currentLocalPath) navigateLocal(currentLocalPath);
+      if (isConnected && currentRemotePath) navigateRemote(currentRemotePath);
+    }
+
+    function transferUpload() {
+      closeAllMenus();
+      if (!isConnected) {
+        alert('Please connect to a server before uploading');
+        return;
+      }
+      if (!selectedLocalFile) {
+        alert('Please select a local file to upload');
+        return;
+      }
+      if (selectedLocalFile.is_dir) {
+        alert('Folder upload via menu is not supported. Please select individual files.');
+        return;
+      }
+      uploadFileDirect(selectedLocalFile.path, selectedLocalFile.name);
+    }
+
+    function transferDownload() {
+      closeAllMenus();
+      if (!isConnected) {
+        alert('Please connect to a server before downloading');
+        return;
+      }
+      if (!selectedRemoteFile) {
+        alert('Please select a remote file to download');
+        return;
+      }
+      if (selectedRemoteFile.is_dir) {
+        alert('Folder download via menu is not supported. Please select individual files.');
+        return;
+      }
+      downloadFileDirect(selectedRemoteFile.path, selectedRemoteFile.name);
+    }
+
+    function copyAllLogs() {
+      closeAllMenus();
+      const logBox = document.getElementById('logContainer');
+      if (!logBox) return;
+      const text = logBox.innerText || '';
+      navigator.clipboard.writeText(text).then(() => {
+        addLog('All logs copied to clipboard', 'success');
+      }).catch(() => {
+        addLog('Failed to copy logs to clipboard', 'error');
+      });
+    }
+
+    function openStorageFolder() {
+      closeAllMenus();
+      try {
+        sendRust('open_storage_folder', {});
+        addLog('Opened configuration folder %APPDATA%\\90FTP', 'info');
+      } catch (err) {
+        addLog('Storage folder located at %APPDATA%\\90FTP', 'info');
+      }
+    }
+
+    // Global Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+      if (e.key === 'Escape') {
+        closeAllMenus();
+        closeContextMenu();
+        closeOptionsModal();
+        closeAboutModal();
+        closeSitesModal();
+        closeEditorModal();
+        return;
+      }
+
+      if (isInput) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        openSitesModal();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q') {
+        e.preventDefault();
+        focusQuickConnect();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        disconnect();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault();
+        openOptionsModal('general');
+      } else if (e.key === 'F5') {
+        e.preventDefault();
+        refreshBothPanes();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        toggleHiddenFiles();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        toggleLogPanel();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        toggleTheme();
+      }
+    });
+
+    // Launch
+    let hasInitialized = false;
+    async function launchApp() {
+      if (hasInitialized) return;
+      hasInitialized = true;
+      try {
+        await initApp();
+      } catch (err) {
+        console.error('Fatal initialization error:', err);
+      }
+    }
+
+    // Launch immediately and attach lifecycle fallbacks
+    launchApp();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', launchApp);
+    }
+    window.addEventListener('load', launchApp);
+
+  </script>
+</body>
+</html>

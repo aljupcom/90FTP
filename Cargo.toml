@@ -1,0 +1,23 @@
+[package]
+name = "ninety_ftp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+base64 = "0.23.1"
+chrono = "0.4.45"
+rfd = "0.17.2"
+russh = "0.64.1"
+russh-sftp = "3.0.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+ssh-key = { version = "0.6.7", features = ["ed25519", "rsa", "encryption"] }
+ssh2 = "0.9.6"
+suppaftp = "12.2.1"
+tao = "0.37.1"
+tokio = { version = "1.54.0", features = ["full"] }
+wry = "0.57.0"
+
+[build-dependencies]
+winres = "0.1.12"
+

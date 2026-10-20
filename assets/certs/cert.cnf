@@ -1,0 +1,17 @@
+[ req ]
+default_bits        = 2048
+distinguished_name  = req_distinguished_name
+prompt              = no
+x509_extensions     = v3_codesign
+
+[ req_distinguished_name ]
+CN                  = aljailane
+O                   = 90FTP
+OU                  = Development
+C                   = SA
+
+[ v3_codesign ]
+basicConstraints    = critical, CA:FALSE
+keyUsage            = critical, digitalSignature
+extendedKeyUsage    = critical, codeSigning
+subjectKeyIdentifier = hash
