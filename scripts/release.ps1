@@ -100,11 +100,7 @@ $headers = @{
 
 $releaseNotes = @"
 ## What's New in v$Version
-$Message
-
-### 🛡️ Enterprise Security
-- Authenticode Signed with publisher **aljailane** & DigiCert RFC 3161 Timestamp.
-- Military-grade AES-256-GCM encrypted vault storage.
+- $Message
 "@
 
 $payloadObj = @{

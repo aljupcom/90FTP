@@ -1348,7 +1348,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.8</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.9</span>
         </div>
       </div>
 
@@ -1357,7 +1357,7 @@
           <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Settings</span>
         </button>
-        <button class="btn btn-secondary" onclick="openToolsModal()" title="Tools & Utilities (أدوات النظام)" style="padding: 0 9px; gap: 5px;">
+        <button class="btn btn-secondary" onclick="openToolsModal()" title="Tools & Utilities" style="padding: 0 9px; gap: 5px;">
           <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
           <span>Tools</span>
         </button>
@@ -2340,7 +2340,7 @@
             SOON
           </div>
           <div style="font-size: 13.5px; font-weight: 600; color: var(--text-muted); margin-top: 6px;">
-            قريباً في التحديثات القادمة (Coming Soon)
+            Coming Soon in Upcoming Releases
           </div>
         </div>
 
@@ -2367,7 +2367,7 @@
           <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
           </svg>
-          <span style="font-weight: 600;">تحديث البرنامج (Software Update)</span>
+          <span style="font-weight: 600;">Software Update</span>
         </div>
         <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
       </div>
@@ -2379,8 +2379,8 @@
             <span class="spin-icon">↻</span>
           </div>
           <div style="flex: 1; min-width: 0;">
-            <div id="updateHeadline" style="font-size: 14px; font-weight: 700; color: var(--text-main);">جاري التحقق من وجود تحديثات...</div>
-            <div id="updateSubtext" style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">يرجى الانتظار ثوانٍ معدودة...</div>
+            <div id="updateHeadline" style="font-size: 14px; font-weight: 700; color: var(--text-main);">Checking for updates...</div>
+            <div id="updateSubtext" style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">Please wait a moment...</div>
           </div>
         </div>
 
@@ -2388,7 +2388,7 @@
         <div id="updateDetailsBox" style="display: none; flex-direction: column; gap: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="font-size: 12.5px; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 5px;">
-              <span>📋</span> سجل التغييرات والميزات الجديدة (What's New)
+              <span>📋</span> Release Highlights & What's New
             </span>
             <span style="font-size: 11px; color: var(--text-dim);" id="updateReleaseDate"></span>
           </div>
@@ -2401,7 +2401,7 @@
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span id="dlStatusIcon" class="spin-icon" style="color: var(--accent); font-size: 15px;">↻</span>
-              <span id="dlStatusText" style="font-size: 12.5px; font-weight: 600; color: var(--text-main);">جاري تنزيل التحديث مباشرة...</span>
+              <span id="dlStatusText" style="font-size: 12.5px; font-weight: 600; color: var(--text-main);">Downloading update package directly...</span>
             </div>
             <span id="dlPercentBadge" style="font-size: 13px; font-weight: 700; color: var(--accent); font-family: var(--font-mono, monospace);">0%</span>
           </div>
@@ -2421,23 +2421,23 @@
         <div id="updateReadyCard" style="display: none; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 8px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3);">
           <div style="display: flex; align-items: center; gap: 8px; color: #22c55e; font-weight: 700; font-size: 13px;">
             <span>✓</span>
-            <span>اكتمل تنزيل التحديث بنجاح!</span>
+            <span>Update Download Completed!</span>
           </div>
           <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5;">
-            ملف التثبيت جاهز على الجهاز. انقر على <strong>تثبيت التحديث والترقية الآن</strong> لتحديث البرنامج فوراً.
+            The installer package is verified and ready on disk. Click <strong>Install & Upgrade Now</strong> to apply the update immediately.
           </div>
         </div>
       </div>
 
       <div class="modal-footer" style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border-color); background: var(--bg-panel);">
-        <button type="button" class="btn btn-secondary" onclick="checkForUpdates(true)" id="btnCheckAgain" style="display: none; padding: 4px 14px;">التحقق مجدداً</button>
+        <button type="button" class="btn btn-secondary" onclick="checkForUpdates(true)" id="btnCheckAgain" style="display: none; padding: 4px 14px;">Check Again</button>
         <button type="button" class="btn btn-primary" onclick="startInAppDownload()" id="btnStartDownload" style="display: none; padding: 5px 18px; font-weight: 600; gap: 6px;">
-          ⬇️ تنزيل وتثبيت التحديث
+          ⬇️ Download & Install Update
         </button>
         <button type="button" class="btn btn-primary" onclick="launchDownloadedInstaller()" id="btnLaunchInstaller" style="display: none; padding: 5px 18px; font-weight: 600; background: #16a34a; border-color: #22c55e; gap: 6px;">
-          🚀 تثبيت التحديث والترقية الآن
+          🚀 Install & Upgrade Now
         </button>
-        <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()" id="btnCloseUpdate" style="padding: 4px 16px;">إغلاق</button>
+        <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()" id="btnCloseUpdate" style="padding: 4px 16px;">Close</button>
       </div>
     </div>
   </div>
@@ -2508,7 +2508,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.8';
+    let APP_CURRENT_VERSION = '0.0.0.9';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4947,7 +4947,7 @@
 
       if (isDirty) {
         if (statusEl) {
-          statusEl.innerHTML = '<span style="color: #f59e0b; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>●</span> <span>Unsaved changes (هناك تغييرات غير محفوظة)</span></span>';
+          statusEl.innerHTML = '<span style="color: #f59e0b; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>●</span> <span>Unsaved changes</span></span>';
         }
         if (applyBtn) {
           applyBtn.style.borderColor = 'var(--accent)';
@@ -5059,7 +5059,7 @@
       const statusEl = document.getElementById('optionsStatusMsg');
       const applyBtn = document.getElementById('btnApplyOptions');
       if (statusEl) {
-        statusEl.innerHTML = '<span style="color: #22c55e; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>✓</span> <span>Settings applied successfully (تم تطبيق الإعدادات بنجاح)</span></span>';
+        statusEl.innerHTML = '<span style="color: #22c55e; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>✓</span> <span>Settings applied successfully</span></span>';
       }
       if (applyBtn) {
         const origText = 'Apply';
@@ -5376,7 +5376,7 @@
 
     function formatChangelogHtml(rawText) {
       if (!rawText || !rawText.trim()) {
-        return '<div style="color: var(--text-dim); text-align: center; padding: 12px;">سجل التغييرات متاح في صفحة الإصدار الرسمي.</div>';
+        return '<div style="color: var(--text-dim); text-align: center; padding: 12px;">Release notes are available on the official releases page.</div>';
       }
       const lines = rawText.split('\n');
       let out = '';
@@ -5409,8 +5409,8 @@
       const btnLaunch = document.getElementById('btnLaunchInstaller');
 
       if (iconContainer) iconContainer.innerHTML = '<span class="spin-icon">↻</span>';
-      if (headline) headline.textContent = 'جاري التحقق من وجود تحديثات...';
-      if (subtext) subtext.textContent = 'يرجى الانتظار ثوانٍ معدودة...';
+      if (headline) headline.textContent = 'Checking for updates...';
+      if (subtext) subtext.textContent = 'Please wait a moment...';
       if (detailsBox) detailsBox.style.display = 'none';
       if (dlCard) dlCard.style.display = 'none';
       if (readyCard) readyCard.style.display = 'none';
@@ -5427,8 +5427,8 @@
 
         if (resp.status === 404) {
           if (iconContainer) iconContainer.innerHTML = '✅';
-          if (headline) headline.textContent = 'أنت تستخدم أحدث إصدار';
-          if (subtext) subtext.textContent = 'برنامج 90FTP محدث للإصدار v' + APP_CURRENT_VERSION + ' بالكامل.';
+          if (headline) headline.textContent = 'You are running the latest version';
+          if (subtext) subtext.textContent = '90FTP is completely up to date (v' + APP_CURRENT_VERSION + ').';
           if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
           addLog('Update check: 90FTP v' + APP_CURRENT_VERSION + ' is up to date.', 'info');
           return;
@@ -5446,8 +5446,8 @@
         if (cmp > 0) {
           // Newer version found
           if (iconContainer) iconContainer.innerHTML = '🚀';
-          if (headline) headline.textContent = 'إصدار جديد متاح: ' + (latestTag.startsWith('v') ? latestTag : 'v' + latestTag);
-          if (subtext) subtext.innerHTML = 'الإصدار الحالي: <strong>v' + APP_CURRENT_VERSION + '</strong> &nbsp;➔&nbsp; الإصدار الجديد: <strong style="color: #22c55e;">' + (latestTag.startsWith('v') ? latestTag : 'v' + latestTag) + '</strong>';
+          if (headline) headline.textContent = 'New Version Available: ' + (latestTag.startsWith('v') ? latestTag : 'v' + latestTag);
+          if (subtext) subtext.innerHTML = 'Current: <strong>v' + APP_CURRENT_VERSION + '</strong> &nbsp;➔&nbsp; Latest: <strong style="color: #22c55e;">' + (latestTag.startsWith('v') ? latestTag : 'v' + latestTag) + '</strong>';
 
           const dateElem = document.getElementById('updateReleaseDate');
           const changelogElem = document.getElementById('updateChangelog');
@@ -5477,15 +5477,15 @@
         } else {
           // Up to date
           if (iconContainer) iconContainer.innerHTML = '✅';
-          if (headline) headline.textContent = 'أنت تستخدم أحدث إصدار';
-          if (subtext) subtext.textContent = 'برنامج 90FTP محدث للإصدار v' + APP_CURRENT_VERSION + ' بالكامل.';
+          if (headline) headline.textContent = 'You are running the latest version';
+          if (subtext) subtext.textContent = '90FTP is completely up to date (v' + APP_CURRENT_VERSION + ').';
           if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
           addLog('Update check: 90FTP v' + APP_CURRENT_VERSION + ' is up to date.', 'info');
         }
       } catch (err) {
         if (iconContainer) iconContainer.innerHTML = '⚠️';
-        if (headline) headline.textContent = 'تعذر التحقق من التحديثات';
-        if (subtext) subtext.textContent = 'يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.';
+        if (headline) headline.textContent = 'Unable to check for updates';
+        if (subtext) subtext.textContent = 'Please check your internet connection and try again.';
         if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
         addLog('Update check failed: ' + (err.message || err), 'warning');
       }
