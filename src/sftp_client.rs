@@ -49,7 +49,7 @@ impl Handler for ClientHandler {
 pub struct SftpClient {
     rt: Arc<Runtime>,
     sftp: SftpSession,
-    _session: Handle<ClientHandler>,
+    pub session: Handle<ClientHandler>,
     pub current_dir: String,
     pub host: String,
     pub username: String,
@@ -160,7 +160,7 @@ impl SftpClient {
             Ok((sftp, session, default_dir)) => Ok(Self {
                 rt,
                 sftp,
-                _session: session,
+                session,
                 current_dir: default_dir,
                 host: host.to_string(),
                 username: user.to_string(),
@@ -304,6 +304,52 @@ impl SftpClient {
             self.sftp.set_metadata(&path_s, meta).await
                 .map_err(|e| format!("Failed to change permissions: {}", e))?;
             Ok(())
+        })
+    }
+
+    pub fn exec_command(&self, cmd: &str) -> Result<String, String> {
+        let cmd_s = cmd.to_string();
+        self.rt.block_on(async {
+            let mut channel = self.session.channel_open_session().await
+                .map_err(|e| format!("Failed to open SSH channel: {}", e))?;
+
+            channel.exec(true, cmd_s).await
+                .map_err(|e| format!("Failed to execute command: {}", e))?;
+
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+
+            let run_res = tokio::time::timeout(tokio::time::Duration::from_secs(25), async {
+                while let Some(msg) = channel.wait().await {
+                    match msg {
+                        russh::ChannelMsg::Data { ref data } => {
+                            stdout.extend_from_slice(data);
+                        }
+                        russh::ChannelMsg::ExtendedData { ref data, ext: _ } => {
+                            stderr.extend_from_slice(data);
+                        }
+                        russh::ChannelMsg::Eof | russh::ChannelMsg::Close => {
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }).await;
+
+            if run_res.is_err() {
+                let _ = channel.close().await;
+                stderr.extend_from_slice(b"\n[Execution timed out after 25s]");
+            }
+
+            let out_str = String::from_utf8_lossy(&stdout).to_string();
+            let err_str = String::from_utf8_lossy(&stderr).to_string();
+            if !err_str.is_empty() && out_str.is_empty() {
+                Ok(err_str)
+            } else if !err_str.is_empty() {
+                Ok(format!("{}{}", out_str, err_str))
+            } else {
+                Ok(out_str)
+            }
         })
     }
 }

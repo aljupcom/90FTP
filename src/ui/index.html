@@ -645,6 +645,100 @@
       display: flex;
     }
 
+    /* Terminal Container & Styling (Xshell-inspired) */
+    .terminal-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #090d16;
+      color: #e2e8f0;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', 'Courier New', monospace;
+      overflow: hidden;
+      position: relative;
+    }
+    .terminal-session-bar {
+      display: flex;
+      align-items: center;
+      background: #060910;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 3px 8px;
+      gap: 5px;
+      min-height: 28px;
+    }
+    .terminal-tab-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      font-size: 11px;
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .terminal-tab-pill:hover {
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .terminal-tab-pill.active {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.14);
+      border-color: rgba(56, 189, 248, 0.4);
+      font-weight: 600;
+    }
+    .terminal-tab-close {
+      font-size: 11px;
+      opacity: 0.6;
+      border-radius: 2px;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .terminal-tab-close:hover {
+      opacity: 1;
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.2);
+    }
+    .terminal-screen {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      font-size: 12.5px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-all;
+      user-select: text;
+      cursor: text;
+      background: #090d16;
+    }
+    .terminal-screen::-webkit-scrollbar {
+      width: 8px;
+    }
+    .terminal-screen::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    .terminal-input-row {
+      display: flex;
+      align-items: center;
+      background: #070a12;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 5px 12px;
+      gap: 8px;
+    }
+    .terminal-cmd-entry {
+      color: #e2e8f0;
+      margin: 2px 0;
+    }
+    .terminal-cmd-header {
+      font-weight: 600;
+      margin-top: 6px;
+      color: #38bdf8;
+    }
+
     /* Transfers Queue Table */
     .transfers-table {
       width: 100%;
@@ -1441,7 +1535,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.14</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.15</span>
         </div>
       </div>
 
@@ -1815,10 +1909,10 @@
     <div class="gutter-h-grip"></div>
   </div>
 
-  <!-- Bottom: Dual-Tab Panel (File Transfers & Activity Log) -->
+  <!-- Bottom: Multi-Tab Panel (File Transfers, Activity Log & Embedded SSH Terminal) -->
   <div class="log-panel collapsed" id="logPanel" style="height: 34px;">
     <div class="log-header" onclick="handleLogHeaderClick(event)">
-      <!-- Left: Dual Tabs -->
+      <!-- Left: Panel Tabs -->
       <div style="display: flex; align-items: center; gap: 4px;" onclick="event.stopPropagation()">
         <button type="button" class="bottom-tab-btn active" id="tabTransfers" onclick="switchBottomTab('transfers', event)">
           <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1834,6 +1928,14 @@
             <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
           </svg>
           <span>Activity Log</span>
+        </button>
+
+        <button type="button" class="bottom-tab-btn" id="tabTerminal" onclick="switchBottomTab('terminal', event)">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          <span>Terminal</span>
+          <span class="tab-badge" id="terminalBadge" style="background: rgba(34, 197, 94, 0.18); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); display: none;">Online</span>
         </button>
       </div>
 
@@ -1855,6 +1957,26 @@
           </button>
           <button type="button" class="btn btn-secondary" onclick="clearLogs()" style="padding: 2px 8px; font-size: 11px;" title="Clear console">
             Clear
+          </button>
+        </div>
+
+        <!-- Terminal Actions -->
+        <div id="terminalActions" style="display: none; align-items: center; gap: 6px;" onclick="event.stopPropagation()">
+          <span id="terminalCwdDisplay" style="font-size: 11px; color: var(--accent); font-family: monospace; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Current Terminal Working Directory">~</span>
+          <button type="button" class="btn btn-secondary" onclick="syncTerminalPathWithRemote()" style="padding: 2px 7px; font-size: 11px;" title="Sync Terminal to Remote Browser Path">
+            Sync Path
+          </button>
+          <div style="display: flex; align-items: center; gap: 3px;">
+            <button type="button" class="btn btn-secondary" onclick="runQuickCommand('ls -la')" style="padding: 2px 6px; font-size: 10.5px; font-family: monospace;" title="Run: ls -la">ls</button>
+            <button type="button" class="btn btn-secondary" onclick="runQuickCommand('pwd')" style="padding: 2px 6px; font-size: 10.5px; font-family: monospace;" title="Run: pwd">pwd</button>
+            <button type="button" class="btn btn-secondary" onclick="runQuickCommand('df -h')" style="padding: 2px 6px; font-size: 10.5px; font-family: monospace;" title="Run: df -h">df</button>
+            <button type="button" class="btn btn-secondary" onclick="runQuickCommand('free -m')" style="padding: 2px 6px; font-size: 10.5px; font-family: monospace;" title="Run: free -m">free</button>
+          </div>
+          <button type="button" class="btn btn-secondary" onclick="clearTerminalScreen()" style="padding: 2px 8px; font-size: 11px;" title="Clear Terminal Screen (Ctrl+L)">
+            Clear
+          </button>
+          <button type="button" class="btn btn-secondary" id="btnTerminalMaximize" onclick="toggleTerminalMaximize()" style="padding: 2px 7px; font-size: 11px;" title="Maximize / Restore Terminal">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
           </button>
         </div>
 
@@ -1894,6 +2016,44 @@
     <!-- Body Tab 2: Activity Log & Console -->
     <div class="bottom-tab-body" id="logBodyContainer">
       <div class="log-body" id="logBody"></div>
+    </div>
+
+    <!-- Body Tab 3: Embedded SSH Terminal (Xshell-inspired) -->
+    <div class="bottom-tab-body" id="terminalBodyContainer" style="background: #090d16; color: #f1f5f9; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', 'Courier New', monospace; flex-direction: column; overflow: hidden; position: relative;">
+      
+      <!-- Sub-tab bar for Terminal Sessions (Xshell-style multi-tabs) -->
+      <div class="terminal-session-bar" style="display: flex; align-items: center; background: #060910; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding: 3px 8px; gap: 5px; min-height: 28px;">
+        <div id="terminalTabsList" style="display: flex; align-items: center; gap: 4px; overflow-x: auto; flex: 1;">
+          <!-- Dynamically populated session tabs -->
+        </div>
+        <button type="button" class="btn-terminal-tab" onclick="addNewTerminalTab()" style="padding: 2px 8px; font-size: 12px; font-weight: bold; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 3px; color: #94a3b8; cursor: pointer;" title="Open New Terminal Tab (+)">
+          +
+        </button>
+        <div style="font-size: 10.5px; color: #64748b; margin-left: 8px; padding-right: 4px; display: flex; align-items: center; gap: 6px;">
+          <span id="terminalSessionInfo">SSH2</span>
+          <span style="cursor: pointer; color: #94a3b8; padding: 0 4px; font-weight: 600;" onclick="adjustTerminalFontSize(-1)" title="Decrease font size">A-</span>
+          <span style="cursor: pointer; color: #94a3b8; padding: 0 4px; font-weight: 600;" onclick="adjustTerminalFontSize(1)" title="Increase font size">A+</span>
+        </div>
+      </div>
+
+      <!-- Terminal Output Screen -->
+      <div class="terminal-screen" id="terminalScreen" onclick="focusTerminalInput()">
+        <!-- Terminal Lines Stream -->
+      </div>
+
+      <!-- Interactive Input Bar -->
+      <div class="terminal-input-row" style="display: flex; align-items: center; background: #070a12; border-top: 1px solid rgba(255, 255, 255, 0.08); padding: 5px 10px; gap: 8px;">
+        <div id="terminalPromptPrefix" style="font-size: 12px; font-weight: 600; white-space: nowrap; user-select: none;">
+          <span style="color: #22c55e;" id="terminalUserSpan">user</span><span style="color: #64748b;">@</span><span style="color: #38bdf8;" id="terminalHostSpan">host</span><span style="color: #94a3b8;">:</span><span style="color: #fbbf24;" id="terminalPromptCwd">~</span><span style="color: #f1f5f9;">$</span>
+        </div>
+        <input type="text" id="terminalInput" autocomplete="off" spellcheck="false" placeholder="Type remote command and press Enter (or 'help')..." 
+               style="flex: 1; background: transparent; border: none; outline: none; color: #f8fafc; font-family: inherit; font-size: 12.5px; caret-color: #38bdf8;" 
+               onkeydown="handleTerminalKey(event)">
+        <div id="terminalBusySpinner" style="display: none; align-items: center; gap: 4px; font-size: 11px; color: #38bdf8;">
+          <svg class="icon icon-sm spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+          <span>Running...</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2680,7 +2840,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.14';
+    let APP_CURRENT_VERSION = '0.0.0.15';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -3598,6 +3758,12 @@
       const text = document.getElementById('statusText');
       const btnConn = document.getElementById('btnConnect');
       const btnDisc = document.getElementById('btnDisconnect');
+      const termBadge = document.getElementById('terminalBadge');
+
+      if (termBadge) {
+        termBadge.style.display = connected ? 'inline-block' : 'none';
+        termBadge.textContent = connected ? 'Online' : 'Offline';
+      }
 
       if (connected) {
         dot.className = 'status-dot connected';
@@ -4465,7 +4631,7 @@
             <span>Copy Directory Path</span>
           </div>
           ${isRemote ? `
-          <div class="context-menu-item" onclick="openRemoteTerminal()">
+          <div class="context-menu-item" onclick="openRemoteTerminal('${escapeJsString(dirPath)}')">
             <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
             <span>Open Terminal Here</span>
           </div>
@@ -4487,6 +4653,14 @@
               <span class="shortcut">Enter</span>
             </div>
           `;
+          if (isRemote) {
+            html += `
+              <div class="context-menu-item" onclick="openRemoteTerminal('${escapeJsString(item.path)}')">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                <span>Open Terminal Here</span>
+              </div>
+            `;
+          }
         } else {
           html += `
             <div class="context-menu-item" onclick="${isRemote ? `openRemoteFileInEditor('${escapeJsString(item.path)}')` : `openLocalFileInEditor('${escapeJsString(item.path)}')`}">
@@ -5122,25 +5296,55 @@
       }
       activeBottomTab = tab;
       const isTransfers = tab === 'transfers';
+      const isLog = tab === 'log';
+      const isTerminal = tab === 'terminal';
       
       const tabTx = document.getElementById('tabTransfers');
       const tabLog = document.getElementById('tabActivityLog');
+      const tabTerm = document.getElementById('tabTerminal');
       const bodyTx = document.getElementById('transfersBodyContainer');
       const bodyLog = document.getElementById('logBodyContainer');
+      const bodyTerm = document.getElementById('terminalBodyContainer');
       const actTx = document.getElementById('transfersActions');
       const actLog = document.getElementById('logActions');
+      const actTerm = document.getElementById('terminalActions');
 
       if (tabTx) tabTx.classList.toggle('active', isTransfers);
-      if (tabLog) tabLog.classList.toggle('active', !isTransfers);
-      if (bodyTx) bodyTx.classList.toggle('active', isTransfers);
-      if (bodyLog) bodyLog.classList.toggle('active', !isTransfers);
+      if (tabLog) tabLog.classList.toggle('active', isLog);
+      if (tabTerm) tabTerm.classList.toggle('active', isTerminal);
+
+      if (bodyTx) {
+        bodyTx.classList.toggle('active', isTransfers);
+        bodyTx.style.display = isTransfers ? 'flex' : 'none';
+      }
+      if (bodyLog) {
+        bodyLog.classList.toggle('active', isLog);
+        bodyLog.style.display = isLog ? 'flex' : 'none';
+      }
+      if (bodyTerm) {
+        bodyTerm.classList.toggle('active', isTerminal);
+        bodyTerm.style.display = isTerminal ? 'flex' : 'none';
+      }
+
       if (actTx) actTx.style.display = isTransfers ? 'flex' : 'none';
-      if (actLog) actLog.style.display = !isTransfers ? 'flex' : 'none';
+      if (actLog) actLog.style.display = isLog ? 'flex' : 'none';
+      if (actTerm) actTerm.style.display = isTerminal ? 'flex' : 'none';
 
       // If panel is collapsed, expand it when user clicks tab
       const panel = document.getElementById('logPanel');
       if (panel && panel.classList.contains('collapsed')) {
         toggleLogPanel();
+      }
+      if (isTerminal) {
+        if (terminalSessions.length === 0) {
+          initTerminalSession();
+        }
+        const curHeight = parseInt(panel.style.height) || 0;
+        if (curHeight < 260) {
+          panel.style.height = '300px';
+          lastLogHeight = 300;
+        }
+        setTimeout(focusTerminalInput, 50);
       }
     }
 
@@ -5783,22 +5987,411 @@
       }
     }
 
-    async function openRemoteTerminal() {
-      closeAllMenus();
-      if (!isConnected) {
-        alert('Please connect to an SSH / SFTP server first.');
+    // ==========================================
+    // Embedded SSH Terminal (Xshell-inspired)
+    // ==========================================
+    let terminalSessions = [];
+    let activeTerminalSessionId = null;
+    let terminalSeq = 0;
+    let terminalFontSize = 12.5;
+    let isTerminalMaximized = false;
+    let preMaximizeHeight = 320;
+
+    function ansiToHtml(text) {
+      if (!text) return '';
+      const colorMap = {
+        30: '#0f172a', 31: '#ef4444', 32: '#22c55e', 33: '#eab308', 34: '#38bdf8', 35: '#a855f7', 36: '#06b6d4', 37: '#f8fafc',
+        90: '#64748b', 91: '#f87171', 92: '#4ade80', 93: '#fde047', 94: '#60a5fa', 95: '#c084fc', 96: '#22d3ee', 97: '#ffffff'
+      };
+      const bgMap = {
+        40: '#000000', 41: '#7f1d1d', 42: '#14532d', 43: '#713f12', 44: '#1e3a8a', 45: '#581c87', 46: '#164e63', 47: '#334155'
+      };
+      let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      html = html.replace(/\x1b\[([0-9;]*)m/g, (match, seq) => {
+        if (!seq || seq === '0') return '</span>';
+        const codes = seq.split(';').map(n => parseInt(n, 10));
+        let styles = [];
+        codes.forEach(c => {
+          if (colorMap[c]) styles.push('color:' + colorMap[c]);
+          if (bgMap[c]) styles.push('background-color:' + bgMap[c]);
+          if (c === 1) styles.push('font-weight:bold');
+          if (c === 4) styles.push('text-decoration:underline');
+          if (c === 2) styles.push('opacity:0.75');
+        });
+        if (styles.length === 0) return '</span>';
+        return `<span style="${styles.join(';')}">`;
+      });
+      return html;
+    }
+
+    function initTerminalSession(targetCwd) {
+      if (terminalSessions.length > 0) return;
+      addNewTerminalTab(targetCwd);
+    }
+
+    function addNewTerminalTab(initialCwd) {
+      terminalSeq++;
+      const id = 'sess_' + terminalSeq;
+      const host = (currentConnectionProfile && currentConnectionProfile.host) || (activeSiteProfile && activeSiteProfile.host) || 'remote-host';
+      const user = (currentConnectionProfile && currentConnectionProfile.username) || (activeSiteProfile && activeSiteProfile.username) || 'root';
+      const cwd = initialCwd || currentRemotePath || '~';
+
+      const session = {
+        id: id,
+        title: `${user}@${host}`,
+        host: host,
+        user: user,
+        cwd: cwd,
+        history: [],
+        historyIndex: -1,
+        logs: [],
+        busy: false
+      };
+
+      // Add Welcome Banner
+      session.logs.push({
+        type: 'banner',
+        text: `\x1b[36m======================================================================\x1b[0m\n` +
+              `\x1b[32m  90FTP Embedded SSH Terminal  [Tab #${terminalSeq}]\x1b[0m\n` +
+              `  Target: \x1b[33m${user}@${host}\x1b[0m | Working Directory: \x1b[34m${cwd}\x1b[0m\n` +
+              `  Type remote shell commands or '\x1b[35mhelp\x1b[0m' for quick shortcuts.\n` +
+              `\x1b[36m======================================================================\x1b[0m\n`
+      });
+
+      terminalSessions.push(session);
+      renderTerminalTabs();
+      switchTerminalSession(id);
+    }
+
+    function renderTerminalTabs() {
+      const container = document.getElementById('terminalTabsList');
+      if (!container) return;
+      container.innerHTML = terminalSessions.map(s => `
+        <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" onclick="switchTerminalSession('${s.id}')">
+          <span style="font-size: 8px; color: ${s.busy ? '#38bdf8' : '#22c55e'};">●</span>
+          <span>${escapeHtml(s.title)} (${escapeHtml(s.cwd.length > 15 ? '...' + s.cwd.slice(-12) : s.cwd)})</span>
+          ${terminalSessions.length > 1 ? `<span class="terminal-tab-close" onclick="closeTerminalSession('${s.id}', event)" title="Close tab">✕</span>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function switchTerminalSession(id) {
+      activeTerminalSessionId = id;
+      renderTerminalTabs();
+      const session = terminalSessions.find(s => s.id === id);
+      if (!session) return;
+
+      const userSpan = document.getElementById('terminalUserSpan');
+      const hostSpan = document.getElementById('terminalHostSpan');
+      const promptCwd = document.getElementById('terminalPromptCwd');
+      const cwdDisplay = document.getElementById('terminalCwdDisplay');
+      const sessionInfo = document.getElementById('terminalSessionInfo');
+      const badge = document.getElementById('terminalBadge');
+
+      if (userSpan) userSpan.textContent = session.user;
+      if (hostSpan) hostSpan.textContent = session.host;
+      if (promptCwd) promptCwd.textContent = session.cwd;
+      if (cwdDisplay) cwdDisplay.textContent = session.cwd;
+      if (sessionInfo) sessionInfo.textContent = `SSH2 - ${session.host}`;
+      if (badge) badge.style.display = isConnected ? 'inline-block' : 'none';
+
+      renderTerminalScreen();
+      focusTerminalInput();
+    }
+
+    function closeTerminalSession(id, event) {
+      if (event) event.stopPropagation();
+      const idx = terminalSessions.findIndex(s => s.id === id);
+      if (idx === -1) return;
+      terminalSessions.splice(idx, 1);
+      if (terminalSessions.length === 0) {
+        addNewTerminalTab();
+      } else {
+        const nextId = terminalSessions[Math.max(0, idx - 1)].id;
+        switchTerminalSession(nextId);
+      }
+    }
+
+    function renderTerminalScreen() {
+      const screen = document.getElementById('terminalScreen');
+      if (!screen) return;
+      const session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      if (!session) {
+        screen.innerHTML = '';
         return;
       }
+
+      let html = '';
+      session.logs.forEach(item => {
+        if (item.type === 'cmd') {
+          html += `<div class="terminal-cmd-entry"><span style="color:#22c55e;">${escapeHtml(session.user)}</span>@<span style="color:#38bdf8;">${escapeHtml(session.host)}</span>:<span style="color:#fbbf24;">${escapeHtml(item.cwd)}</span>$ <span style="color:#f8fafc; font-weight:600;">${escapeHtml(item.command)}</span></div>`;
+        } else if (item.type === 'output') {
+          html += `<div style="color:#cbd5e1; white-space:pre-wrap;">${ansiToHtml(item.text)}</div>`;
+        } else if (item.type === 'error') {
+          html += `<div style="color:#f87171; white-space:pre-wrap;">${ansiToHtml(item.text)}</div>`;
+        } else if (item.type === 'banner') {
+          html += `<div>${ansiToHtml(item.text)}</div>`;
+        }
+      });
+
+      screen.innerHTML = html;
+      screen.scrollTop = screen.scrollHeight;
+    }
+
+    function focusTerminalInput() {
+      const input = document.getElementById('terminalInput');
+      if (input) input.focus();
+    }
+
+    function clearTerminalScreen() {
+      const session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      if (session) {
+        session.logs = [];
+        renderTerminalScreen();
+      }
+      focusTerminalInput();
+    }
+
+    function adjustTerminalFontSize(delta) {
+      terminalFontSize = Math.max(10, Math.min(22, terminalFontSize + delta));
+      const screen = document.getElementById('terminalScreen');
+      const input = document.getElementById('terminalInput');
+      if (screen) screen.style.fontSize = terminalFontSize + 'px';
+      if (input) input.style.fontSize = terminalFontSize + 'px';
+    }
+
+    function toggleTerminalMaximize() {
+      const panel = document.getElementById('logPanel');
+      if (!panel) return;
+      if (!isTerminalMaximized) {
+        isTerminalMaximized = true;
+        preMaximizeHeight = parseInt(panel.style.height) || 300;
+        panel.classList.remove('collapsed');
+        panel.style.height = 'calc(100vh - 120px)';
+        const btn = document.getElementById('btnTerminalMaximize');
+        if (btn) btn.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
+      } else {
+        isTerminalMaximized = false;
+        panel.style.height = preMaximizeHeight + 'px';
+        const btn = document.getElementById('btnTerminalMaximize');
+        if (btn) btn.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>`;
+      }
+    }
+
+    function syncTerminalPathWithRemote() {
+      if (!currentRemotePath) return;
+      runQuickCommand(`cd "${currentRemotePath}"`);
+    }
+
+    function runQuickCommand(cmd) {
+      const input = document.getElementById('terminalInput');
+      if (input) {
+        input.value = cmd;
+        executeTerminalCommand();
+      }
+    }
+
+    function handleTerminalKey(e) {
+      const session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      if (!session) return;
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        executeTerminalCommand();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (session.history.length > 0) {
+          if (session.historyIndex === -1) {
+            session.historyIndex = session.history.length - 1;
+          } else if (session.historyIndex > 0) {
+            session.historyIndex--;
+          }
+          e.target.value = session.history[session.historyIndex] || '';
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (session.historyIndex !== -1) {
+          if (session.historyIndex < session.history.length - 1) {
+            session.historyIndex++;
+            e.target.value = session.history[session.historyIndex] || '';
+          } else {
+            session.historyIndex = -1;
+            e.target.value = '';
+          }
+        }
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        session.logs.push({
+          type: 'cmd',
+          cwd: session.cwd,
+          command: e.target.value + ' ^C'
+        });
+        e.target.value = '';
+        session.historyIndex = -1;
+        renderTerminalScreen();
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        clearTerminalScreen();
+      }
+    }
+
+    async function executeTerminalCommand() {
+      const input = document.getElementById('terminalInput');
+      if (!input) return;
+      const cmd = input.value.trim();
+      input.value = '';
+      if (!cmd) return;
+
+      const session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      if (!session) return;
+
+      session.history.push(cmd);
+      session.historyIndex = -1;
+
+      if (cmd === 'clear') {
+        clearTerminalScreen();
+        return;
+      }
+      if (cmd === 'exit') {
+        closeTerminalSession(session.id);
+        return;
+      }
+      if (cmd === 'sync') {
+        syncTerminalPathWithRemote();
+        return;
+      }
+      if (cmd === 'help') {
+        session.logs.push({
+          type: 'cmd',
+          cwd: session.cwd,
+          command: cmd
+        });
+        session.logs.push({
+          type: 'output',
+          text: `\x1b[36m90FTP Embedded Terminal Commands:\x1b[0m\n` +
+                `  \x1b[33mclear\x1b[0m               Clear terminal screen (Ctrl+L)\n` +
+                `  \x1b[33mcd <path>\x1b[0m           Change directory and update prompt\n` +
+                `  \x1b[33msync\x1b[0m                Sync directory to remote browser's current folder\n` +
+                `  \x1b[33mexit\x1b[0m                Close current terminal session tab\n` +
+                `  \x1b[32mAny SSH command\x1b[0m     e.g., ls -la, top, df -h, free, git status, docker ps\n`
+        });
+        renderTerminalScreen();
+        return;
+      }
+
+      session.logs.push({
+        type: 'cmd',
+        cwd: session.cwd,
+        command: cmd
+      });
+      renderTerminalScreen();
+
+      if (!isConnected) {
+        session.logs.push({
+          type: 'error',
+          text: `Error: No active SSH/SFTP connection. Please connect to a server first.\n`
+        });
+        renderTerminalScreen();
+        return;
+      }
+
+      const spinner = document.getElementById('terminalBusySpinner');
+      if (spinner) spinner.style.display = 'flex';
+      session.busy = true;
+      renderTerminalTabs();
+
       try {
-        addLog('Spawning remote terminal at ' + (currentRemotePath || '/') + '...', 'cmd');
-        const res = await sendRust('open_remote_terminal', { remote_path: currentRemotePath });
-        if (res && res.launched) {
-          addLog('Remote SSH terminal launched successfully', 'success');
+        const res = await sendRust('terminal_exec', {
+          command: cmd,
+          cwd: session.cwd
+        });
+
+        if (res) {
+          if (res.cwd) {
+            session.cwd = res.cwd;
+            const promptCwd = document.getElementById('terminalPromptCwd');
+            const cwdDisplay = document.getElementById('terminalCwdDisplay');
+            if (promptCwd) promptCwd.textContent = res.cwd;
+            if (cwdDisplay) cwdDisplay.textContent = res.cwd;
+          }
+
+          if (res.output && res.output.trim().length > 0) {
+            session.logs.push({
+              type: 'output',
+              text: res.output
+            });
+          }
         }
       } catch (err) {
-        addLog('Terminal launch error: ' + (err.message || err), 'error');
-        alert('Terminal Launch Error:\n' + (err.message || err));
+        session.logs.push({
+          type: 'error',
+          text: `Command error: ${err.message || err}\n`
+        });
+      } finally {
+        session.busy = false;
+        if (spinner) spinner.style.display = 'none';
+        renderTerminalTabs();
+        renderTerminalScreen();
+        focusTerminalInput();
       }
+    }
+
+    function ensureTerminalActiveSession(host, user, remotePath) {
+      if (terminalSessions.length === 0) {
+        addNewTerminalTab(remotePath);
+      } else {
+        const active = terminalSessions.find(s => s.id === activeTerminalSessionId);
+        if (active) {
+          if (host) active.host = host;
+          if (user) active.user = user;
+          if (remotePath && remotePath !== active.cwd) {
+            runQuickCommand(`cd "${remotePath}"`);
+          } else {
+            switchTerminalSession(active.id);
+          }
+        }
+      }
+    }
+
+    async function openRemoteTerminal(targetPath) {
+      closeAllMenus();
+      const path = targetPath || currentRemotePath || '/';
+      switchBottomTab('terminal');
+      const panel = document.getElementById('logPanel');
+      if (panel) {
+        if (panel.classList.contains('collapsed')) {
+          toggleLogPanel();
+        }
+        const curHeight = parseInt(panel.style.height) || 0;
+        if (curHeight < 280) {
+          panel.style.height = '320px';
+          lastLogHeight = 320;
+        }
+      }
+
+      if (!isConnected) {
+        ensureTerminalActiveSession('server', 'user', path);
+        focusTerminalInput();
+        return;
+      }
+
+      try {
+        const res = await sendRust('open_remote_terminal', { remote_path: path });
+        if (res && res.opened) {
+          ensureTerminalActiveSession(res.host, res.username, res.remote_path);
+        }
+      } catch (err) {
+        ensureTerminalActiveSession(
+          (currentConnectionProfile && currentConnectionProfile.host) || 'host',
+          (currentConnectionProfile && currentConnectionProfile.username) || 'user',
+          path
+        );
+      }
+      focusTerminalInput();
     }
 
     function openToolsModal() {

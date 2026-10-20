@@ -822,98 +822,110 @@ impl AppState {
                 IpcResponse::ok(id, action, json!({ "opened": true }))
             }
 
-            "open_remote_terminal" => {
+            "terminal_init" => {
+                let remote_lock = self.remote.lock().unwrap();
+                let remote = match remote_lock.as_ref() {
+                    Some(r) => r,
+                    None => return IpcResponse::err(id, action, "No active SSH/SFTP connection"),
+                };
                 let conn_lock = self.current_connection.lock().unwrap();
-                let conn = match conn_lock.as_ref() {
-                    Some(c) => c.clone(),
-                    None => return IpcResponse::err(id, action, "No active connection"),
+                let (host, user, port) = match conn_lock.as_ref() {
+                    Some(c) => (
+                        c["host"].as_str().unwrap_or("").to_string(),
+                        c["username"].as_str().unwrap_or("").to_string(),
+                        c["port"].as_u64().unwrap_or(22),
+                    ),
+                    None => ("".to_string(), "".to_string(), 22),
                 };
 
-                let protocol = conn["protocol"].as_str().unwrap_or("").to_lowercase();
-                let host = conn["host"].as_str().unwrap_or("");
-                let port = conn["port"].as_u64().unwrap_or(22);
-                let username = conn["username"].as_str().unwrap_or("");
-                let auth_type = conn["auth_type"].as_str().unwrap_or("password");
-                let key_path = conn["key_path"].as_str().unwrap_or("");
-                let pwd = payload.get("remote_path").and_then(|v| v.as_str()).unwrap_or(conn["pwd"].as_str().unwrap_or("~"));
+                let cwd = remote.pwd();
+                IpcResponse::ok(id, action, json!({
+                    "connected": true,
+                    "host": host,
+                    "username": user,
+                    "port": port,
+                    "cwd": cwd,
+                }))
+            }
 
-                if protocol != "sftp" && protocol != "ssh" {
-                    return IpcResponse::err(id, action, "Terminal shell is only available for SSH/SFTP sessions");
-                }
+            "terminal_exec" => {
+                let cmd_raw = payload["command"].as_str().unwrap_or("").trim();
+                let cwd = payload["cwd"].as_str().unwrap_or("").trim();
 
-                if host.is_empty() {
-                    return IpcResponse::err(id, action, "Host is empty");
-                }
-
-                // Check if user has NetSarang Xshell installed
-                let xshell_paths = [
-                    r"C:\Program Files (x86)\NetSarang\Xshell 8\Xshell.exe",
-                    r"C:\Program Files\NetSarang\Xshell 8\Xshell.exe",
-                    r"C:\Program Files (x86)\NetSarang\Xshell 7\Xshell.exe",
-                    r"C:\Program Files\NetSarang\Xshell 7\Xshell.exe",
-                ];
-                let mut xshell_exe = None;
-                for xp in &xshell_paths {
-                    if std::path::Path::new(xp).exists() {
-                        xshell_exe = Some(xp.to_string());
-                        break;
-                    }
-                }
-
-                if let Some(ref xe) = xshell_exe {
-                    // Launch via Xshell
-                    // Format: xshell.exe -url ssh://user:pass@host:port
-                    let conn_url = if !username.is_empty() {
-                        format!("ssh://{}@{}:{}", username, host, port)
-                    } else {
-                        format!("ssh://{}:{}", host, port)
-                    };
-
-                    let launched = std::process::Command::new(xe)
-                        .args(&["-url", &conn_url])
-                        .spawn()
-                        .is_ok();
-
-                    if launched {
-                        return IpcResponse::ok(id, action, json!({ "launched": true, "terminal": "xshell", "host": host }));
-                    }
-                }
-
-                let mut ssh_args = Vec::new();
-                if port != 22 && port != 0 {
-                    ssh_args.push("-p".to_string());
-                    ssh_args.push(port.to_string());
-                }
-                if auth_type == "key" && !key_path.is_empty() {
-                    ssh_args.push("-i".to_string());
-                    ssh_args.push(key_path.to_string());
-                }
-
-                let target = if !username.is_empty() {
-                    format!("{}@{}", username, host)
-                } else {
-                    host.to_string()
+                let remote_lock = self.remote.lock().unwrap();
+                let remote = match remote_lock.as_ref() {
+                    Some(r) => r,
+                    None => return IpcResponse::err(id, action, "No active remote session"),
                 };
-                ssh_args.push(target);
 
-                // Priority: Windows Terminal (wt.exe) -> cmd.exe fallback
-                let mut wt_args: Vec<String> = vec!["-w".to_string(), "0".to_string(), "nt".to_string(), "--title".to_string(), format!("90FTP SSH: {}", host), "ssh".to_string()];
-                wt_args.extend(ssh_args.clone());
-
-                let launched = std::process::Command::new("wt.exe")
-                    .args(&wt_args)
-                    .spawn()
-                    .is_ok();
-
-                if !launched {
-                    let mut cmd_args = vec!["/c".to_string(), "start".to_string(), format!("90FTP SSH: {}", host), "ssh".to_string()];
-                    cmd_args.extend(ssh_args);
-                    if let Err(e) = std::process::Command::new("cmd.exe").args(&cmd_args).spawn() {
-                        return IpcResponse::err(id, action, &format!("Failed to spawn terminal: {}", e));
-                    }
+                if cmd_raw.is_empty() {
+                    return IpcResponse::ok(id, action, json!({
+                        "output": "",
+                        "cwd": cwd,
+                    }));
                 }
 
-                IpcResponse::ok(id, action, json!({ "launched": true, "terminal": "wt", "host": host, "remote_path": pwd }))
+                if cmd_raw == "clear" {
+                    return IpcResponse::ok(id, action, json!({
+                        "clear": true,
+                        "output": "",
+                        "cwd": cwd,
+                    }));
+                }
+
+                let safe_cwd = if cwd.is_empty() { "~" } else { cwd };
+                let wrapped_cmd = format!(
+                    "cd \"{}\" 2>/dev/null; {}; printf \"\\n__90FTP_PWD__%s\\n\" \"$(pwd)\"",
+                    safe_cwd, cmd_raw
+                );
+
+                match remote.exec_command(&wrapped_cmd) {
+                    Ok(raw_output) => {
+                        let mut output = raw_output;
+                        let mut new_cwd = cwd.to_string();
+
+                        if let Some(pos) = output.rfind("__90FTP_PWD__") {
+                            let (pre, post) = output.split_at(pos);
+                            let pwd_part = &post["__90FTP_PWD__".len()..];
+                            let detected_pwd = pwd_part.lines().next().unwrap_or("").trim();
+                            if !detected_pwd.is_empty() {
+                                new_cwd = detected_pwd.to_string();
+                            }
+                            output = pre.trim_end_matches(['\r', '\n']).to_string();
+                        }
+
+                        IpcResponse::ok(id, action, json!({
+                            "output": output,
+                            "cwd": new_cwd,
+                        }))
+                    }
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "open_remote_terminal" => {
+                let remote_lock = self.remote.lock().unwrap();
+                let remote = match remote_lock.as_ref() {
+                    Some(r) => r,
+                    None => return IpcResponse::err(id, action, "No active SSH/SFTP connection"),
+                };
+                let conn_lock = self.current_connection.lock().unwrap();
+                let (host, user) = match conn_lock.as_ref() {
+                    Some(c) => (
+                        c["host"].as_str().unwrap_or("").to_string(),
+                        c["username"].as_str().unwrap_or("").to_string(),
+                    ),
+                    None => ("".to_string(), "".to_string()),
+                };
+                let pwd = payload.get("remote_path").and_then(|v| v.as_str()).unwrap_or(&remote.pwd()).to_string();
+
+                IpcResponse::ok(id, action, json!({
+                    "opened": true,
+                    "embedded": true,
+                    "host": host,
+                    "username": user,
+                    "remote_path": pwd,
+                }))
             }
 
             unknown => IpcResponse::err(id, action, &format!("Unknown action: {}", unknown)),
