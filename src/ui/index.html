@@ -1348,14 +1348,18 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.7</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.8</span>
         </div>
       </div>
 
       <div style="display: flex; align-items: center; gap: 6px;">
         <button class="btn btn-secondary" onclick="openOptionsModal('general')" title="Application Settings & Options" style="padding: 0 9px; gap: 5px;">
-          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Settings</span>
+        </button>
+        <button class="btn btn-secondary" onclick="openToolsModal()" title="Tools & Utilities (أدوات النظام)" style="padding: 0 9px; gap: 5px;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <span>Tools</span>
         </button>
         <button class="btn btn-secondary" id="btnThemeToggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" style="padding: 0 8px;">
           <svg class="icon icon-sm" id="themeIcon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -1459,6 +1463,11 @@
       <div class="menu-item" onclick="toggleMenu(event, 'toolsMenu')">
         <span>Tools</span>
         <div class="menu-dropdown" id="toolsMenu">
+          <div class="dropdown-item" onclick="openToolsModal()">
+            <span class="menu-icon">🛠️</span>
+            <span>Tools Suite (SOON)...</span>
+          </div>
+          <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openOptionsModal('security')">
             <span class="menu-icon">🧹</span>
             <span>Clear Cache & History...</span>
@@ -2116,19 +2125,19 @@
           <div class="options-groupbox">
             <div class="options-groupbox-legend">File Browser</div>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optShowHidden" onchange="toggleHiddenFiles(this.checked)">
+              <input type="checkbox" id="optShowHidden" onchange="checkOptionsFormDirty()">
               <span>Show hidden files and dotfiles (.git, .env, etc.)</span>
             </label>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optShowFullPath">
+              <input type="checkbox" id="optShowFullPath" onchange="checkOptionsFormDirty()">
               <span>Show full absolute path in local directory bar</span>
             </label>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optAutoCheckUpdates">
+              <input type="checkbox" id="optAutoCheckUpdates" onchange="checkOptionsFormDirty()">
               <span>Check for updates automatically on startup</span>
             </label>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optConfirmDisconnect">
+              <input type="checkbox" id="optConfirmDisconnect" onchange="checkOptionsFormDirty()">
               <span>Confirm before disconnecting from active server</span>
             </label>
           </div>
@@ -2137,14 +2146,14 @@
             <div class="options-groupbox-legend">Mouse Action Shortcuts</div>
             <div class="options-select-row">
               <span style="color: var(--text-muted);">Double-click Local File:</span>
-              <select id="optDblLocal" style="width: 180px;">
+              <select id="optDblLocal" style="width: 180px;" onchange="checkOptionsFormDirty()">
                 <option value="edit">Open in Code Editor</option>
                 <option value="transfer">Transfer (Upload)</option>
               </select>
             </div>
             <div class="options-select-row">
               <span style="color: var(--text-muted);">Double-click Remote File:</span>
-              <select id="optDblRemote" style="width: 180px;">
+              <select id="optDblRemote" style="width: 180px;" onchange="checkOptionsFormDirty()">
                 <option value="edit">Open in Code Editor</option>
                 <option value="transfer">Transfer (Download)</option>
               </select>
@@ -2157,16 +2166,16 @@
           <div class="options-groupbox">
             <div class="options-groupbox-legend">Transfer Queue & Automation</div>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optDelFinished">
+              <input type="checkbox" id="optDelFinished" onchange="checkOptionsFormDirty()">
               <span>Automatically remove finished items from Transfers Queue</span>
             </label>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optAutoSwitchTransfers">
+              <input type="checkbox" id="optAutoSwitchTransfers" onchange="checkOptionsFormDirty()">
               <span>Automatically switch to Transfers tab when upload or download begins</span>
             </label>
             <div class="options-select-row" style="margin-top: 10px;">
               <span style="color: var(--text-muted);">File Collision Handling:</span>
-              <select id="optFileCollision" style="width: 200px;">
+              <select id="optFileCollision" style="width: 200px;" onchange="checkOptionsFormDirty()">
                 <option value="overwrite">Overwrite automatically</option>
                 <option value="prompt">Prompt for user confirmation</option>
                 <option value="skip">Skip if same size</option>
@@ -2180,7 +2189,7 @@
           <div class="options-groupbox">
             <div class="options-groupbox-legend">Session Security</div>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optWipeOnDisconnect">
+              <input type="checkbox" id="optWipeOnDisconnect" onchange="checkOptionsFormDirty()">
               <span>Wipe in-memory credentials immediately upon server disconnect</span>
             </label>
           </div>
@@ -2232,10 +2241,10 @@
             <div class="options-groupbox-legend">Activity Log & Console</div>
             <div class="options-select-row">
               <span style="color: var(--text-muted);">Maximum Console Lines:</span>
-              <input type="number" id="optMaxLogLines" value="500" min="50" max="5000" style="width: 90px; text-align: center;">
+              <input type="number" id="optMaxLogLines" value="500" min="50" max="5000" style="width: 90px; text-align: center;" onchange="checkOptionsFormDirty()" oninput="checkOptionsFormDirty()">
             </div>
             <label class="options-checkbox-row">
-              <input type="checkbox" id="optLogTimestamps">
+              <input type="checkbox" id="optLogTimestamps" onchange="checkOptionsFormDirty()">
               <span>Show timestamps [HH:MM:SS] on each log entry</span>
             </label>
             <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
@@ -2246,10 +2255,15 @@
 
       </div>
 
-      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 8px 14px;">
-        <button type="button" class="btn btn-primary" onclick="saveOptionsAndClose()" style="padding: 4px 16px;">OK</button>
-        <button type="button" class="btn btn-secondary" onclick="closeOptionsModal()" style="padding: 4px 14px;">Cancel</button>
-        <button type="button" class="btn btn-secondary" onclick="saveOptions(false)" style="padding: 4px 14px;">Apply</button>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 14px;">
+        <div id="optionsStatusMsg" style="font-size: 11.5px; display: flex; align-items: center; gap: 6px; min-height: 20px;">
+          <!-- Dynamically populated: Unsaved changes text or All changes applied -->
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button type="button" class="btn btn-primary" onclick="saveOptionsAndClose()" style="padding: 4px 16px;">OK</button>
+          <button type="button" class="btn btn-secondary" onclick="closeOptionsModal()" style="padding: 4px 14px;">Cancel</button>
+          <button type="button" class="btn btn-secondary" id="btnApplyOptions" onclick="applyOptions()" style="padding: 4px 16px; transition: all 0.2s ease;">Apply</button>
+        </div>
       </div>
     </div>
   </div>
@@ -2260,12 +2274,12 @@
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span>About 90FTP</span>
+          <span style="font-weight: 600;">About 90FTP</span>
         </div>
         <button type="button" class="btn btn-secondary" onclick="closeAboutModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
       </div>
-      <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;">
-        <svg viewBox="0 0 32 32" width="56" height="56" fill="none">
+      <div class="modal-body" style="padding: 24px 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px;">
+        <svg viewBox="0 0 32 32" width="60" height="60" fill="none" style="filter: drop-shadow(0 4px 14px rgba(56, 189, 248, 0.4));">
           <defs>
             <linearGradient id="aboutLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
               <stop offset="0%" stop-color="#0284c7"/>
@@ -2278,22 +2292,69 @@
           <path d="M11.5 25.5l3.5-3v6l-3.5-3z" fill="#38bdf8"/>
           <path d="M20.5 6.5l-3.5 3v-6l3.5 3z" fill="#facc15"/>
         </svg>
+
         <div>
-          <div style="font-size: 17px; font-weight: 700; color: var(--text-main);">90FTP - Modern Site Manager</div>
-          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.0.7 Dev (Windows x64)</div>
+          <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
+          <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
+          <div style="margin-top: 8px;">
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.8 Dev</span>
+          </div>
         </div>
-        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; max-width: 360px;">
-          High-Performance Asynchronous SFTP, FTP & FTPS Transfer Engine.
-          Engineered with Rust, Tao & Wry WebView2 for ultra-fast, low-latency file operations.
+
+        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.65; max-width: 360px;">
+          High-performance asynchronous SFTP, FTP & FTPS client designed for speed, security, and effortless remote server management.
         </div>
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); width: 100%; text-align: left;">
-          <div><strong>Core:</strong> Rust 1.99 / ssh2 / suppaftp / wry</div>
-          <div><strong>Platform:</strong> Windows x86_64 MSVC</div>
-          <div><strong>Storage:</strong> %APPDATA%\90FTP</div>
+
+        <div style="font-size: 11px; color: var(--text-dim); border-top: 1px solid var(--border-color); width: 100%; padding-top: 12px; margin-top: 4px;">
+          © 2026 90FTP. All rights reserved.
         </div>
       </div>
-      <div class="modal-footer" style="display: flex; justify-content: center; padding: 8px 14px;">
-        <button type="button" class="btn btn-primary" onclick="closeAboutModal()" style="padding: 4px 24px;">OK</button>
+      <div class="modal-footer" style="display: flex; justify-content: center; padding: 10px 16px;">
+        <button type="button" class="btn btn-primary" onclick="closeAboutModal()" style="padding: 4px 28px; font-weight: 600;">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Tools & Utilities (SOON) -->
+  <div class="modal-overlay" id="toolsModal" style="z-index: 1060;">
+    <div class="modal-content" style="width: 480px; max-width: 95vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+          <span style="font-weight: 600;">Tools Suite</span>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeToolsModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 32px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px;">
+        <div style="display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 50%; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); box-shadow: 0 0 24px rgba(56, 189, 248, 0.2);">
+          <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+        </div>
+
+        <div>
+          <div style="font-size: 54px; font-weight: 900; letter-spacing: 6px; background: linear-gradient(135deg, #38bdf8, #0284c7, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 30px rgba(56, 189, 248, 0.4); line-height: 1.1;">
+            SOON
+          </div>
+          <div style="font-size: 13.5px; font-weight: 600; color: var(--text-muted); margin-top: 6px;">
+            قريباً في التحديثات القادمة (Coming Soon)
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-dim); line-height: 1.7; max-width: 380px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; text-align: left;">
+          <div style="font-weight: 700; color: var(--accent); margin-bottom: 6px; font-size: 12.5px;">Upcoming Power Tools:</div>
+          <div style="display: flex; gap: 6px; margin-bottom: 4px;"><span>⚡</span><span>Multi-threaded Directory Synchronization</span></div>
+          <div style="display: flex; gap: 6px; margin-bottom: 4px;"><span>🌐</span><span>Network Ping, Traceroute & Port Connectivity Probe</span></div>
+          <div style="display: flex; gap: 6px; margin-bottom: 4px;"><span>🛡️</span><span>SSH Keypair Generator & Vault Exporter</span></div>
+          <div style="display: flex; gap: 6px;"><span>💻</span><span>Integrated Native Terminal Console</span></div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: center; padding: 10px 16px;">
+        <button type="button" class="btn btn-primary" onclick="closeToolsModal()" style="padding: 4px 28px; font-weight: 600;">OK</button>
       </div>
     </div>
   </div>
@@ -2447,7 +2508,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.7';
+    let APP_CURRENT_VERSION = '0.0.0.8';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4819,7 +4880,7 @@
       }
     }
 
-    // Options & Preferences Management (100% Functional & Persistent)
+    // Options & Preferences Management (100% Functional, Reactive & Persistent)
     const defaultOptions = {
       showHidden: true,
       showFullPath: true,
@@ -4837,6 +4898,7 @@
 
     let appOptions = Object.assign({}, defaultOptions);
     let showHiddenFilesState = true;
+    let optionsFormSnapshot = '';
 
     function initOptions() {
       try {
@@ -4849,6 +4911,59 @@
       showHiddenFilesState = !!appOptions.showHidden;
       const menuCheck = document.getElementById('menuCheckHidden');
       if (menuCheck) menuCheck.textContent = showHiddenFilesState ? '✓' : ' ';
+    }
+
+    function getCurrentFormOptions() {
+      const getCheck = (id, def) => {
+        const el = document.getElementById(id);
+        return el ? el.checked : def;
+      };
+      const getVal = (id, def) => {
+        const el = document.getElementById(id);
+        return el ? el.value : def;
+      };
+
+      return {
+        showHidden: getCheck('optShowHidden', true),
+        showFullPath: getCheck('optShowFullPath', true),
+        autoCheckUpdates: getCheck('optAutoCheckUpdates', true),
+        confirmDisconnect: getCheck('optConfirmDisconnect', true),
+        dblLocal: getVal('optDblLocal', 'edit'),
+        dblRemote: getVal('optDblRemote', 'edit'),
+        delFinished: getCheck('optDelFinished', false),
+        autoSwitchTransfers: getCheck('optAutoSwitchTransfers', true),
+        fileCollision: getVal('optFileCollision', 'overwrite'),
+        wipeOnDisconnect: getCheck('optWipeOnDisconnect', false),
+        maxLogLines: parseInt(getVal('optMaxLogLines', '500'), 10) || 500,
+        logTimestamps: getCheck('optLogTimestamps', true)
+      };
+    }
+
+    function checkOptionsFormDirty() {
+      const current = JSON.stringify(getCurrentFormOptions());
+      const isDirty = current !== optionsFormSnapshot;
+      const statusEl = document.getElementById('optionsStatusMsg');
+      const applyBtn = document.getElementById('btnApplyOptions');
+
+      if (isDirty) {
+        if (statusEl) {
+          statusEl.innerHTML = '<span style="color: #f59e0b; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>●</span> <span>Unsaved changes (هناك تغييرات غير محفوظة)</span></span>';
+        }
+        if (applyBtn) {
+          applyBtn.style.borderColor = 'var(--accent)';
+          applyBtn.style.color = 'var(--accent)';
+          applyBtn.style.fontWeight = '700';
+        }
+      } else {
+        if (statusEl) {
+          statusEl.innerHTML = '<span style="color: var(--text-dim); display: inline-flex; align-items: center; gap: 5px;"><span>✓</span> <span>All settings up to date</span></span>';
+        }
+        if (applyBtn) {
+          applyBtn.style.borderColor = '';
+          applyBtn.style.color = '';
+          applyBtn.style.fontWeight = '';
+        }
+      }
     }
 
     function loadOptionsToForm() {
@@ -4880,6 +4995,10 @@
       // Tab 4: Interface & Console
       setVal('optMaxLogLines', appOptions.maxLogLines);
       setCheck('optLogTimestamps', appOptions.logTimestamps);
+
+      // Take snapshot of loaded clean state
+      optionsFormSnapshot = JSON.stringify(getCurrentFormOptions());
+      checkOptionsFormDirty();
     }
 
     function openOptionsModal(tab) {
@@ -4907,46 +5026,61 @@
       });
     }
 
-    function saveOptions(showNotice = true) {
-      const getCheck = (id, def) => {
-        const el = document.getElementById(id);
-        return el ? el.checked : def;
-      };
-      const getVal = (id, def) => {
-        const el = document.getElementById(id);
-        return el ? el.value : def;
-      };
-
-      appOptions = {
-        showHidden: getCheck('optShowHidden', true),
-        showFullPath: getCheck('optShowFullPath', true),
-        autoCheckUpdates: getCheck('optAutoCheckUpdates', true),
-        confirmDisconnect: getCheck('optConfirmDisconnect', true),
-        dblLocal: getVal('optDblLocal', 'edit'),
-        dblRemote: getVal('optDblRemote', 'edit'),
-        delFinished: getCheck('optDelFinished', false),
-        autoSwitchTransfers: getCheck('optAutoSwitchTransfers', true),
-        fileCollision: getVal('optFileCollision', 'overwrite'),
-        wipeOnDisconnect: getCheck('optWipeOnDisconnect', false),
-        maxLogLines: parseInt(getVal('optMaxLogLines', '500'), 10) || 500,
-        logTimestamps: getCheck('optLogTimestamps', true)
-      };
+    function applyOptions() {
+      const newOpts = getCurrentFormOptions();
+      const prevOpts = Object.assign({}, appOptions);
+      appOptions = Object.assign({}, defaultOptions, newOpts);
 
       try {
         appStorage.setItem('90ftp_options', JSON.stringify(appOptions));
       } catch (_) {}
 
+      // Update snapshot
+      optionsFormSnapshot = JSON.stringify(newOpts);
+
+      // 1. Reactive Hidden Files
       showHiddenFilesState = !!appOptions.showHidden;
       const menuCheck = document.getElementById('menuCheckHidden');
       if (menuCheck) menuCheck.textContent = showHiddenFilesState ? '✓' : ' ';
-
-      if (showNotice) {
-        addLog('Preferences saved successfully', 'success');
+      if (prevOpts.showHidden !== appOptions.showHidden) {
+        if (currentLocalPath) navigateLocal(currentLocalPath);
+        if (isConnected && currentRemotePath) navigateRemote(currentRemotePath);
       }
+
+      // 2. Reactive Full Path
+      if (prevOpts.showFullPath !== appOptions.showFullPath && currentLocalPath) {
+        const pathInp = document.getElementById('localPathInput');
+        if (pathInp) {
+          pathInp.value = appOptions.showFullPath ? currentLocalPath : (currentLocalPath.split('\\').pop() || currentLocalPath);
+        }
+      }
+
+      // 3. Visual feedback on Apply button and status
+      const statusEl = document.getElementById('optionsStatusMsg');
+      const applyBtn = document.getElementById('btnApplyOptions');
+      if (statusEl) {
+        statusEl.innerHTML = '<span style="color: #22c55e; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>✓</span> <span>Settings applied successfully (تم تطبيق الإعدادات بنجاح)</span></span>';
+      }
+      if (applyBtn) {
+        const origText = 'Apply';
+        applyBtn.textContent = '✓ Applied!';
+        applyBtn.style.borderColor = '#22c55e';
+        applyBtn.style.color = '#22c55e';
+        setTimeout(() => {
+          applyBtn.textContent = origText;
+          checkOptionsFormDirty();
+        }, 1500);
+      }
+
+      addLog('Preferences applied and saved successfully', 'success');
+    }
+
+    function saveOptions(showNotice = true) {
+      applyOptions();
     }
 
     function saveOptionsAndClose() {
-      saveOptions(true);
+      applyOptions();
       closeOptionsModal();
     }
 
@@ -4959,6 +5093,17 @@
         loadOptionsToForm();
         addLog('Preferences reset to default values', 'info');
       }
+    }
+
+    function openToolsModal() {
+      closeAllMenus();
+      const modal = document.getElementById('toolsModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeToolsModal() {
+      const modal = document.getElementById('toolsModal');
+      if (modal) modal.classList.remove('active');
     }
 
     async function clearKnownHostsCache() {
