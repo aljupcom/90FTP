@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <title>90FTP - Modern Site Manager</title>
   <style>
+    html, body {
+      background: #18181b !important;
+      background-color: #18181b !important;
+    }
     :root, [data-theme="dark"] {
       --bg-app: #18181b;
       --bg-panel: #202024;
@@ -1285,6 +1289,12 @@
       <div class="menu-item" onclick="toggleMenu(event, 'helpMenu')">
         <span>Help</span>
         <div class="menu-dropdown" id="helpMenu">
+          <div class="dropdown-item" onclick="openUpdateModal(true)">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></span>
+            <span>Check for Updates...</span>
+            <span class="menu-shortcut">Ctrl+U</span>
+          </div>
+          <div class="dropdown-divider"></div>
           <div class="dropdown-item" onclick="openAboutModal()">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
             <span>About 90FTP...</span>
@@ -2119,6 +2129,71 @@
       </div>
       <div class="modal-footer" style="display: flex; justify-content: center; padding: 8px 14px;">
         <button type="button" class="btn btn-primary" onclick="closeAboutModal()" style="padding: 4px 24px;">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Software Remote Update Dialog -->
+  <div class="modal-overlay" id="updateModal" style="z-index: 1065;">
+    <div class="modal-content" style="width: 520px; max-width: 95vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          <span style="font-weight: 600;">Check for Updates</span>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <!-- Status Card -->
+        <div id="updateStatusBanner" style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-color);">
+          <div id="updateIconContainer" style="font-size: 26px; line-height: 1; flex-shrink: 0;">
+            <span class="spin-icon">↻</span>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div id="updateHeadline" style="font-size: 14px; font-weight: 700; color: var(--text-main);">Checking for updates...</div>
+            <div id="updateSubtext" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Querying GitHub releases for aljupcom/90FTP...</div>
+          </div>
+          <div id="updateCurrentBadge" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25); white-space: nowrap;">
+            Current: v2.5.0
+          </div>
+        </div>
+
+        <!-- Release Info Container -->
+        <div id="updateDetailsBox" style="display: none; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
+            <span style="font-size: 12.5px; font-weight: 600; color: var(--text-main);" id="updateReleaseTitle">Release Highlights</span>
+            <span style="font-size: 11px; color: var(--text-dim);" id="updateReleaseDate"></span>
+          </div>
+          <div id="updateChangelog" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; font-size: 11.5px; line-height: 1.55; color: var(--text-muted); max-height: 180px; overflow-y: auto; white-space: pre-wrap; font-family: var(--font-mono, monospace);">
+          </div>
+        </div>
+
+        <!-- Direct Release / Download Info -->
+        <div id="updateActionContainer" style="display: none; background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 10px 12px; font-size: 11.5px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main);">
+              <strong>Release Asset:</strong> <span id="updateAssetName" style="color: var(--accent);">90FTP-Setup.exe</span>
+            </div>
+            <button type="button" class="btn btn-secondary" onclick="copyUpdateDownloadUrl()" style="padding: 2px 8px; font-size: 10.5px;" title="Copy Download Link to Clipboard">📋 Copy Link</button>
+          </div>
+        </div>
+
+        <!-- Notice Message -->
+        <div id="updateActionMsg" style="font-size: 11px; color: var(--text-dim); text-align: center;"></div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border-color); background: var(--bg-panel);">
+        <span style="font-size: 10.5px; color: var(--text-dim);">Repository: <strong style="color: var(--text-muted);">aljupcom/90FTP</strong></span>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary" onclick="checkForUpdates(true)" id="btnCheckAgain" style="display: none; padding: 4px 12px;">Check Again</button>
+          <a id="btnDownloadUpdate" href="#" target="_blank" class="btn btn-primary" style="display: none; padding: 4px 14px; text-decoration: none; align-items: center; gap: 6px;">
+            ⬇️ Open Download
+          </a>
+          <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()" id="btnCloseUpdate" style="padding: 4px 16px;">Close</button>
+        </div>
       </div>
     </div>
   </div>
@@ -4499,6 +4574,158 @@
       if (modal) modal.classList.remove('active');
     }
 
+    // Software Remote Update via GitHub (aljupcom/90FTP)
+    const APP_CURRENT_VERSION = '2.5.0';
+    const GITHUB_REPO_PATH = 'aljupcom/90FTP';
+    let currentDownloadUrl = '';
+
+    function openUpdateModal(autoCheck = true) {
+      closeAllMenus();
+      const modal = document.getElementById('updateModal');
+      if (modal) modal.classList.add('active');
+      if (autoCheck) {
+        checkForUpdates(false);
+      }
+    }
+
+    function closeUpdateModal() {
+      const modal = document.getElementById('updateModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function parseSemVer(v) {
+      if (!v) return [0, 0, 0];
+      const cleaned = v.trim().replace(/^[vV]/, '');
+      const parts = cleaned.split('.').map(p => parseInt(p, 10) || 0);
+      while (parts.length < 3) parts.push(0);
+      return parts;
+    }
+
+    function compareSemVer(v1, v2) {
+      const a = parseSemVer(v1);
+      const b = parseSemVer(v2);
+      for (let i = 0; i < 3; i++) {
+        if (a[i] > b[i]) return 1;
+        if (a[i] < b[i]) return -1;
+      }
+      return 0;
+    }
+
+    function copyUpdateDownloadUrl() {
+      if (!currentDownloadUrl) return;
+      navigator.clipboard.writeText(currentDownloadUrl).then(() => {
+        addLog('Update download URL copied to clipboard: ' + currentDownloadUrl, 'success');
+        const msg = document.getElementById('updateActionMsg');
+        if (msg) msg.textContent = '✓ Download link copied to clipboard!';
+      }).catch(err => {
+        addLog('Failed to copy update URL: ' + err, 'error');
+      });
+    }
+
+    async function checkForUpdates(manualTrigger = false) {
+      const iconContainer = document.getElementById('updateIconContainer');
+      const headline = document.getElementById('updateHeadline');
+      const subtext = document.getElementById('updateSubtext');
+      const detailsBox = document.getElementById('updateDetailsBox');
+      const actionContainer = document.getElementById('updateActionContainer');
+      const btnCheckAgain = document.getElementById('btnCheckAgain');
+      const btnDownload = document.getElementById('btnDownloadUpdate');
+      const actionMsg = document.getElementById('updateActionMsg');
+
+      if (iconContainer) {
+        iconContainer.innerHTML = '<span class="spin-icon">↻</span>';
+      }
+      if (headline) headline.textContent = 'Checking for updates...';
+      if (subtext) subtext.textContent = 'Connecting to GitHub releases for ' + GITHUB_REPO_PATH + '...';
+      if (detailsBox) detailsBox.style.display = 'none';
+      if (actionContainer) actionContainer.style.display = 'none';
+      if (btnCheckAgain) btnCheckAgain.style.display = 'none';
+      if (btnDownload) btnDownload.style.display = 'none';
+      if (actionMsg) actionMsg.textContent = '';
+
+      try {
+        const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO_PATH + '/releases/latest', {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        });
+
+        if (resp.status === 404) {
+          // No releases published yet on the repository
+          if (iconContainer) iconContainer.innerHTML = '✅';
+          if (headline) headline.textContent = 'You are running the latest version';
+          if (subtext) subtext.textContent = '90FTP v' + APP_CURRENT_VERSION + ' is up to date. No remote release has been tagged on GitHub yet.';
+          if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
+          addLog('Update check: 90FTP v' + APP_CURRENT_VERSION + ' is up to date (no remote release found).', 'info');
+          return;
+        }
+
+        if (!resp.ok) {
+          throw new Error('GitHub API responded with HTTP ' + resp.status + ' (' + resp.statusText + ')');
+        }
+
+        const data = await resp.json();
+        const latestTag = data.tag_name || data.name || '';
+        const cleanLatest = latestTag.replace(/^[vV]/, '');
+        const cmp = compareSemVer(cleanLatest, APP_CURRENT_VERSION);
+
+        if (cmp > 0) {
+          // Newer version found
+          if (iconContainer) iconContainer.innerHTML = '🚀';
+          if (headline) headline.textContent = 'New Version Available: ' + (latestTag.startsWith('v') ? latestTag : 'v' + latestTag);
+          if (subtext) subtext.textContent = 'A new release is available on GitHub. Current: v' + APP_CURRENT_VERSION + ' ➔ Latest: ' + latestTag;
+
+          const titleElem = document.getElementById('updateReleaseTitle');
+          const dateElem = document.getElementById('updateReleaseDate');
+          const changelogElem = document.getElementById('updateChangelog');
+          if (titleElem) titleElem.textContent = data.name || ('Release ' + latestTag);
+          if (dateElem && data.published_at) {
+            dateElem.textContent = new Date(data.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+          }
+          if (changelogElem) {
+            changelogElem.textContent = data.body || 'No release notes provided for this release.';
+          }
+          if (detailsBox) detailsBox.style.display = 'flex';
+
+          let downloadUrl = data.html_url;
+          let assetName = 'Release Page';
+          if (data.assets && data.assets.length > 0) {
+            const exeAsset = data.assets.find(a => a.name.toLowerCase().endsWith('.exe')) || data.assets[0];
+            if (exeAsset) {
+              downloadUrl = exeAsset.browser_download_url;
+              assetName = exeAsset.name;
+            }
+          }
+          currentDownloadUrl = downloadUrl;
+
+          const assetElem = document.getElementById('updateAssetName');
+          if (assetElem) assetElem.textContent = assetName;
+          if (actionContainer) actionContainer.style.display = 'block';
+
+          if (btnDownload) {
+            btnDownload.href = downloadUrl;
+            btnDownload.style.display = 'inline-flex';
+          }
+          if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
+
+          addLog('Update available: New version ' + latestTag + ' ready to download from GitHub.', 'success');
+        } else {
+          // Up to date
+          if (iconContainer) iconContainer.innerHTML = '✅';
+          if (headline) headline.textContent = '90FTP is Up to Date';
+          if (subtext) subtext.textContent = 'You have the latest version installed (v' + APP_CURRENT_VERSION + ').';
+          if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
+          addLog('Update check: 90FTP v' + APP_CURRENT_VERSION + ' is up to date.', 'info');
+        }
+      } catch (err) {
+        if (iconContainer) iconContainer.innerHTML = '⚠️';
+        if (headline) headline.textContent = 'Update Check Failed';
+        if (subtext) subtext.textContent = 'Could not retrieve update information: ' + (err.message || err);
+        if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
+        addLog('Update check failed: ' + (err.message || err), 'warning');
+      }
+    }
+
     // Native Desktop Menubar
     function toggleMenu(e, menuId) {
       if (e) {
@@ -4623,6 +4850,7 @@
         closeContextMenu();
         closeOptionsModal();
         closeAboutModal();
+        closeUpdateModal();
         closeSitesModal();
         closeEditorModal();
         return;
@@ -4630,7 +4858,10 @@
 
       if (isInput) return;
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+        e.preventDefault();
+        openUpdateModal(true);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         openSitesModal();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q') {

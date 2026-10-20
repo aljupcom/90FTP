@@ -34,7 +34,8 @@ fn main() {
     let mut builder = WindowBuilder::new()
         .with_title("90FTP - Modern Site Manager")
         .with_inner_size(LogicalSize::new(saved_state.width, saved_state.height))
-        .with_min_inner_size(LogicalSize::new(800.0, 500.0));
+        .with_min_inner_size(LogicalSize::new(800.0, 500.0))
+        .with_visible(false);
 
     if saved_state.is_maximized {
         builder = builder.with_maximized(true);
@@ -72,6 +73,7 @@ fn main() {
 
     let webview = WebViewBuilder::new_with_web_context(&mut context)
         .with_devtools(true)
+        .with_background_color((17, 17, 19, 255))
         .with_html(html_content)
         .with_ipc_handler({
             let app_state = app_state.clone();
@@ -104,6 +106,9 @@ fn main() {
         })
         .build(&window)
         .expect("Failed to initialize WebView");
+
+    // Show window smoothly now that WebView2 is initialized with dark theme background
+    window.set_visible(true);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
