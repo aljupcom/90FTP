@@ -2301,6 +2301,14 @@
     let savedSites = [];
     let selectedQuickSite = null;
 
+    // Software Remote Update Global State
+    let APP_CURRENT_VERSION = '0.0.3';
+    const GITHUB_REPO_PATH = 'aljupcom/90FTP';
+    let currentDownloadUrl = '';
+    let currentDownloadFilename = '';
+    let currentLatestVersion = '';
+    let currentDownloadedInstallerPath = '';
+
     // Editor state
     let activeEditingPath = '';
     let activeEditingIsRemote = false;
@@ -4620,13 +4628,7 @@
       if (modal) modal.classList.remove('active');
     }
 
-    // Software Remote Update via GitHub (aljupcom/90FTP)
-    let APP_CURRENT_VERSION = '0.0.3';
-    const GITHUB_REPO_PATH = 'aljupcom/90FTP';
-    let currentDownloadUrl = '';
-    let currentDownloadFilename = '';
-    let currentLatestVersion = '';
-    let currentDownloadedInstallerPath = '';
+    // Software Remote Update Modal Methods
 
     function openUpdateModal(autoCheck = true) {
       closeAllMenus();
