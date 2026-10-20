@@ -114,6 +114,106 @@ impl AppState {
                 }
             }
 
+            "get_local_shell_verbs" => {
+                let path = payload["path"].as_str().unwrap_or("");
+                if path.is_empty() || !std::path::Path::new(path).exists() {
+                    return IpcResponse::err(id, action, "Path does not exist");
+                }
+
+                let py_script = format!(
+                    "import win32com.client, json, os\n\
+                    path = r'''{}'''\n\
+                    parent = os.path.dirname(path)\n\
+                    name = os.path.basename(path)\n\
+                    shell = win32com.client.Dispatch('Shell.Application')\n\
+                    folder = shell.NameSpace(parent)\n\
+                    item = folder.ParseName(name)\n\
+                    verbs = item.Verbs()\n\
+                    res = []\n\
+                    for i in range(verbs.Count):\n\
+                        v = verbs.Item(i)\n\
+                        clean = v.Name.replace('&', '').strip()\n\
+                        if clean:\n\
+                            res.append({{'index': i, 'name': clean}})\n\
+                    print(json.dumps(res))",
+                    path.replace("'''", "")
+                );
+
+                let output = std::process::Command::new("python")
+                    .args(&["-c", &py_script])
+                    .output();
+
+                match output {
+                    Ok(out) => {
+                        let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                        match serde_json::from_str::<serde_json::Value>(&stdout) {
+                            Ok(verbs) => IpcResponse::ok(id, action, json!({ "path": path, "verbs": verbs })),
+                            Err(_) => IpcResponse::err(id, action, "Failed to parse shell verbs JSON"),
+                        }
+                    }
+                    Err(e) => IpcResponse::err(id, action, &format!("Failed to retrieve shell verbs: {}", e)),
+                }
+            }
+
+            "invoke_local_shell_verb" => {
+                let path = payload["path"].as_str().unwrap_or("");
+                let verb_index = payload["index"].as_i64();
+                let verb_name = payload["name"].as_str().unwrap_or("");
+
+                if path.is_empty() || !std::path::Path::new(path).exists() {
+                    return IpcResponse::err(id, action, "Path does not exist");
+                }
+
+                let py_script = if let Some(idx) = verb_index {
+                    format!(
+                        "import win32com.client, os\n\
+                        path = r'''{}'''\n\
+                        parent = os.path.dirname(path)\n\
+                        name = os.path.basename(path)\n\
+                        shell = win32com.client.Dispatch('Shell.Application')\n\
+                        folder = shell.NameSpace(parent)\n\
+                        item = folder.ParseName(name)\n\
+                        verbs = item.Verbs()\n\
+                        verbs.Item({}).DoIt()",
+                        path.replace("'''", ""), idx
+                    )
+                } else {
+                    format!(
+                        "import win32com.client, os\n\
+                        path = r'''{}'''\n\
+                        verb_name = r'''{}'''\n\
+                        parent = os.path.dirname(path)\n\
+                        name = os.path.basename(path)\n\
+                        shell = win32com.client.Dispatch('Shell.Application')\n\
+                        folder = shell.NameSpace(parent)\n\
+                        item = folder.ParseName(name)\n\
+                        verbs = item.Verbs()\n\
+                        for v in verbs:\n\
+                            clean = v.Name.replace('&', '').strip()\n\
+                            if clean.lower() == verb_name.lower():\n\
+                                v.DoIt()\n\
+                                break",
+                        path.replace("'''", ""), verb_name.replace("'''", "")
+                    )
+                };
+
+                let _ = std::process::Command::new("python")
+                    .args(&["-c", &py_script])
+                    .spawn();
+
+                IpcResponse::ok(id, action, json!({ "invoked": true, "path": path }))
+            }
+
+            "open_in_file_explorer" => {
+                let path = payload["path"].as_str().unwrap_or("");
+                if !path.is_empty() {
+                    let _ = std::process::Command::new("explorer")
+                        .args(&["/select,", path])
+                        .spawn();
+                }
+                IpcResponse::ok(id, action, json!({ "opened": true }))
+            }
+
             "connect" => {
                 let protocol = payload["protocol"].as_str().unwrap_or("ftp");
                 let host = payload["host"].as_str().unwrap_or("");

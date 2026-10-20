@@ -1149,7 +1149,10 @@
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 9px;
       box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
-      min-width: 230px;
+      min-width: 250px;
+      max-height: 82vh;
+      overflow-y: auto;
+      overflow-x: hidden;
       z-index: 3000;
       padding: 6px;
       font-size: 13px;
@@ -1438,7 +1441,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.12</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.13</span>
         </div>
       </div>
 
@@ -2677,7 +2680,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.12';
+    let APP_CURRENT_VERSION = '0.0.0.13';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4243,7 +4246,74 @@
     // Custom Context Menu & Properties Management
     let contextTarget = null;
 
-    function openContextMenu(e, type, item = null, index = null) {
+    function getVerbIconSvg(name) {
+      const lower = name.toLowerCase();
+      if (lower === 'open' || lower === 'open in new process') {
+        return '<svg class="icon" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+      }
+      if (lower.includes('terminal') || lower.includes('powershell') || lower.includes('bash')) {
+        return '<svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+      }
+      if (lower.includes('code') || lower.includes('visual studio') || lower.includes('cursor') || lower.includes('trae') || lower.includes('qoder') || lower.includes('edit')) {
+        return '<svg class="icon" viewBox="0 0 24 24" style="color: #60a5fa;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
+      }
+      if (lower.includes('vlc') || lower.includes('play')) {
+        return '<svg class="icon" viewBox="0 0 24 24" style="color: #fb923c;"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+      }
+      if (lower.includes('git')) {
+        return '<svg class="icon" viewBox="0 0 24 24" style="color: #f87171;"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9"/><line x1="12" y1="12" x2="12" y2="15"/></svg>';
+      }
+      if (lower.includes('pin') || lower.includes('favorite')) {
+        return '<svg class="icon" viewBox="0 0 24 24" style="color: #fbbf24;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+      }
+      if (lower.includes('glary') || lower.includes('utilities') || lower.includes('shred') || lower.includes('clean')) {
+        return '<svg class="icon" viewBox="0 0 24 24" style="color: #34d399;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
+      }
+      if (lower.includes('copy as path') || lower.includes('copy path')) {
+        return '<svg class="icon" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+      }
+      if (lower.includes('copy')) {
+        return '<svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+      }
+      if (lower.includes('cut')) {
+        return '<svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>';
+      }
+      if (lower.includes('delete')) {
+        return '<svg class="icon" viewBox="0 0 24 24" style="color: #f87171;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+      }
+      if (lower.includes('rename')) {
+        return '<svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+      }
+      if (lower.includes('properties')) {
+        return '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+      }
+      return '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/></svg>';
+    }
+
+    async function invokeShellVerb(path, index, name) {
+      closeContextMenu();
+      try {
+        await sendRust('invoke_local_shell_verb', { path, index, name });
+        // Refresh local if it could be a delete or rename
+        const lower = (name || '').toLowerCase();
+        if (lower.includes('delete') || lower.includes('rename')) {
+          setTimeout(refreshLocal, 400);
+        }
+      } catch (err) {
+        alert('Action error: ' + (err.message || err));
+      }
+    }
+
+    async function openInFileExplorer(path) {
+      closeContextMenu();
+      try {
+        await sendRust('open_in_file_explorer', { path });
+      } catch (err) {
+        alert('Explorer error: ' + (err.message || err));
+      }
+    }
+
+    async function openContextMenu(e, type, item = null, index = null) {
       e.preventDefault();
       contextTarget = { type, item, index };
       const menu = document.getElementById('customContextMenu');
@@ -4253,8 +4323,8 @@
 
       menu.classList.add('active');
 
-      const menuWidth = 230;
-      const menuHeight = 280;
+      const menuWidth = 260;
+      const menuHeight = 360;
       let x = e.clientX;
       let y = e.clientY;
 
@@ -4267,6 +4337,97 @@
 
       menu.style.left = `${Math.max(10, x)}px`;
       menu.style.top = `${Math.max(10, y)}px`;
+
+      // If local file item, fetch native Windows Explorer Shell verbs dynamically
+      if (type === 'local' && item && item.path) {
+        try {
+          const res = await sendRust('get_local_shell_verbs', { path: item.path });
+          if (res && res.verbs && res.verbs.length > 0 && contextTarget && contextTarget.item && contextTarget.item.path === item.path) {
+            renderLocalShellContextMenu(item, res.verbs);
+            // Reposition menu if it expands downwards
+            const rect = menu.getBoundingClientRect();
+            if (rect.bottom > window.innerHeight) {
+              const adjustedY = Math.max(10, window.innerHeight - rect.height - 10);
+              menu.style.top = `${adjustedY}px`;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    function renderLocalShellContextMenu(item, verbs) {
+      const menu = document.getElementById('customContextMenu');
+      if (!menu) return;
+
+      let html = '';
+
+      // 1. FTP Transfer & 90FTP Quick Actions section
+      html += `
+        <div class="context-menu-item" onclick="uploadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+          <svg class="icon" viewBox="0 0 24 24" style="color: var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span style="font-weight: 600;">Transfer / Upload</span>
+        </div>
+        <div class="context-menu-item" onclick="openLocalFileInEditor('${escapeJsString(item.path)}')">
+          <svg class="icon" viewBox="0 0 24 24" style="color: var(--accent);"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span>Edit in Code Editor</span>
+        </div>
+        <div class="context-menu-item" onclick="openInFileExplorer('${escapeJsString(item.path)}')">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span>Open in File Explorer</span>
+        </div>
+        <div class="context-menu-separator"></div>
+      `;
+
+      // 2. Windows Shell Context Menu Verbs
+      const primaryVerbs = [];
+      const appVerbs = [];
+      const toolVerbs = [];
+      const fsVerbs = [];
+
+      verbs.forEach(v => {
+        const nameLower = v.name.toLowerCase();
+        if (nameLower === 'open' || nameLower === 'open in new process' || nameLower === 'pin to quick access') {
+          primaryVerbs.push(v);
+        } else if (nameLower.includes('visual studio') || nameLower.includes('cursor') || nameLower.includes('qoder') || nameLower.includes('trae') || nameLower.includes('code') || nameLower.includes('zcode') || nameLower.includes('vlc') || nameLower.includes('terminal') || nameLower.includes('git')) {
+          appVerbs.push(v);
+        } else if (nameLower.includes('glary') || nameLower.includes('shred') || nameLower.includes('defrag') || nameLower.includes('split') || nameLower.includes('encrypt') || nameLower.includes('acronis') || nameLower.includes('7-zip')) {
+          toolVerbs.push(v);
+        } else {
+          fsVerbs.push(v);
+        }
+      });
+
+      function renderGroup(group) {
+        group.forEach(v => {
+          const iconSvg = getVerbIconSvg(v.name);
+          const isDanger = v.name.toLowerCase() === 'delete';
+          const isBold = v.name.toLowerCase() === 'open';
+          html += `
+            <div class="context-menu-item ${isDanger ? 'danger' : ''}" onclick="invokeShellVerb('${escapeJsString(item.path)}', ${v.index}, '${escapeJsString(v.name)}')">
+              ${iconSvg}
+              <span style="${isBold ? 'font-weight: 700;' : ''}">${escapeHtml(v.name)}</span>
+            </div>
+          `;
+        });
+      }
+
+      if (primaryVerbs.length > 0) {
+        renderGroup(primaryVerbs);
+        html += `<div class="context-menu-separator"></div>`;
+      }
+      if (appVerbs.length > 0) {
+        renderGroup(appVerbs);
+        html += `<div class="context-menu-separator"></div>`;
+      }
+      if (toolVerbs.length > 0) {
+        renderGroup(toolVerbs);
+        html += `<div class="context-menu-separator"></div>`;
+      }
+      if (fsVerbs.length > 0) {
+        renderGroup(fsVerbs);
+      }
+
+      menu.innerHTML = html;
     }
 
     function closeContextMenu() {
