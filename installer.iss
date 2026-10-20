@@ -2,7 +2,9 @@
 ; Inno Setup 7 Configuration
 
 #define MyAppName "90FTP"
-#define MyAppVersion "2.6.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.0.1"
+#endif
 #define MyAppPublisher "aljailane"
 #define MyAppURL "https://github.com/aljupcom/90FTP"
 #define MyAppExeName "90FTP.exe"

@@ -1,6 +1,6 @@
 [package]
 name = "ninety_ftp"
-version = "2.6.0"
+version = "0.0.1"
 edition = "2024"
 
 [dependencies]
@@ -23,4 +23,3 @@ wry = "0.57.0"
 
 [build-dependencies]
 winres = "0.1.12"
-

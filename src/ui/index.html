@@ -2115,7 +2115,7 @@
         </svg>
         <div>
           <div style="font-size: 17px; font-weight: 700; color: var(--text-main);">90FTP - Modern Site Manager</div>
-          <div style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 2.6.0 Pro (Windows x64)</div>
+          <div style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.1 Dev (Windows x64)</div>
         </div>
         <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; max-width: 360px;">
           High-Performance Asynchronous SFTP, FTP & FTPS Transfer Engine.
@@ -2157,7 +2157,7 @@
             <div id="updateSubtext" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Querying GitHub releases for aljupcom/90FTP...</div>
           </div>
           <div id="updateCurrentBadge" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25); white-space: nowrap;">
-            Current: v2.6.0
+            Current: v0.0.1
           </div>
         </div>
 
@@ -4575,7 +4575,7 @@
     }
 
     // Software Remote Update via GitHub (aljupcom/90FTP)
-    const APP_CURRENT_VERSION = '2.6.0';
+    const APP_CURRENT_VERSION = '0.0.1';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
 
@@ -4594,19 +4594,22 @@
     }
 
     function parseSemVer(v) {
-      if (!v) return [0, 0, 0];
+      if (!v) return [0, 0, 0, 0];
       const cleaned = v.trim().replace(/^[vV]/, '');
       const parts = cleaned.split('.').map(p => parseInt(p, 10) || 0);
-      while (parts.length < 3) parts.push(0);
+      while (parts.length < 4) parts.push(0);
       return parts;
     }
 
     function compareSemVer(v1, v2) {
       const a = parseSemVer(v1);
       const b = parseSemVer(v2);
-      for (let i = 0; i < 3; i++) {
-        if (a[i] > b[i]) return 1;
-        if (a[i] < b[i]) return -1;
+      const maxLen = Math.max(a.length, b.length);
+      for (let i = 0; i < maxLen; i++) {
+        const valA = a[i] || 0;
+        const valB = b[i] || 0;
+        if (valA > valB) return 1;
+        if (valA < valB) return -1;
       }
       return 0;
     }

@@ -40,7 +40,7 @@ Set-Content $issPath $iss -NoNewline
 $htmlPath = Join-Path $Root "src\ui\index.html"
 $html = Get-Content $htmlPath -Raw
 $html = $html -replace 'const APP_CURRENT_VERSION\s*=\s*''[^'']+''', ('const APP_CURRENT_VERSION = ''' + $Version + '''')
-$html = $html -replace 'Version\s+[0-9\.]+\s+Pro\s+\(Windows\s+x64\)', ('Version ' + $Version + ' Pro (Windows x64)')
+$html = $html -replace 'Version\s+[0-9\.]+\s+(Pro|Dev)\s+\(Windows\s+x64\)', ('Version ' + $Version + ' Dev (Windows x64)')
 $html = $html -replace 'Current:\s+v[0-9\.]+', ('Current: v' + $Version)
 Set-Content $htmlPath $html -NoNewline
 
@@ -58,8 +58,8 @@ Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
 $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
 & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "90FTP.exe"
 
-Write-Host ">>> [5/8] Compiling Inno Setup installer..." -ForegroundColor Cyan
-& "C:\Program Files\Inno Setup 7\ISCC.exe" installer.iss
+Write-Host ">>> [5/8] Compiling Inno Setup installer dynamically (Version: $Version)..." -ForegroundColor Cyan
+& "C:\Program Files\Inno Setup 7\ISCC.exe" "/DMyAppVersion=$Version" installer.iss
 
 $setupExe = Join-Path $Root "dist\90FTP-Setup-v$Version.exe"
 Write-Host ">>> [6/8] Signing installer: $setupExe..." -ForegroundColor Cyan
@@ -70,7 +70,7 @@ Write-Host ">>> [7/8] Committing and pushing branch & tag to Git..." -Foreground
 git add .
 git commit -m "release: v$Version - $Message"
 git push origin main
-git tag -a "v$Version" -m "Release v$Version: $Message" -f
+git tag -a "v$Version" -m "Release v${Version} - $Message" -f
 git push origin "v$Version" -f
 
 Write-Host ">>> [8/8] Creating GitHub Release & uploading installer asset..." -ForegroundColor Cyan

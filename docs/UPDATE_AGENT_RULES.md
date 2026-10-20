@@ -1,38 +1,39 @@
-# 90FTP Release & Update Agent Protocol (قواعد وكيل التحديث والإصدارات)
+# 90FTP Release & Update Agent Protocol (قواعد وكيل الإصدارات والتحديثات)
 
-Official release engineering protocol, Semantic Versioning hierarchy, and asset publishing rules for 90FTP.
-
----
-
-## 1. Semantic Versioning Protocol (SemVer)
-Version numbers strictly adhere to `MAJOR.MINOR.PATCH` (e.g. `v2.6.0`):
-
-- **PATCH (`x.y.Z`):** Bug fixes, visual polish, startup flash fixes, minor performance improvements.
-- **MINOR (`x.Y.0`):** New features, cryptographic vault enhancements, remote update integration, new protocol support.
-- **MAJOR (`X.0.0`):** Breaking architectural redesigns or backward-incompatible API/storage rewrites.
+Official release protocol, development-branch versioning policy, and dynamic installer build specification for 90FTP.
 
 ---
 
-## 2. Synchronized File Locations
-Every version change MUST be applied simultaneously across:
-- `Cargo.toml`: `version = "X.Y.Z"`
-- `installer.iss`: `#define MyAppVersion "X.Y.Z"`
-- `src/ui/index.html`: `APP_CURRENT_VERSION = 'X.Y.Z'`, About Modal badge, Update Modal badge
-- Inno Setup output: `dist\90FTP-Setup-vX.Y.Z.exe`
+## 1. Development Mode Versioning Policy (الترقيم بالفرع الثالث)
+- **No Large Version Bumps in Development:** Major releases (1.0, 2.0, etc.) are strictly forbidden while in the active development phase.
+- **Third Branch Progression (`0.0.X`):**
+  - Initial baseline: `0.0.1` (equivalent to `0.0.0.1`).
+  - Increments strictly occur in the **third branch**: `0.0.1` -> `0.0.2` -> `0.0.3` -> `0.0.4` ...
+  - Progression to `1.0.0` or production numbering occurs ONLY upon explicit user approval.
 
 ---
 
-## 3. Mandatory GitHub Release & Asset Publishing
-Every release published on GitHub MUST include:
-1. Git Tag `vX.Y.Z` pushed to `origin`.
-2. Official GitHub Release with markdown changelog highlights.
-3. Attached binary asset: signed `90FTP-Setup-vX.Y.Z.exe` uploaded to GitHub Release Assets so the client application's built-in update modal can detect and download it directly.
+## 2. Dynamic Installer Compilation (رقم الإصدار الديناميكي)
+- **No Hardcoded Versions in `installer.iss`:** Static version strings are disallowed.
+- **CLI Dynamic Injection:** The version is passed dynamically at compile time via:
+  ```powershell
+  & "C:\Program Files\Inno Setup 7\ISCC.exe" "/DMyAppVersion=$Version" installer.iss
+  ```
+- **Dynamic Output Filename:** `dist\90FTP-Setup-v{$Version}.exe`.
+
+---
+
+## 3. Synchronized Version Checklist
+- `Cargo.toml`: `version = "0.0.X"`
+- `installer.iss`: dynamic `/DMyAppVersion=0.0.X`
+- `src/ui/index.html`: `APP_CURRENT_VERSION = '0.0.X'`, About modal (`0.0.X Dev`), Update modal (`Current: v0.0.X`)
+- Binary: `90FTP.exe` (signed)
+- Installer: `dist\90FTP-Setup-v0.0.X.exe` (signed)
 
 ---
 
 ## 4. One-Command Automated Release Pipeline
-To execute the complete pipeline (bump version, test, build, sign with DigiCert RFC 3161 timestamp, compile installer, push git tag, create GitHub Release, and upload installer asset):
-
 ```powershell
-.\scripts\release.ps1 -Version "X.Y.Z" -Message "Summary of changes"
+.\scripts\release.ps1 -Version "0.0.X" -Message "Changelog description"
 ```
+Handles building, signing with DigiCert timestamp, compiling dynamic installer, pushing git commit and tag, and publishing the GitHub Release with attached installer asset.
