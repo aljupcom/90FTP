@@ -36,6 +36,11 @@
       --scrollbar-thumb-hover: #52525b;
       --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", system-ui, sans-serif;
       --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace;
+      --bg-glass-panel: rgba(30, 30, 36, 0.75);
+      --bg-glass-card: rgba(26, 26, 32, 0.78);
+      --bg-glass-input: rgba(18, 18, 22, 0.68);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
 
     [data-theme="light"] {
@@ -64,6 +69,11 @@
       --log-text: #e2e8f0;
       --scrollbar-thumb: #cbd5e1;
       --scrollbar-thumb-hover: #94a3b8;
+      --bg-glass-panel: rgba(255, 255, 255, 0.78);
+      --bg-glass-card: rgba(255, 255, 255, 0.88);
+      --bg-glass-input: rgba(255, 255, 255, 0.95);
+      --glass-border: rgba(0, 0, 0, 0.09);
+      --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
@@ -183,14 +193,30 @@
       to { opacity: 1; }
     }
 
-    /* Quick Connect Bar */
+    /* Quick Connect Bar (Floating Glassmorphic Container) */
     .quick-connect-bar {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 5px 14px;
-      background: var(--bg-panel);
-      height: 36px;
+      gap: 7px;
+      margin: 6px 14px 8px 14px;
+      padding: 6px 14px;
+      background: var(--bg-glass-panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      box-shadow: var(--glass-shadow);
+      min-height: 40px;
+      flex-shrink: 0;
+    }
+    .quick-connect-bar input, .quick-connect-bar select {
+      background: var(--bg-glass-input);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+    }
+    .quick-connect-bar input:focus, .quick-connect-bar select:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 1.5px var(--border-focus);
     }
 
     .qc-item {
@@ -276,19 +302,26 @@
       color: var(--text-main);
     }
 
-    /* Main Workspace Layout (Resizable Split Panes) */
+    /* Main Workspace Layout (Floating Glassmorphic Split Panes) */
     .workspace-area {
       flex: 1;
       display: flex;
       overflow: hidden;
       position: relative;
       min-height: 0;
+      padding: 0 14px 6px 14px;
+      gap: 8px;
     }
 
     .file-pane-wrapper {
       display: flex;
       flex-direction: column;
-      background: var(--bg-panel);
+      background: var(--bg-glass-card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      box-shadow: var(--glass-shadow);
       overflow: hidden;
       min-width: 200px;
       min-height: 0;
@@ -333,14 +366,16 @@
 
     /* Center Dual-Pane Divider with Drag Handle */
     .gutter-vertical {
-      width: 5px;
-      background: var(--border-color);
+      width: 6px;
+      margin: 4px 0;
+      border-radius: 3px;
+      background: rgba(127, 127, 127, 0.22);
       cursor: col-resize;
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 10;
-      transition: background 0.15s;
+      transition: background 0.15s, box-shadow 0.15s;
       flex-shrink: 0;
     }
     .gutter-vertical:hover, .gutter-vertical.dragging {
@@ -447,11 +482,11 @@
       color: var(--text-muted);
     }
 
-    /* Bottom Resizable Log Console */
+    /* Bottom Resizable Log Console (Floating Glassmorphic Panel) */
     .gutter-horizontal {
-      height: 5px;
-      background: var(--bg-app);
-      border-top: 1px solid var(--border-color);
+      height: 6px;
+      margin: 0 14px;
+      background: transparent;
       cursor: row-resize;
       display: flex;
       align-items: center;
@@ -459,18 +494,25 @@
       transition: background 0.15s;
     }
     .gutter-horizontal:hover, .gutter-horizontal.dragging {
-      background: var(--accent);
+      background: var(--accent-glow);
     }
     .gutter-h-grip {
-      width: 24px;
-      height: 1px;
+      width: 28px;
+      height: 2px;
+      border-radius: 1px;
       background: var(--text-dim);
     }
 
     .log-panel {
       display: flex;
       flex-direction: column;
-      background: var(--bg-panel);
+      background: var(--bg-glass-card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      margin: 0 14px 10px 14px;
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      box-shadow: var(--glass-shadow);
       height: 140px;
       min-height: 30px;
       max-height: 500px;
@@ -1132,6 +1174,36 @@
       height: 26px;
       font-size: 12px;
     }
+  
+    /* Floating Glassmorphic Notification Toast */
+    .floating-update-toast {
+      position: fixed;
+      top: 74px;
+      right: 24px;
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.25);
+      animation: slideInToast 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      color: #fff;
+    }
+    @keyframes slideInToast {
+      from { opacity: 0; transform: translateY(-16px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .fut-icon { font-size: 22px; flex-shrink: 0; }
+    .fut-body { display: flex; flex-direction: column; gap: 2px; }
+    .fut-title { font-weight: 700; font-size: 12.5px; color: #38bdf8; }
+    .fut-desc { font-size: 11.5px; color: #cbd5e1; }
+    .fut-actions { display: flex; align-items: center; gap: 6px; margin-left: 8px; }
+
   </style>
 </head>
 <body>
@@ -1155,7 +1227,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.5</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.6</span>
         </div>
       </div>
 
@@ -1365,6 +1437,23 @@
       </button>
     </div>
   </header>
+  <!-- Floating Glassmorphic Update Toast -->
+  <div id="floatingUpdateToast" class="floating-update-toast" style="display: none;">
+    <div class="fut-icon">🚀</div>
+    <div class="fut-body">
+      <div class="fut-title" id="futTitle">New Update Available!</div>
+      <div class="fut-desc" id="futDesc">A new version of 90FTP is ready to install.</div>
+    </div>
+    <div class="fut-actions">
+      <button type="button" class="btn btn-primary" onclick="openUpdateModal(true); closeFloatingUpdateToast();" style="padding: 3px 12px; font-size: 11.5px; font-weight: 600;">
+        Update Now
+      </button>
+      <button type="button" class="btn btn-secondary" onclick="closeFloatingUpdateToast()" style="padding: 3px 8px; font-size: 11px;" title="Dismiss">
+        ✕
+      </button>
+    </div>
+  </div>
+
 
   <!-- Dual Panes Workspace (Horizontally Resizable via Gutter) -->
   <div class="workspace-area" id="workspaceArea">
@@ -2115,7 +2204,7 @@
         </svg>
         <div>
           <div style="font-size: 17px; font-weight: 700; color: var(--text-main);">90FTP - Modern Site Manager</div>
-          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.0.5 Dev (Windows x64)</div>
+          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.0.6 Dev (Windows x64)</div>
         </div>
         <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; max-width: 360px;">
           High-Performance Asynchronous SFTP, FTP & FTPS Transfer Engine.
@@ -2157,7 +2246,7 @@
             <div id="updateSubtext" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Querying GitHub releases for aljupcom/90FTP...</div>
           </div>
           <div id="updateCurrentBadge" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25); white-space: nowrap;">
-            Current: v0.0.0.5
+            Current: v0.0.0.6
           </div>
         </div>
 
@@ -2302,7 +2391,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.5';
+    let APP_CURRENT_VERSION = '0.0.0.6';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -2818,6 +2907,11 @@
       }
 
       // If initial files were not loaded, trigger resilient navigateLocal fallback
+      // Instant background update check on app startup
+      setTimeout(() => {
+        checkUpdatesSilentlyOnStartup();
+      }, 1000);
+
       if (!loaded || !localFiles || localFiles.length === 0) {
         try {
           const fallbackPath = currentLocalPath || 'C:\\Users\\aljailane\\Desktop';
@@ -4821,6 +4915,51 @@
         await sendRust('open_installer_folder', { path: currentDownloadedInstallerPath });
       } catch (err) {
         addLog('Failed to open installer directory: ' + (err.message || err), 'error');
+      }
+    }
+
+
+    function showFloatingUpdateBanner(latestTag, cleanLatest, data) {
+      const toast = document.getElementById('floatingUpdateToast');
+      if (!toast) return;
+      const title = document.getElementById('futTitle');
+      const desc = document.getElementById('futDesc');
+      if (title) title.textContent = 'New Update Available: v' + cleanLatest;
+      if (desc) desc.textContent = data.name || ('Version ' + latestTag + ' is ready to download.');
+      toast.style.display = 'flex';
+      
+      const topBadge = document.getElementById('topBrandBadge');
+      if (topBadge) {
+        topBadge.innerHTML = 'Modern Site Manager v' + APP_CURRENT_VERSION + ' <span style="background: #22c55e; color: #fff; font-size: 9.5px; padding: 1px 6px; border-radius: 10px; margin-left: 5px; animation: pulse 1s infinite alternate;">Update v' + cleanLatest + '</span>';
+        topBadge.style.cursor = 'pointer';
+        topBadge.title = 'Click to open update manager';
+        topBadge.onclick = () => openUpdateModal(true);
+      }
+    }
+
+    function closeFloatingUpdateToast() {
+      const toast = document.getElementById('floatingUpdateToast');
+      if (toast) toast.style.display = 'none';
+    }
+
+    async function checkUpdatesSilentlyOnStartup() {
+      try {
+        const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO_PATH + '/releases/latest', {
+          headers: { 'Accept': 'application/vnd.github.v3+json' }
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const latestTag = data.tag_name || data.name || '';
+        const cleanLatest = latestTag.replace(/^[vV]/, '');
+        const cmp = compareSemVer(cleanLatest, APP_CURRENT_VERSION);
+        if (cmp > 0) {
+          showFloatingUpdateBanner(latestTag, cleanLatest, data);
+          addLog('🚀 Startup update check: New version ' + latestTag + ' is available on GitHub.', 'success');
+        } else {
+          addLog('Startup update check: 90FTP v' + APP_CURRENT_VERSION + ' is up to date.', 'info');
+        }
+      } catch (err) {
+        console.warn('Startup update check skipped:', err);
       }
     }
 
