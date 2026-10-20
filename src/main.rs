@@ -55,7 +55,13 @@ fn main() {
         .expect("Failed to create native desktop window");
 
     let proxy = event_loop.create_proxy();
-    let app_state = Arc::new(AppState::new());
+    let proxy_cb = {
+        let proxy = proxy.clone();
+        Arc::new(move |script: String| {
+            let _ = proxy.send_event(AppEvent::ExecScript(script));
+        })
+    };
+    let app_state = Arc::new(AppState::new(Some(proxy_cb)));
 
     let html_content = include_str!("ui/index.html");
 

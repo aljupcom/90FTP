@@ -5,14 +5,18 @@ use crate::models::{IpcRequest, IpcResponse, SiteProfile};
 use crate::remote::RemoteClient;
 use crate::sessions;
 
+pub type ScriptCallback = Arc<dyn Fn(String) + Send + Sync>;
+
 pub struct AppState {
     pub remote: Arc<Mutex<Option<RemoteClient>>>,
+    pub exec_script: Option<ScriptCallback>,
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(exec_script: Option<ScriptCallback>) -> Self {
         Self {
             remote: Arc::new(Mutex::new(None)),
+            exec_script,
         }
     }
 
@@ -38,6 +42,7 @@ impl AppState {
                         "sites": sites,
                         "local_files": local_files,
                         "remote_history": remote_history,
+                        "app_version": env!("CARGO_PKG_VERSION"),
                     }),
                 )
             }
@@ -479,6 +484,145 @@ impl AppState {
                 }
             }
 
+            "start_update_download" => {
+                let url = payload.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let version = payload.get("version").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let filename = payload.get("filename").and_then(|v| v.as_str()).unwrap_or("90FTP-Setup.exe").to_string();
+
+                if url.is_empty() {
+                    return IpcResponse::err(id, action, "Download URL is required");
+                }
+
+                let exec_script = self.exec_script.clone();
+                std::thread::spawn(move || {
+                    let mut temp_dir = std::env::temp_dir();
+                    temp_dir.push("90FTP_Updates");
+                    let _ = std::fs::create_dir_all(&temp_dir);
+                    let target_path = temp_dir.join(&filename);
+
+                    match ureq::get(&url).call() {
+                        Ok(resp) => {
+                            let total_bytes: u64 = resp
+                                .headers()
+                                .get("content-length")
+                                .and_then(|v| v.to_str().ok())
+                                .and_then(|s| s.parse().ok())
+                                .unwrap_or(0);
+
+                            let mut reader = resp.into_body().into_reader();
+                            let mut file = match std::fs::File::create(&target_path) {
+                                Ok(f) => f,
+                                Err(e) => {
+                                    if let Some(ref cb) = exec_script {
+                                        cb(format!("window.onUpdateDownloadError({{ error: \"Failed to create file: {}\" }});", e));
+                                    }
+                                    return;
+                                }
+                            };
+
+                            let mut buffer = [0u8; 64 * 1024];
+                            let mut downloaded: u64 = 0;
+                            let start_time = std::time::Instant::now();
+                            let mut last_emit = std::time::Instant::now();
+
+                            use std::io::{Read, Write};
+                            loop {
+                                match reader.read(&mut buffer) {
+                                    Ok(0) => break,
+                                    Ok(n) => {
+                                        if let Err(e) = file.write_all(&buffer[..n]) {
+                                            if let Some(ref cb) = exec_script {
+                                                cb(format!("window.onUpdateDownloadError({{ error: \"Write error: {}\" }});", e));
+                                            }
+                                            return;
+                                        }
+                                        downloaded += n as u64;
+
+                                        let elapsed = start_time.elapsed().as_secs_f64();
+                                        let speed_mb = if elapsed > 0.05 {
+                                            (downloaded as f64 / (1024.0 * 1024.0)) / elapsed
+                                        } else {
+                                            0.0
+                                        };
+
+                                        let percent = if total_bytes > 0 {
+                                            ((downloaded as f64 / total_bytes as f64) * 100.0).min(100.0)
+                                        } else {
+                                            0.0
+                                        };
+
+                                        if last_emit.elapsed().as_millis() >= 80 {
+                                            if let Some(ref cb) = exec_script {
+                                                cb(format!(
+                                                    "window.onUpdateDownloadProgress({{ percent: {:.1}, downloaded: {}, total: {}, speed: '{:.2} MB/s' }});",
+                                                    percent, downloaded, total_bytes, speed_mb
+                                                ));
+                                            }
+                                            last_emit = std::time::Instant::now();
+                                        }
+                                    }
+                                    Err(e) => {
+                                        if let Some(ref cb) = exec_script {
+                                            cb(format!("window.onUpdateDownloadError({{ error: \"Download error: {}\" }});", e));
+                                        }
+                                        return;
+                                    }
+                                }
+                            }
+
+                            // Download completed successfully
+                            let escaped_path = target_path.to_string_lossy().replace('\\', "\\\\");
+                            if let Some(ref cb) = exec_script {
+                                cb(format!(
+                                    "window.onUpdateDownloadComplete({{ path: \"{}\", version: \"{}\", size: {} }});",
+                                    escaped_path, version, downloaded
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            if let Some(ref cb) = exec_script {
+                                cb(format!("window.onUpdateDownloadError({{ error: \"Failed to connect to GitHub: {}\" }});", e));
+                            }
+                        }
+                    }
+                });
+
+                IpcResponse::ok(id, action, json!({ "started": true }))
+            }
+
+            "launch_installer" => {
+                let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                if path.is_empty() {
+                    return IpcResponse::err(id, action, "Installer path is required");
+                }
+
+                let p = std::path::PathBuf::from(path);
+                if !p.exists() {
+                    return IpcResponse::err(id, action, "Installer executable not found on disk");
+                }
+
+                match std::process::Command::new(&p).spawn() {
+                    Ok(_) => {
+                        std::thread::spawn(|| {
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                            std::process::exit(0);
+                        });
+                        IpcResponse::ok(id, action, json!({ "launched": true }))
+                    }
+                    Err(e) => IpcResponse::err(id, action, &format!("Failed to launch installer: {}", e)),
+                }
+            }
+
+            "open_installer_folder" => {
+                let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                if !path.is_empty() {
+                    let p = std::path::PathBuf::from(path);
+                    if let Some(parent) = p.parent() {
+                        let _ = std::process::Command::new("explorer").arg(parent).spawn();
+                    }
+                }
+                IpcResponse::ok(id, action, json!({ "opened": true }))
+            }
 
             unknown => IpcResponse::err(id, action, &format!("Unknown action: {}", unknown)),
         }

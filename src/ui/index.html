@@ -2115,7 +2115,7 @@
         </svg>
         <div>
           <div style="font-size: 17px; font-weight: 700; color: var(--text-main);">90FTP - Modern Site Manager</div>
-          <div style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.2 Dev (Windows x64)</div>
+          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.3 Dev (Windows x64)</div>
         </div>
         <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; max-width: 360px;">
           High-Performance Asynchronous SFTP, FTP & FTPS Transfer Engine.
@@ -2157,7 +2157,7 @@
             <div id="updateSubtext" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Querying GitHub releases for aljupcom/90FTP...</div>
           </div>
           <div id="updateCurrentBadge" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25); white-space: nowrap;">
-            Current: v0.0.2
+            Current: v0.0.3
           </div>
         </div>
 
@@ -2181,6 +2181,38 @@
           </div>
         </div>
 
+        <!-- In-App Download Manager Progress Card -->
+        <div id="updateDownloadCard" style="display: none; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 8px; background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="dlStatusIcon" class="spin-icon" style="color: var(--accent); font-size: 15px;">↻</span>
+              <span id="dlStatusText" style="font-size: 12.5px; font-weight: 600; color: var(--text-main);">Downloading update directly...</span>
+            </div>
+            <span id="dlPercentBadge" style="font-size: 12.5px; font-weight: 700; color: var(--accent); font-family: var(--font-mono, monospace);">0%</span>
+          </div>
+
+          <!-- Glowing Smooth Progress Bar -->
+          <div style="height: 10px; width: 100%; background: rgba(255, 255, 255, 0.08); border-radius: 5px; overflow: hidden; position: relative;">
+            <div id="dlProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0284c7, #38bdf8); border-radius: 5px; transition: width 0.1s linear; box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);"></div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-dim); font-family: var(--font-mono, monospace);">
+            <span id="dlBytesText">0.0 MB / 0.0 MB</span>
+            <span id="dlSpeedText">0.0 MB/s</span>
+          </div>
+        </div>
+
+        <!-- Download Finished Success Card -->
+        <div id="updateReadyCard" style="display: none; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 8px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3);">
+          <div style="display: flex; align-items: center; gap: 8px; color: #22c55e; font-weight: 700; font-size: 13px;">
+            <span>✓</span>
+            <span>Update Download Complete!</span>
+          </div>
+          <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5;">
+            The installer is verified and ready on disk. Click <strong>Install & Upgrade</strong> to launch setup and update automatically.
+          </div>
+        </div>
+
         <!-- Notice Message -->
         <div id="updateActionMsg" style="font-size: 11px; color: var(--text-dim); text-align: center;"></div>
       </div>
@@ -2189,9 +2221,15 @@
         <span style="font-size: 10.5px; color: var(--text-dim);">Repository: <strong style="color: var(--text-muted);">aljupcom/90FTP</strong></span>
         <div style="display: flex; gap: 8px;">
           <button type="button" class="btn btn-secondary" onclick="checkForUpdates(true)" id="btnCheckAgain" style="display: none; padding: 4px 12px;">Check Again</button>
-          <a id="btnDownloadUpdate" href="#" target="_blank" class="btn btn-primary" style="display: none; padding: 4px 14px; text-decoration: none; align-items: center; gap: 6px;">
-            ⬇️ Open Download
-          </a>
+          <button type="button" class="btn btn-primary" onclick="startInAppDownload()" id="btnStartDownload" style="display: none; padding: 5px 16px; font-weight: 600; gap: 6px;">
+            ⬇️ Download & Install Update
+          </button>
+          <button type="button" class="btn btn-primary" onclick="launchDownloadedInstaller()" id="btnLaunchInstaller" style="display: none; padding: 5px 16px; font-weight: 600; background: #16a34a; border-color: #22c55e; gap: 6px;">
+            🚀 Install & Upgrade Now
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="openDownloadedFolder()" id="btnOpenFolder" style="display: none; padding: 4px 12px;">
+            📁 Open Folder
+          </button>
           <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()" id="btnCloseUpdate" style="padding: 4px 16px;">Close</button>
         </div>
       </div>
@@ -2731,6 +2769,14 @@
                 driveSelect.value = dl;
               }
             }
+          }
+
+          if (data.app_version) {
+            APP_CURRENT_VERSION = data.app_version;
+            const curBadge = document.getElementById('updateCurrentBadge');
+            if (curBadge) curBadge.textContent = 'Current: v' + APP_CURRENT_VERSION;
+            const aboutVer = document.getElementById('aboutAppVersion');
+            if (aboutVer) aboutVer.textContent = 'Version ' + APP_CURRENT_VERSION + ' Dev (Windows x64)';
           }
 
           if (data.remote_history) {
@@ -4575,9 +4621,12 @@
     }
 
     // Software Remote Update via GitHub (aljupcom/90FTP)
-    const APP_CURRENT_VERSION = '0.0.2';
+    let APP_CURRENT_VERSION = '0.0.3';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
+    let currentDownloadFilename = '';
+    let currentLatestVersion = '';
+    let currentDownloadedInstallerPath = '';
 
     function openUpdateModal(autoCheck = true) {
       closeAllMenus();
@@ -4625,25 +4674,162 @@
       });
     }
 
+    async function startInAppDownload() {
+      if (!currentDownloadUrl) {
+        alert('No download URL available.');
+        return;
+      }
+
+      const btnStart = document.getElementById('btnStartDownload');
+      const btnCheckAgain = document.getElementById('btnCheckAgain');
+      const dlCard = document.getElementById('updateDownloadCard');
+      const readyCard = document.getElementById('updateReadyCard');
+      const btnLaunch = document.getElementById('btnLaunchInstaller');
+      const btnOpen = document.getElementById('btnOpenFolder');
+      const pBar = document.getElementById('dlProgressBar');
+      const pBadge = document.getElementById('dlPercentBadge');
+      const pBytes = document.getElementById('dlBytesText');
+      const pSpeed = document.getElementById('dlSpeedText');
+      const statusText = document.getElementById('dlStatusText');
+      const statusIcon = document.getElementById('dlStatusIcon');
+      const actionMsg = document.getElementById('updateActionMsg');
+
+      if (btnStart) btnStart.style.display = 'none';
+      if (btnCheckAgain) btnCheckAgain.style.display = 'none';
+      if (readyCard) readyCard.style.display = 'none';
+      if (btnLaunch) btnLaunch.style.display = 'none';
+      if (btnOpen) btnOpen.style.display = 'none';
+
+      if (pBar) pBar.style.width = '0%';
+      if (pBadge) pBadge.textContent = '0%';
+      if (pBytes) pBytes.textContent = 'Connecting to download stream...';
+      if (pSpeed) pSpeed.textContent = '';
+      if (statusText) statusText.textContent = 'Downloading ' + (currentDownloadFilename || '90FTP-Setup.exe') + '...';
+      if (statusIcon) statusIcon.className = 'spin-icon';
+      if (actionMsg) actionMsg.textContent = 'Streaming package securely directly from GitHub...';
+
+      if (dlCard) dlCard.style.display = 'flex';
+
+      addLog('Starting native update download: ' + (currentDownloadFilename || 'installer') + ' from GitHub...', 'info');
+
+      try {
+        await sendRust('start_update_download', {
+          url: currentDownloadUrl,
+          version: currentLatestVersion,
+          filename: currentDownloadFilename || '90FTP-Setup.exe'
+        });
+      } catch (err) {
+        if (dlCard) dlCard.style.display = 'none';
+        if (btnStart) btnStart.style.display = 'inline-flex';
+        if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
+        if (actionMsg) actionMsg.innerHTML = '<span style="color:#ef4444;">⚠️ Failed to start download: ' + escapeHtml(err.message || err) + '</span>';
+        addLog('Update download failed to initialize: ' + (err.message || err), 'error');
+      }
+    }
+
+    // Callbacks invoked from native Rust streaming thread
+    window.onUpdateDownloadProgress = function(data) {
+      const pBar = document.getElementById('dlProgressBar');
+      const pBadge = document.getElementById('dlPercentBadge');
+      const pBytes = document.getElementById('dlBytesText');
+      const pSpeed = document.getElementById('dlSpeedText');
+
+      const pct = Math.min(100, Math.max(0, parseFloat(data.percent) || 0));
+      if (pBar) pBar.style.width = pct.toFixed(1) + '%';
+      if (pBadge) pBadge.textContent = Math.round(pct) + '%';
+
+      const dlMb = ((data.downloaded || 0) / (1024 * 1024)).toFixed(1);
+      const totMb = (data.total && data.total > 0) ? ((data.total / (1024 * 1024)).toFixed(1) + ' MB') : '...';
+      if (pBytes) pBytes.textContent = dlMb + ' MB / ' + totMb;
+      if (pSpeed && data.speed) pSpeed.textContent = data.speed;
+    };
+
+    window.onUpdateDownloadComplete = function(data) {
+      currentDownloadedInstallerPath = data.path || '';
+      const dlCard = document.getElementById('updateDownloadCard');
+      const readyCard = document.getElementById('updateReadyCard');
+      const btnStart = document.getElementById('btnStartDownload');
+      const btnLaunch = document.getElementById('btnLaunchInstaller');
+      const btnOpen = document.getElementById('btnOpenFolder');
+      const actionMsg = document.getElementById('updateActionMsg');
+
+      if (dlCard) dlCard.style.display = 'none';
+      if (readyCard) readyCard.style.display = 'flex';
+      if (btnStart) btnStart.style.display = 'none';
+      if (btnLaunch) btnLaunch.style.display = 'inline-flex';
+      if (btnOpen) btnOpen.style.display = 'inline-flex';
+
+      const sizeMb = ((data.size || 0) / (1024 * 1024)).toFixed(2);
+      if (actionMsg) actionMsg.innerHTML = '<span style="color:#22c55e;">✓ Download verified (' + sizeMb + ' MB). Ready to install.</span>';
+      addLog('Update download complete: saved to ' + (data.path || 'temp directory'), 'success');
+    };
+
+    window.onUpdateDownloadError = function(data) {
+      const dlCard = document.getElementById('updateDownloadCard');
+      const btnStart = document.getElementById('btnStartDownload');
+      const btnCheckAgain = document.getElementById('btnCheckAgain');
+      const actionMsg = document.getElementById('updateActionMsg');
+
+      if (dlCard) dlCard.style.display = 'none';
+      if (btnStart) btnStart.style.display = 'inline-flex';
+      if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
+
+      const errText = data.error || 'Network or disk error during download';
+      if (actionMsg) actionMsg.innerHTML = '<span style="color:#ef4444;">⚠️ Download Error: ' + escapeHtml(errText) + '</span>';
+      addLog('Update download error: ' + errText, 'error');
+    };
+
+    async function launchDownloadedInstaller() {
+      if (!currentDownloadedInstallerPath) {
+        alert('Installer path not found. Please re-download the update.');
+        return;
+      }
+      const actionMsg = document.getElementById('updateActionMsg');
+      if (actionMsg) actionMsg.innerHTML = '<span style="color:#38bdf8;">Launching setup installer... 90FTP will close now to allow the upgrade.</span>';
+      addLog('Launching installer: ' + currentDownloadedInstallerPath, 'info');
+
+      try {
+        await sendRust('launch_installer', { path: currentDownloadedInstallerPath });
+      } catch (err) {
+        alert('Failed to launch installer: ' + (err.message || err));
+        addLog('Failed to launch installer: ' + (err.message || err), 'error');
+      }
+    }
+
+    async function openDownloadedFolder() {
+      if (!currentDownloadedInstallerPath) return;
+      try {
+        await sendRust('open_installer_folder', { path: currentDownloadedInstallerPath });
+      } catch (err) {
+        addLog('Failed to open installer directory: ' + (err.message || err), 'error');
+      }
+    }
+
     async function checkForUpdates(manualTrigger = false) {
       const iconContainer = document.getElementById('updateIconContainer');
       const headline = document.getElementById('updateHeadline');
       const subtext = document.getElementById('updateSubtext');
       const detailsBox = document.getElementById('updateDetailsBox');
       const actionContainer = document.getElementById('updateActionContainer');
+      const dlCard = document.getElementById('updateDownloadCard');
+      const readyCard = document.getElementById('updateReadyCard');
       const btnCheckAgain = document.getElementById('btnCheckAgain');
-      const btnDownload = document.getElementById('btnDownloadUpdate');
+      const btnStart = document.getElementById('btnStartDownload');
+      const btnLaunch = document.getElementById('btnLaunchInstaller');
+      const btnOpen = document.getElementById('btnOpenFolder');
       const actionMsg = document.getElementById('updateActionMsg');
 
-      if (iconContainer) {
-        iconContainer.innerHTML = '<span class="spin-icon">↻</span>';
-      }
+      if (iconContainer) iconContainer.innerHTML = '<span class="spin-icon">↻</span>';
       if (headline) headline.textContent = 'Checking for updates...';
       if (subtext) subtext.textContent = 'Connecting to GitHub releases for ' + GITHUB_REPO_PATH + '...';
       if (detailsBox) detailsBox.style.display = 'none';
       if (actionContainer) actionContainer.style.display = 'none';
+      if (dlCard) dlCard.style.display = 'none';
+      if (readyCard) readyCard.style.display = 'none';
       if (btnCheckAgain) btnCheckAgain.style.display = 'none';
-      if (btnDownload) btnDownload.style.display = 'none';
+      if (btnStart) btnStart.style.display = 'none';
+      if (btnLaunch) btnLaunch.style.display = 'none';
+      if (btnOpen) btnOpen.style.display = 'none';
       if (actionMsg) actionMsg.textContent = '';
 
       try {
@@ -4654,7 +4840,6 @@
         });
 
         if (resp.status === 404) {
-          // No releases published yet on the repository
           if (iconContainer) iconContainer.innerHTML = '✅';
           if (headline) headline.textContent = 'You are running the latest version';
           if (subtext) subtext.textContent = '90FTP v' + APP_CURRENT_VERSION + ' is up to date. No remote release has been tagged on GitHub yet.';
@@ -4691,7 +4876,7 @@
           if (detailsBox) detailsBox.style.display = 'flex';
 
           let downloadUrl = data.html_url;
-          let assetName = 'Release Page';
+          let assetName = '90FTP-Setup-v' + cleanLatest + '.exe';
           if (data.assets && data.assets.length > 0) {
             const exeAsset = data.assets.find(a => a.name.toLowerCase().endsWith('.exe')) || data.assets[0];
             if (exeAsset) {
@@ -4700,15 +4885,14 @@
             }
           }
           currentDownloadUrl = downloadUrl;
+          currentDownloadFilename = assetName;
+          currentLatestVersion = cleanLatest;
 
           const assetElem = document.getElementById('updateAssetName');
           if (assetElem) assetElem.textContent = assetName;
           if (actionContainer) actionContainer.style.display = 'block';
 
-          if (btnDownload) {
-            btnDownload.href = downloadUrl;
-            btnDownload.style.display = 'inline-flex';
-          }
+          if (btnStart) btnStart.style.display = 'inline-flex';
           if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
 
           addLog('Update available: New version ' + latestTag + ' ready to download from GitHub.', 'success');
@@ -4725,6 +4909,9 @@
         if (headline) headline.textContent = 'Update Check Failed';
         if (subtext) subtext.textContent = 'Could not retrieve update information: ' + (err.message || err);
         if (btnCheckAgain) btnCheckAgain.style.display = 'inline-flex';
+        addLog('Update check failed: ' + (err.message || err), 'warning');
+      }
+    }
         addLog('Update check failed: ' + (err.message || err), 'warning');
       }
     }

@@ -39,7 +39,7 @@ Set-Content $issPath $iss -NoNewline
 # 3. src/ui/index.html
 $htmlPath = Join-Path $Root "src\ui\index.html"
 $html = Get-Content $htmlPath -Raw
-$html = $html -replace 'const APP_CURRENT_VERSION\s*=\s*''[^'']+''', ('const APP_CURRENT_VERSION = ''' + $Version + '''')
+$html = $html -replace '(?:const|let)\s+APP_CURRENT_VERSION\s*=\s*''[^'']+''', ('let APP_CURRENT_VERSION = ''' + $Version + '''')
 $html = $html -replace 'Version\s+[0-9\.]+\s+(Pro|Dev)\s+\(Windows\s+x64\)', ('Version ' + $Version + ' Dev (Windows x64)')
 $html = $html -replace 'Current:\s+v[0-9\.]+', ('Current: v' + $Version)
 Set-Content $htmlPath $html -NoNewline

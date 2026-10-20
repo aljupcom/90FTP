@@ -1,6 +1,6 @@
 [package]
 name = "ninety_ftp"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 
 [dependencies]
@@ -19,6 +19,7 @@ ssh2 = "0.9.6"
 suppaftp = "12.2.1"
 tao = "0.37.1"
 tokio = { version = "1.54.0", features = ["full"] }
+ureq = "3.4.2"
 wry = "0.57.0"
 
 [build-dependencies]
