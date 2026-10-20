@@ -3,7 +3,7 @@
 
 #define MyAppName "90FTP"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.0.0.4"
+  #define MyAppVersion "0.0.0.5"
 #endif
 #define MyAppPublisher "aljailane"
 #define MyAppURL "https://github.com/aljupcom/90FTP"
@@ -62,12 +62,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 
 [Code]
 var
-  SetupTypePage: TWizardPage;
-  TypicalRadio: TNewRadioButton;
-  CustomRadio: TNewRadioButton;
-  TypicalDescLabel: TLabel;
-  CustomDescLabel: TLabel;
-  UpgradeInfoLabel: TLabel;
+  SetupTypePage: TInputOptionWizardPage;
   IsUpgrade: Boolean;
   PrevAppPath: String;
   PrevVersion: String;
@@ -108,100 +103,48 @@ begin
   end;
 end;
 
-procedure OnRadioClick(Sender: TObject);
-begin
-  if IsUpgrade and TypicalRadio.Checked then
-    WizardForm.NextButton.Caption := '&Upgrade'
-  else
-    WizardForm.NextButton.Caption := '&Next >';
-end;
-
 procedure InitializeWizard;
 var
-  TopPos: Integer;
+  SubCaptionText: String;
 begin
   WizardForm.Font.Name := 'Segoe UI';
   IsUpgrade := CheckForExistingInstallation;
 
-  // Create Setup Type Page after wpWelcome
-  SetupTypePage := CreateCustomPage(wpWelcome, 'Setup Type', 'Choose how you want to install or upgrade {#MyAppName}');
+  if IsUpgrade then
+    SubCaptionText := 'Existing installation detected: 90FTP v' + PrevVersion + ' at ' + PrevAppPath + #13#10 + 'Please select how you want to proceed:'
+  else
+    SubCaptionText := 'Please select the setup type that best suits your needs:';
 
-  TopPos := ScaleY(10);
+  SetupTypePage := CreateInputOptionPage(
+    wpWelcome,
+    'Setup Type',
+    'Choose how you want to install or upgrade {#MyAppName}',
+    SubCaptionText,
+    True,
+    False
+  );
 
   if IsUpgrade then
   begin
-    UpgradeInfoLabel := TLabel.Create(SetupTypePage);
-    UpgradeInfoLabel.Parent := SetupTypePage.Surface;
-    UpgradeInfoLabel.Left := ScaleX(4);
-    UpgradeInfoLabel.Top := TopPos;
-    UpgradeInfoLabel.Width := SetupTypePage.SurfaceWidth - ScaleX(8);
-    UpgradeInfoLabel.WordWrap := True;
-    UpgradeInfoLabel.Font.Style := [fsBold];
-    UpgradeInfoLabel.Caption := 'Setup detected an existing installation of {#MyAppName} (v' + PrevVersion + ') at:' + #13#10 + PrevAppPath;
-    TopPos := TopPos + ScaleY(42);
+    SetupTypePage.Add('&Full upgrade (Recommended) - Upgrades in place to v{#MyAppVersion} preserving all settings');
+    SetupTypePage.Add('&Custom installation - Choose destination folder, components, and shortcuts');
+  end
+  else
+  begin
+    SetupTypePage.Add('&Typical installation (Recommended) - Installs 90FTP to default location');
+    SetupTypePage.Add('&Custom installation - Choose destination folder, components, and shortcuts');
   end;
 
-  TypicalRadio := TNewRadioButton.Create(SetupTypePage);
-  TypicalRadio.Parent := SetupTypePage.Surface;
-  TypicalRadio.Left := ScaleX(4);
-  TypicalRadio.Top := TopPos;
-  TypicalRadio.Width := SetupTypePage.SurfaceWidth - ScaleX(8);
-  TypicalRadio.Font.Style := [fsBold];
-  if IsUpgrade then
-    TypicalRadio.Caption := '&Full upgrade (Recommended)'
-  else
-    TypicalRadio.Caption := '&Typical installation (Recommended)';
-  TypicalRadio.Checked := True;
-
-  TopPos := TopPos + ScaleY(24);
-
-  TypicalDescLabel := TLabel.Create(SetupTypePage);
-  TypicalDescLabel.Parent := SetupTypePage.Surface;
-  TypicalDescLabel.Left := ScaleX(24);
-  TypicalDescLabel.Top := TopPos;
-  TypicalDescLabel.Width := SetupTypePage.SurfaceWidth - ScaleX(32);
-  TypicalDescLabel.WordWrap := True;
-  if IsUpgrade then
-    TypicalDescLabel.Caption := 'Upgrades existing installation directly in place to v{#MyAppVersion}. All your saved sites, sessions, vaults, and configurations will be preserved.'
-  else
-    TypicalDescLabel.Caption := 'Installs {#MyAppName} to the default location with standard shortcuts and configuration.';
-
-  TopPos := TopPos + ScaleY(40);
-
-  CustomRadio := TNewRadioButton.Create(SetupTypePage);
-  CustomRadio.Parent := SetupTypePage.Surface;
-  CustomRadio.Left := ScaleX(4);
-  CustomRadio.Top := TopPos;
-  CustomRadio.Width := SetupTypePage.SurfaceWidth - ScaleX(8);
-  CustomRadio.Font.Style := [fsBold];
-  if IsUpgrade then
-    CustomRadio.Caption := '&Custom upgrade or new installation'
-  else
-    CustomRadio.Caption := '&Custom installation';
-
-  TopPos := TopPos + ScaleY(24);
-
-  CustomDescLabel := TLabel.Create(SetupTypePage);
-  CustomDescLabel.Parent := SetupTypePage.Surface;
-  CustomDescLabel.Left := ScaleX(24);
-  CustomDescLabel.Top := TopPos;
-  CustomDescLabel.Width := SetupTypePage.SurfaceWidth - ScaleX(32);
-  CustomDescLabel.WordWrap := True;
-  if IsUpgrade then
-    CustomDescLabel.Caption := 'Allows choosing a different installation directory, custom components, and shortcut options.'
-  else
-    CustomDescLabel.Caption := 'Allows full selection of installation destination, components, and shortcut options.';
-  TypicalRadio.OnClick := @OnRadioClick;
-  CustomRadio.OnClick := @OnRadioClick;
+  SetupTypePage.SelectedValueIndex := 0;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
-  // If user selected Full Upgrade, skip directory and program group selection!
+  // If user selected Full Upgrade (Option index 0), skip directory and program group selection!
   if (PageID = wpSelectDir) or (PageID = wpSelectProgramGroup) then
   begin
-    if IsUpgrade and TypicalRadio.Checked then
+    if IsUpgrade and (SetupTypePage.SelectedValueIndex = 0) then
       Result := True;
   end;
 end;
@@ -211,7 +154,7 @@ begin
   Result := True;
   if CurPageID = SetupTypePage.ID then
   begin
-    if IsUpgrade and TypicalRadio.Checked then
+    if IsUpgrade and (SetupTypePage.SelectedValueIndex = 0) then
     begin
       WizardForm.DirEdit.Text := PrevAppPath;
     end;
@@ -222,14 +165,14 @@ procedure CurPageChanged(CurPageID: Integer);
 begin
   if CurPageID = SetupTypePage.ID then
   begin
-    if IsUpgrade and TypicalRadio.Checked then
+    if IsUpgrade and (SetupTypePage.SelectedValueIndex = 0) then
       WizardForm.NextButton.Caption := '&Upgrade'
     else
       WizardForm.NextButton.Caption := '&Next >';
   end
   else if CurPageID = wpReady then
   begin
-    if IsUpgrade and TypicalRadio.Checked then
+    if IsUpgrade and (SetupTypePage.SelectedValueIndex = 0) then
       WizardForm.NextButton.Caption := '&Upgrade'
     else
       WizardForm.NextButton.Caption := '&Install';
@@ -241,7 +184,7 @@ function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoType
 var
   S: String;
 begin
-  if IsUpgrade and TypicalRadio.Checked then
+  if IsUpgrade and (SetupTypePage.SelectedValueIndex = 0) then
   begin
     S := 'Upgrade Mode: Full upgrade to v' + '{#MyAppVersion}' + NewLine;
     S := S + 'Previous Version: v' + PrevVersion + NewLine;
