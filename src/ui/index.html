@@ -198,7 +198,7 @@
       display: flex;
       align-items: center;
       gap: 7px;
-      margin: 6px 14px 8px 14px;
+      margin: 6px 14px 4px 14px;
       padding: 6px 14px;
       background: var(--bg-glass-panel);
       backdrop-filter: blur(16px);
@@ -309,7 +309,7 @@
       overflow: hidden;
       position: relative;
       min-height: 0;
-      padding: 0 14px 6px 14px;
+      padding: 8px 14px 8px 14px;
       gap: 8px;
     }
 
@@ -921,21 +921,88 @@
       color: #fff;
     }
 
-    /* Code Editor Modal Textarea */
-    .editor-textarea {
-      width: 100%;
-      height: 500px;
-      background: #080c14;
+    /* Advanced Code Editor Suite */
+    .editor-container {
+      display: flex;
+      height: 520px;
       border: 1px solid var(--border-color);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #080c14;
+      position: relative;
+    }
+    .editor-gutter {
+      width: 48px;
+      padding: 12px 8px 12px 0;
+      text-align: right;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.6;
+      background: rgba(0, 0, 0, 0.35);
+      border-right: 1px solid var(--border-color);
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+      white-space: pre;
+      flex-shrink: 0;
+    }
+    .editor-textarea {
+      flex: 1;
+      height: 100%;
+      background: transparent;
       color: #f8fafc;
       font-family: var(--font-mono);
-      font-size: 13.5px;
+      font-size: 13px;
       line-height: 1.6;
-      padding: 14px;
-      border-radius: 8px;
+      padding: 12px 14px;
+      border: none;
       resize: none;
-      tab-size: 4;
-      user-select: text;
+      outline: none;
+      white-space: pre;
+      overflow: auto;
+      tab-size: 2;
+    }
+    .editor-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap;
+    }
+    .editor-tool-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .editor-find-bar {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      font-size: 11.5px;
+    }
+    .editor-find-bar input {
+      padding: 3px 8px;
+      font-size: 11.5px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      color: var(--text-main);
+    }
+    .editor-find-bar button {
+      padding: 3px 8px;
+      font-size: 11px;
+    }
+    .editor-btn-active {
+      background: rgba(56, 189, 248, 0.15) !important;
+      border-color: var(--accent) !important;
+      color: var(--accent) !important;
     }
 
     /* Drag and Drop Visual Feedback */
@@ -1348,7 +1415,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.9</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.10</span>
         </div>
       </div>
 
@@ -1798,31 +1865,102 @@
 
   <!-- Modal: Built-in Code Editor & Formatter -->
   <div class="modal-overlay" id="editorModal">
-    <div class="modal-content" style="width: 950px; max-width: 95vw;">
-      <div class="modal-header">
+    <div class="modal-content" style="width: 1040px; max-width: 96vw;">
+      <div class="modal-header" style="padding: 8px 14px;">
+        <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; max-width: 65%;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span id="editorTitle" style="font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Code Editor</span>
+        </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-          <span id="editorTitle">Quick Code Editor</span>
+          <span id="editorStatus" style="font-size: 11.5px; color: var(--accent); font-weight: 600;"></span>
+          <button type="button" class="btn btn-secondary" onclick="closeEditorModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <button type="button" class="btn btn-secondary" onclick="formatEditorCode()" style="padding: 3px 10px; font-size: 11.5px; display: flex; align-items: center; gap: 5px;" title="Format & Beautify Code (JSON, HTML, JS, CSS)">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
-            Beautify / Format
+      </div>
+
+      <!-- Editor Action Toolbar -->
+      <div class="editor-toolbar">
+        <div class="editor-tool-group">
+          <!-- Find & Replace Trigger -->
+          <button type="button" class="btn btn-secondary" onclick="toggleFindBar(false)" style="padding: 3px 9px; font-size: 11.5px; display: flex; align-items: center; gap: 4px;" title="Find Text (Ctrl+F)">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>Find</span>
           </button>
-          <span id="editorStats" style="font-size: 11.5px; color: var(--text-dim); font-family: var(--font-mono);"></span>
-          <span id="editorStatus" style="font-size: 12px; color: var(--accent); font-weight: 600;"></span>
+          <button type="button" class="btn btn-secondary" onclick="toggleFindBar(true)" style="padding: 3px 9px; font-size: 11.5px; display: flex; align-items: center; gap: 4px;" title="Find & Replace (Ctrl+H)">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            <span>Replace</span>
+          </button>
+
+          <div style="width: 1px; height: 18px; background: var(--border-color); margin: 0 4px;"></div>
+
+          <!-- Format & Beautify -->
+          <button type="button" class="btn btn-secondary" onclick="formatEditorCode()" style="padding: 3px 10px; font-size: 11.5px; display: flex; align-items: center; gap: 5px;" title="Format & Beautify Code (JSON, XML, HTML, JS, CSS)">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            <span>Format Code</span>
+          </button>
+
+          <div style="width: 1px; height: 18px; background: var(--border-color); margin: 0 4px;"></div>
+
+          <!-- Case Tools -->
+          <button type="button" class="btn btn-secondary" onclick="convertEditorCase('upper')" style="padding: 3px 8px; font-size: 11px;" title="Convert selected text to UPPERCASE">
+            AA
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="convertEditorCase('lower')" style="padding: 3px 8px; font-size: 11px;" title="Convert selected text to lowercase">
+            aa
+          </button>
+
+          <div style="width: 1px; height: 18px; background: var(--border-color); margin: 0 4px;"></div>
+
+          <!-- Word Wrap Toggle -->
+          <button type="button" class="btn btn-secondary" id="btnWordWrap" onclick="toggleWordWrap()" style="padding: 3px 8px; font-size: 11px;" title="Toggle Word Wrap">
+            ↩ Wrap
+          </button>
+
+          <!-- Font Size Zoom -->
+          <button type="button" class="btn btn-secondary" onclick="changeEditorFontSize(-1)" style="padding: 3px 7px; font-size: 11px;" title="Decrease Font Size">A-</button>
+          <button type="button" class="btn btn-secondary" onclick="changeEditorFontSize(1)" style="padding: 3px 7px; font-size: 11px;" title="Increase Font Size">A+</button>
+        </div>
+
+        <div class="editor-tool-group">
+          <span id="editorStats" style="font-size: 11.5px; color: var(--text-dim); font-family: var(--font-mono);">Lines: 0 | Chars: 0</span>
         </div>
       </div>
-      <div class="modal-body" style="padding: 12px;">
-        <textarea id="editorTextarea" class="editor-textarea" spellcheck="false" oninput="updateEditorStats()"></textarea>
+
+      <!-- Docked Find & Replace Bar -->
+      <div class="editor-find-bar" id="editorFindBar">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <input type="text" id="editorFindInput" placeholder="Find text..." style="width: 200px;" onkeydown="handleFindInputKey(event)">
+          <button type="button" class="btn btn-secondary" onclick="executeFind(-1)" title="Previous Match (Shift+Enter)">▲</button>
+          <button type="button" class="btn btn-secondary" onclick="executeFind(1)" title="Next Match (Enter)">▼</button>
+          <button type="button" class="btn btn-secondary" id="findMatchCase" onclick="toggleMatchCase()" title="Match Case" style="font-family: var(--font-mono); font-weight: 700;">Aa</button>
+          <span id="findCountBadge" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); min-width: 60px;"></span>
+        </div>
+
+        <div id="findReplaceGroup" style="display: none; align-items: center; gap: 6px; margin-left: 8px;">
+          <input type="text" id="editorReplaceInput" placeholder="Replace with..." style="width: 180px;" onkeydown="if(event.key==='Enter') executeReplace()">
+          <button type="button" class="btn btn-secondary" onclick="executeReplace()" title="Replace Selected Match">Replace</button>
+          <button type="button" class="btn btn-secondary" onclick="executeReplaceAll()" title="Replace All Matches">Replace All</button>
+        </div>
+
+        <button type="button" class="btn btn-secondary" onclick="closeFindBar()" style="margin-left: auto; padding: 2px 7px; font-size: 10.5px;">✕</button>
       </div>
-      <div class="modal-footer">
-        <span style="margin-right: auto; font-size: 12px; color: var(--text-dim);">Shortcuts: Ctrl+S to Save & Upload | Tab to Indent | Format Button</span>
-        <button class="btn btn-secondary" onclick="closeEditorModal()">Close</button>
-        <button class="btn btn-primary" onclick="saveEditorContent()">
-          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-          Save & Upload
-        </button>
+
+      <!-- Editor Content Area with Line Numbers Gutter -->
+      <div class="modal-body" style="padding: 10px 14px 4px 14px;">
+        <div class="editor-container">
+          <div id="editorGutter" class="editor-gutter">1</div>
+          <textarea id="editorTextarea" class="editor-textarea" spellcheck="false" oninput="onEditorInput()" onscroll="syncEditorScroll()"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding: 8px 14px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 11px; color: var(--text-dim);">Shortcuts: Ctrl+S Save & Upload | Ctrl+F Find | Ctrl+H Replace | Tab Indent | Esc Close</span>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary" onclick="closeEditorModal()" style="padding: 4px 16px;">Close</button>
+          <button type="button" class="btn btn-primary" onclick="saveEditorContent()" style="padding: 4px 18px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save & Upload
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -2508,7 +2646,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.9';
+    let APP_CURRENT_VERSION = '0.0.0.10';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -3556,16 +3694,200 @@
       await downloadFileDirect(selectedRemoteFile.path, selectedRemoteFile.name);
     }
 
-    // Code Editor & Formatter
+    // Code Editor & Formatter Suite
+    let editorFontSize = 13;
+    let findMatches = [];
+    let currentMatchIdx = -1;
+
+    function onEditorInput() {
+      updateEditorStats();
+      updateEditorLineNumbers();
+    }
+
     function updateEditorStats() {
       const textarea = document.getElementById('editorTextarea');
       const text = textarea ? textarea.value : '';
       const lines = text ? text.split('\n').length : 0;
       const chars = text.length;
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
       const statsEl = document.getElementById('editorStats');
       if (statsEl) {
-        statsEl.innerText = `Lines: ${lines} | Chars: ${chars.toLocaleString()}`;
+        statsEl.innerText = 'Lines: ' + lines + ' | Words: ' + words + ' | Chars: ' + chars.toLocaleString();
       }
+    }
+
+    function updateEditorLineNumbers() {
+      const ta = document.getElementById('editorTextarea');
+      const gutter = document.getElementById('editorGutter');
+      if (!ta || !gutter) return;
+      const lineCount = ta.value.split('\n').length;
+      let s = '';
+      for (let i = 1; i <= lineCount; i++) {
+        s += i + '\n';
+      }
+      gutter.textContent = s;
+    }
+
+    function syncEditorScroll() {
+      const ta = document.getElementById('editorTextarea');
+      const gutter = document.getElementById('editorGutter');
+      if (ta && gutter) {
+        gutter.scrollTop = ta.scrollTop;
+      }
+    }
+
+    function toggleWordWrap() {
+      const ta = document.getElementById('editorTextarea');
+      const btn = document.getElementById('btnWordWrap');
+      if (!ta) return;
+      const isWrapped = ta.style.whiteSpace === 'pre-wrap';
+      ta.style.whiteSpace = isWrapped ? 'pre' : 'pre-wrap';
+      if (btn) btn.classList.toggle('editor-btn-active', !isWrapped);
+    }
+
+    function changeEditorFontSize(delta) {
+      editorFontSize = Math.min(22, Math.max(10, editorFontSize + delta));
+      const ta = document.getElementById('editorTextarea');
+      const gutter = document.getElementById('editorGutter');
+      if (ta) ta.style.fontSize = editorFontSize + 'px';
+      if (gutter) gutter.style.fontSize = editorFontSize + 'px';
+    }
+
+    function convertEditorCase(type) {
+      const ta = document.getElementById('editorTextarea');
+      if (!ta) return;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const text = ta.value;
+      const selected = text.substring(start, end);
+      if (!selected) {
+        ta.value = type === 'upper' ? text.toUpperCase() : text.toLowerCase();
+      } else {
+        const rep = type === 'upper' ? selected.toUpperCase() : selected.toLowerCase();
+        ta.value = text.substring(0, start) + rep + text.substring(end);
+        ta.setSelectionRange(start, start + rep.length);
+      }
+      onEditorInput();
+    }
+
+    function toggleFindBar(showReplace = false) {
+      const bar = document.getElementById('editorFindBar');
+      if (!bar) return;
+      const isHidden = bar.style.display === 'none' || bar.style.display === '';
+      if (isHidden) {
+        bar.style.display = 'flex';
+        document.getElementById('findReplaceGroup').style.display = showReplace ? 'flex' : 'none';
+        const inp = document.getElementById('editorFindInput');
+        if (inp) {
+          inp.focus();
+          inp.select();
+        }
+        executeFind();
+      } else {
+        if (showReplace && document.getElementById('findReplaceGroup').style.display === 'none') {
+          document.getElementById('findReplaceGroup').style.display = 'flex';
+          document.getElementById('editorReplaceInput').focus();
+        } else {
+          closeFindBar();
+        }
+      }
+    }
+
+    function closeFindBar() {
+      const bar = document.getElementById('editorFindBar');
+      if (bar) bar.style.display = 'none';
+      const ta = document.getElementById('editorTextarea');
+      if (ta) ta.focus();
+    }
+
+    function toggleMatchCase() {
+      const btn = document.getElementById('findMatchCase');
+      if (btn) {
+        btn.classList.toggle('editor-btn-active');
+        executeFind(0);
+      }
+    }
+
+    function handleFindInputKey(e) {
+      if (e.key === 'Enter') {
+        executeFind(e.shiftKey ? -1 : 1);
+      } else if (e.key === 'Escape') {
+        closeFindBar();
+      } else {
+        setTimeout(() => executeFind(0), 10);
+      }
+    }
+
+    function executeFind(dir = 0) {
+      const query = document.getElementById('editorFindInput').value;
+      const matchCase = document.getElementById('findMatchCase').classList.contains('editor-btn-active');
+      const countEl = document.getElementById('findCountBadge');
+      const ta = document.getElementById('editorTextarea');
+      if (!query || !ta) {
+        if (countEl) countEl.textContent = 'No text';
+        return;
+      }
+      const text = ta.value;
+      const regexFlags = matchCase ? 'g' : 'gi';
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, regexFlags);
+
+      findMatches = [];
+      let m;
+      while ((m = regex.exec(text)) !== null) {
+        findMatches.push({ start: m.index, end: m.index + m[0].length });
+      }
+
+      if (findMatches.length === 0) {
+        if (countEl) countEl.textContent = '0 of 0';
+        currentMatchIdx = -1;
+        return;
+      }
+
+      if (dir === 1) {
+        currentMatchIdx = (currentMatchIdx + 1) % findMatches.length;
+      } else if (dir === -1) {
+        currentMatchIdx = (currentMatchIdx - 1 + findMatches.length) % findMatches.length;
+      } else {
+        const curPos = ta.selectionStart;
+        const nextIdx = findMatches.findIndex(item => item.start >= curPos);
+        currentMatchIdx = nextIdx !== -1 ? nextIdx : 0;
+      }
+
+      const match = findMatches[currentMatchIdx];
+      ta.focus();
+      ta.setSelectionRange(match.start, match.end);
+
+      const linesBefore = text.substring(0, match.start).split('\n').length;
+      const lineHeight = 20.8;
+      ta.scrollTop = Math.max(0, (linesBefore - 6) * lineHeight);
+
+      if (countEl) countEl.textContent = (currentMatchIdx + 1) + ' of ' + findMatches.length;
+    }
+
+    function executeReplace() {
+      const ta = document.getElementById('editorTextarea');
+      const repVal = document.getElementById('editorReplaceInput').value;
+      if (currentMatchIdx >= 0 && currentMatchIdx < findMatches.length) {
+        const match = findMatches[currentMatchIdx];
+        const text = ta.value;
+        ta.value = text.substring(0, match.start) + repVal + text.substring(match.end);
+        onEditorInput();
+        executeFind(0);
+      }
+    }
+
+    function executeReplaceAll() {
+      const query = document.getElementById('editorFindInput').value;
+      const repVal = document.getElementById('editorReplaceInput').value;
+      const matchCase = document.getElementById('findMatchCase').classList.contains('editor-btn-active');
+      const ta = document.getElementById('editorTextarea');
+      if (!query || !ta) return;
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, matchCase ? 'g' : 'gi');
+      ta.value = ta.value.replace(regex, repVal);
+      onEditorInput();
+      executeFind(0);
     }
 
     function formatEditorCode() {
@@ -3581,28 +3903,28 @@
         try {
           const parsed = JSON.parse(code);
           textarea.value = JSON.stringify(parsed, null, 2);
-          updateEditorStats();
-          status.innerText = 'JSON Beautified ✓';
+          onEditorInput();
+          status.innerText = 'JSON Formatted ✓';
           setTimeout(() => status.innerText = '', 2000);
           return;
         } catch (_) {}
       }
 
-      // XML / HTML Beautifier
+      // XML / HTML / SVG Beautifier
       if (['html', 'htm', 'xml', 'svg'].includes(ext) || code.trim().startsWith('<')) {
         try {
           textarea.value = formatXmlHtml(code);
-          updateEditorStats();
-          status.innerText = 'HTML/XML Beautified ✓';
+          onEditorInput();
+          status.innerText = 'HTML/XML Formatted ✓';
           setTimeout(() => status.innerText = '', 2000);
           return;
         } catch (_) {}
       }
 
-      // Generic indentation formatter
+      // Generic C/JS/CSS Formatter
       textarea.value = formatGenericCode(code);
-      updateEditorStats();
-      status.innerText = 'Code Beautified ✓';
+      onEditorInput();
+      status.innerText = 'Code Formatted ✓';
       setTimeout(() => status.innerText = '', 2000);
     }
 
@@ -3640,27 +3962,27 @@
 
         out.push(tab.repeat(indent) + line);
 
-        const opens = (line.match(/[{(\[]/g) || []).length;
-        const closes = (line.match(/[})\]]/g) || []).length;
+        const opens = (line.match(/[{([]/g) || []).length;
+        const closes = (line.match(/[})]]/g) || []).length;
         indent += Math.max(0, opens - closes);
       }
       return out.join('\n');
     }
 
     async function openRemoteFileInEditor(path) {
-      addLog(`Loading remote file: ${path}...`, 'cmd');
+      addLog("Loading remote file: " + path + "...", 'cmd');
       try {
         const res = await sendRust('remote_read', { path });
         activeEditingPath = path;
         activeEditingIsRemote = true;
-        document.getElementById('editorTitle').innerText = 'Editing Remote: ' + path;
+        document.getElementById('editorTitle').innerText = 'Remote: ' + path;
         document.getElementById('editorTextarea').value = res.content;
         document.getElementById('editorStatus').innerText = 'Loaded (' + formatBytes(res.size) + ')';
-        updateEditorStats();
+        onEditorInput();
         document.getElementById('editorModal').classList.add('active');
       } catch (err) {
-        addLog('Cannot open remote file: ' + err.message, 'error');
-        alert('Failed to open file:\n' + err.message);
+        addLog('Cannot open remote file: ' + (err.message || err), 'error');
+        alert('Failed to open file:\n' + (err.message || err));
       }
     }
 
@@ -3669,496 +3991,65 @@
         const res = await sendRust('local_read', { path });
         activeEditingPath = path;
         activeEditingIsRemote = false;
-        document.getElementById('editorTitle').innerText = 'Editing Local: ' + path;
+        document.getElementById('editorTitle').innerText = 'Local: ' + path;
         document.getElementById('editorTextarea').value = res.content;
         document.getElementById('editorStatus').innerText = 'Local File';
-        updateEditorStats();
+        onEditorInput();
         document.getElementById('editorModal').classList.add('active');
       } catch (err) {
-        alert('Cannot open file:\n' + err.message);
+        alert('Cannot open file:\n' + (err.message || err));
       }
     }
 
     async function saveEditorContent() {
       const content = document.getElementById('editorTextarea').value;
       const status = document.getElementById('editorStatus');
-      status.innerText = 'Saving & Uploading...';
+      status.innerText = 'Saving...';
 
       try {
         if (activeEditingIsRemote) {
           await sendRust('remote_write', { path: activeEditingPath, content });
-          addLog(`Saved and uploaded changes to ${activeEditingPath}`, 'success');
+          addLog("Saved and uploaded changes to " + activeEditingPath, 'success');
         } else {
           await sendRust('local_write', { path: activeEditingPath, content });
-          addLog(`Saved local file ${activeEditingPath}`, 'success');
+          addLog("Saved local file " + activeEditingPath, 'success');
         }
         status.innerText = 'Saved successfully ✓';
         setTimeout(() => status.innerText = '', 2000);
       } catch (err) {
         status.innerText = 'Save error!';
-        addLog('Save failed: ' + err.message, 'error');
-        alert('Error saving file:\n' + err.message);
+        addLog('Save failed: ' + (err.message || err), 'error');
+        alert('Error saving file:\n' + (err.message || err));
       }
     }
 
     function closeEditorModal() {
+      closeFindBar();
       document.getElementById('editorModal').classList.remove('active');
     }
 
     const editorAreaEl = document.getElementById('editorTextarea');
     if (editorAreaEl) editorAreaEl.addEventListener('keydown', function(e) {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         saveEditorContent();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        toggleFindBar(false);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        toggleFindBar(true);
+      } else if (e.key === 'Escape') {
+        closeFindBar();
       } else if (e.key === 'Tab') {
         e.preventDefault();
         const start = this.selectionStart;
         const end = this.selectionEnd;
         this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
         this.selectionStart = this.selectionEnd = start + 2;
-        updateEditorStats();
+        onEditorInput();
       }
     });
-
-    // Custom Context Menu & Properties Management
-    let contextTarget = null;
-
-    function openContextMenu(e, type, item = null, index = null) {
-      e.preventDefault();
-      contextTarget = { type, item, index };
-      const menu = document.getElementById('customContextMenu');
-      if (!menu) return;
-
-      renderContextMenuItems(type, item);
-
-      menu.classList.add('active');
-
-      const menuWidth = 230;
-      const menuHeight = 280;
-      let x = e.clientX;
-      let y = e.clientY;
-
-      if (x + menuWidth > window.innerWidth) {
-        x = window.innerWidth - menuWidth - 10;
-      }
-      if (y + menuHeight > window.innerHeight) {
-        y = window.innerHeight - menuHeight - 10;
-      }
-
-      menu.style.left = `${Math.max(10, x)}px`;
-      menu.style.top = `${Math.max(10, y)}px`;
-    }
-
-    function closeContextMenu() {
-      const menu = document.getElementById('customContextMenu');
-      if (menu) menu.classList.remove('active');
-    }
-
-    window.addEventListener('click', () => closeContextMenu());
-    window.addEventListener('blur', () => closeContextMenu());
-
-    function renderContextMenuItems(type, item) {
-      const menu = document.getElementById('customContextMenu');
-      if (!menu) return;
-
-      const isRemote = type.startsWith('remote');
-      const isBlank = type.endsWith('_blank');
-
-      let html = '';
-
-      if (isBlank) {
-        const dirPath = isRemote ? currentRemotePath : currentLocalPath;
-        html += `<div class="context-menu-header">${isRemote ? 'Remote Directory' : 'Local Directory'}</div>`;
-        html += `
-          <div class="context-menu-item" onclick="promptNewFile(${isRemote})">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-            <span>New File...</span>
-          </div>
-          <div class="context-menu-item" onclick="promptNewFolder(${isRemote})">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-            <span>New Folder...</span>
-          </div>
-          <div class="context-menu-separator"></div>
-          <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(dirPath)}')">
-            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span>Copy Directory Path</span>
-          </div>
-          <div class="context-menu-item" onclick="${isRemote ? 'refreshRemote()' : 'refreshLocal()'}">
-            <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            <span>Refresh</span>
-            <span class="shortcut">F5</span>
-          </div>
-        `;
-      } else if (item) {
-        html += `<div class="context-menu-header">${item.is_dir ? 'Folder: ' : 'File: '} ${escapeHtml(item.name.length > 20 ? item.name.substring(0, 18) + '...' : item.name)}</div>`;
-
-        if (item.is_dir) {
-          html += `
-            <div class="context-menu-item" onclick="${isRemote ? `navigateRemote('${escapeJsString(item.path)}')` : `navigateLocal('${escapeJsString(item.path)}')`}">
-              <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              <span>Open Folder</span>
-              <span class="shortcut">Enter</span>
-            </div>
-          `;
-        } else {
-          html += `
-            <div class="context-menu-item" onclick="${isRemote ? `openRemoteFileInEditor('${escapeJsString(item.path)}')` : `openLocalFileInEditor('${escapeJsString(item.path)}')`}">
-              <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-              <span>Edit in Code Editor</span>
-            </div>
-          `;
-        }
-
-        if (isRemote) {
-          html += `
-            <div class="context-menu-item" onclick="downloadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
-              <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Download to Local</span>
-            </div>
-          `;
-        } else {
-          html += `
-            <div class="context-menu-item" onclick="uploadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
-              <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span>Upload to Server</span>
-            </div>
-          `;
-        }
-
-        html += `<div class="context-menu-separator"></div>`;
-
-        html += `
-          <div class="context-menu-item" onclick="promptRename('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            <span>Rename...</span>
-            <span class="shortcut">F2</span>
-          </div>
-        `;
-
-        if (isRemote) {
-          html += `
-            <div class="context-menu-item" onclick="openChmodForItem('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', '${escapeJsString(item.permissions || '0644')}')">
-              <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <span>Permissions (CHMOD)...</span>
-            </div>
-          `;
-        }
-
-        html += `
-          <div class="context-menu-item danger" onclick="confirmDelete('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${item.is_dir}, ${isRemote})">
-            <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            <span>Delete</span>
-            <span class="shortcut">Del</span>
-          </div>
-        `;
-
-        html += `<div class="context-menu-separator"></div>`;
-
-        html += `
-          <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(item.path)}')">
-            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span>Copy Full Path</span>
-          </div>
-          <div class="context-menu-item" onclick='showPropertiesModal(${JSON.stringify(item)}, ${isRemote})'>
-            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <span>Properties & Info...</span>
-          </div>
-        `;
-      }
-
-      menu.innerHTML = html;
-    }
-
-    function escapeJsString(str) {
-      if (!str) return '';
-      return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    }
-
-    async function promptNewFile(isRemote) {
-      closeContextMenu();
-      const fileName = prompt('Enter new file name (e.g. index.php, config.json):');
-      if (!fileName || !fileName.trim()) return;
-      const cleanName = fileName.trim();
-
-      if (isRemote) {
-        if (!isConnected) { alert('Please connect to server first'); return; }
-        const fullPath = currentRemotePath.endsWith('/') ? currentRemotePath + cleanName : currentRemotePath + '/' + cleanName;
-        try {
-          const res = await sendRust('remote_create_file', { path: fullPath });
-          renderRemoteFiles(res.files || []);
-          addLog(`Created remote file: ${fullPath}`, 'success');
-        } catch (e) {
-          alert('Failed to create file: ' + e.message);
-        }
-      } else {
-        const fullPath = currentLocalPath.endsWith('\\') ? currentLocalPath + cleanName : currentLocalPath + '\\' + cleanName;
-        try {
-          await sendRust('local_create_file', { path: fullPath });
-          refreshLocal();
-          addLog(`Created local file: ${fullPath}`, 'success');
-        } catch (e) {
-          alert('Failed to create file: ' + e.message);
-        }
-      }
-    }
-
-    async function promptNewFolder(isRemote) {
-      closeContextMenu();
-      const folderName = prompt('Enter new folder name:');
-      if (!folderName || !folderName.trim()) return;
-      const cleanName = folderName.trim();
-
-      if (isRemote) {
-        if (!isConnected) { alert('Please connect to server first'); return; }
-        const fullPath = currentRemotePath.endsWith('/') ? currentRemotePath + cleanName : currentRemotePath + '/' + cleanName;
-        try {
-          const res = await sendRust('remote_create_dir', { path: fullPath });
-          renderRemoteFiles(res.files || []);
-          addLog(`Created remote directory: ${fullPath}`, 'success');
-        } catch (e) {
-          alert('Failed to create directory: ' + e.message);
-        }
-      } else {
-        const fullPath = currentLocalPath.endsWith('\\') ? currentLocalPath + cleanName : currentLocalPath + '\\' + cleanName;
-        try {
-          await sendRust('local_create_dir', { path: fullPath });
-          refreshLocal();
-          addLog(`Created local directory: ${fullPath}`, 'success');
-        } catch (e) {
-          alert('Failed to create directory: ' + e.message);
-        }
-      }
-    }
-
-    async function promptRename(oldPath, oldName, isRemote) {
-      closeContextMenu();
-      const newName = prompt(`Rename '${oldName}' to:`, oldName);
-      if (!newName || !newName.trim() || newName.trim() === oldName) return;
-      const cleanName = newName.trim();
-
-      if (isRemote) {
-        const parent = oldPath.replace(/\/[^\/]+$/, '') || '/';
-        const newPath = parent.endsWith('/') ? parent + cleanName : parent + '/' + cleanName;
-        try {
-          const res = await sendRust('remote_rename', { old_path: oldPath, new_path: newPath });
-          renderRemoteFiles(res.files || []);
-          addLog(`Renamed remote '${oldName}' to '${cleanName}'`, 'success');
-        } catch (e) {
-          alert('Rename failed: ' + e.message);
-        }
-      } else {
-        const parent = oldPath.replace(/\\[^\\]+$/, '');
-        const newPath = parent ? parent + '\\' + cleanName : cleanName;
-        try {
-          await sendRust('local_rename', { old_path: oldPath, new_path: newPath });
-          refreshLocal();
-          addLog(`Renamed local '${oldName}' to '${cleanName}'`, 'success');
-        } catch (e) {
-          alert('Rename failed: ' + e.message);
-        }
-      }
-    }
-
-    async function confirmDelete(path, name, isDir, isRemote) {
-      closeContextMenu();
-      const kind = isDir ? 'directory' : 'file';
-      if (!confirm(`Are you sure you want to delete this ${kind}?\n\n${name}`)) return;
-
-      if (isRemote) {
-        try {
-          const res = await sendRust('remote_delete', { path, is_dir: isDir });
-          renderRemoteFiles(res.files || []);
-          addLog(`Deleted remote ${kind}: ${name}`, 'success');
-        } catch (e) {
-          alert('Delete failed: ' + e.message);
-        }
-      } else {
-        try {
-          await sendRust('local_delete', { path });
-          refreshLocal();
-          addLog(`Deleted local ${kind}: ${name}`, 'success');
-        } catch (e) {
-          alert('Delete failed: ' + e.message);
-        }
-      }
-    }
-
-    function copyItemPath(path) {
-      closeContextMenu();
-      if (!path) return;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(path).then(() => {
-          addLog(`Copied to clipboard: ${path}`, 'info');
-        }).catch(() => fallbackCopyText(path));
-      } else {
-        fallbackCopyText(path);
-      }
-    }
-
-    function openChmodForItem(path, name, perms) {
-      closeContextMenu();
-      selectedRemoteFile = { path, name, permissions: perms };
-      openChmodModal();
-    }
-
-    function showPropertiesModal(item, isRemote) {
-      closeContextMenu();
-      if (!item) return;
-      document.getElementById('propTitle').innerText = `${isRemote ? 'Remote' : 'Local'} Properties`;
-      document.getElementById('propIcon').innerText = item.is_dir ? '📁' : '📄';
-      document.getElementById('propName').innerText = item.name;
-      document.getElementById('propType').innerText = item.is_dir ? 'Folder / Directory' : (item.is_symlink ? 'Symlink' : 'Regular File');
-      document.getElementById('propPath').innerText = item.path;
-      document.getElementById('propSize').innerText = item.is_dir ? '-' : `${formatBytes(item.size)} (${item.size.toLocaleString()} bytes)`;
-      document.getElementById('propPerms').innerText = item.permissions || '-';
-      document.getElementById('propModified').innerText = item.modified || '-';
-      document.getElementById('propertiesModal').classList.add('active');
-    }
-
-    function closePropertiesModal() {
-      document.getElementById('propertiesModal').classList.remove('active');
-    }
-
-    // CHMOD Modal
-    function openChmodModal() {
-      if (!selectedRemoteFile) {
-        alert('Please select a remote file first');
-        return;
-      }
-      document.getElementById('chmodFilename').innerText = selectedRemoteFile.path;
-      document.getElementById('chmodOctal').value = '0644';
-      updateCheckboxesFromOctal('0644');
-      document.getElementById('chmodModal').classList.add('active');
-    }
-
-    function closeChmodModal() {
-      document.getElementById('chmodModal').classList.remove('active');
-    }
-
-    function updateCheckboxesFromOctal(octalStr) {
-      const val = parseInt(octalStr.replace('0o', ''), 8) || 0o644;
-      document.getElementById('cm_ur').checked = (val & 0o400) !== 0;
-      document.getElementById('cm_uw').checked = (val & 0o200) !== 0;
-      document.getElementById('cm_ux').checked = (val & 0o100) !== 0;
-      document.getElementById('cm_gr').checked = (val & 0o040) !== 0;
-      document.getElementById('cm_gw').checked = (val & 0o020) !== 0;
-      document.getElementById('cm_gx').checked = (val & 0o010) !== 0;
-      document.getElementById('cm_or').checked = (val & 0o004) !== 0;
-      document.getElementById('cm_ow').checked = (val & 0o002) !== 0;
-      document.getElementById('cm_ox').checked = (val & 0o001) !== 0;
-    }
-
-    function calculateOctalFromCheckboxes() {
-      let val = 0;
-      if (document.getElementById('cm_ur').checked) val |= 0o400;
-      if (document.getElementById('cm_uw').checked) val |= 0o200;
-      if (document.getElementById('cm_ux').checked) val |= 0o100;
-      if (document.getElementById('cm_gr').checked) val |= 0o040;
-      if (document.getElementById('cm_gw').checked) val |= 0o020;
-      if (document.getElementById('cm_gx').checked) val |= 0o010;
-      if (document.getElementById('cm_or').checked) val |= 0o004;
-      if (document.getElementById('cm_ow').checked) val |= 0o002;
-      if (document.getElementById('cm_ox').checked) val |= 0o001;
-      return '0' + val.toString(8);
-    }
-
-    ['cm_ur','cm_uw','cm_ux','cm_gr','cm_gw','cm_gx','cm_or','cm_ow','cm_ox'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('change', () => {
-        const oct = document.getElementById('chmodOctal');
-        if (oct) oct.value = calculateOctalFromCheckboxes();
-      });
-    });
-
-    function updateChmodFromOctal() {
-      const oct = document.getElementById('chmodOctal').value;
-      updateCheckboxesFromOctal(oct);
-    }
-
-    async function applyChmod() {
-      const mode = document.getElementById('chmodOctal').value;
-      try {
-        const res = await sendRust('remote_chmod', {
-          path: selectedRemoteFile.path,
-          mode: mode
-        });
-        renderRemoteFiles(res.files || []);
-        addLog(`Updated permissions for '${selectedRemoteFile.name}' to ${mode}`, 'success');
-        closeChmodModal();
-      } catch (err) {
-        addLog('Failed to change permissions: ' + err.message, 'error');
-        alert('CHMOD Error:\n' + err.message);
-      }
-    }
-
-    // Delete and Edit actions
-    async function deleteSelectedRemote() {
-      if (!selectedRemoteFile) return;
-      if (!confirm(`Are you sure you want to delete '${selectedRemoteFile.name}' from the remote server?`)) return;
-
-      try {
-        const res = await sendRust('remote_delete', {
-          path: selectedRemoteFile.path,
-          is_dir: selectedRemoteFile.is_dir
-        });
-        renderRemoteFiles(res.files || []);
-        addLog(`Deleted '${selectedRemoteFile.name}' from remote server.`, 'success');
-        selectedRemoteFile = null;
-      } catch (err) {
-        addLog('Deletion failed: ' + err.message, 'error');
-        alert('Delete Error:\n' + err.message);
-      }
-    }
-
-    function editSelectedRemoteFile() {
-      if (!selectedRemoteFile) {
-        alert('Please select a file to edit');
-        return;
-      }
-      if (selectedRemoteFile.is_dir) {
-        alert('Selected item is a directory, not a file!');
-        return;
-      }
-      openRemoteFileInEditor(selectedRemoteFile.path);
-    }
-
-    async function promptNewRemoteFolder() {
-      if (!isConnected) return;
-      const name = prompt('Enter new remote folder name:');
-      if (!name) return;
-      const newPath = currentRemotePath.endsWith('/') ? currentRemotePath + name : currentRemotePath + '/' + name;
-      try {
-        const res = await sendRust('remote_create_dir', { path: newPath });
-        renderRemoteFiles(res.files || []);
-        addLog(`Created remote directory: ${name}`, 'success');
-      } catch (err) {
-        alert('Error creating folder:\n' + err.message);
-      }
-    }
-
-    async function promptNewLocalFolder() {
-      const name = prompt('Enter new local folder name:');
-      if (!name) return;
-      const newPath = currentLocalPath.endsWith('\\') ? currentLocalPath + name : currentLocalPath + '\\' + name;
-      try {
-        await sendRust('local_create_dir', { path: newPath });
-        refreshLocal();
-      } catch (err) {
-        alert('Error creating folder:\n' + err.message);
-      }
-    }
-
-    async function promptNewLocalFile() {
-      const name = prompt('Enter new local file name (e.g. index.html):');
-      if (!name) return;
-      const newPath = currentLocalPath.endsWith('\\') ? currentLocalPath + name : currentLocalPath + '\\' + name;
-      try {
-        await sendRust('local_create_file', { path: newPath });
-        refreshLocal();
-      } catch (err) {
-        alert('Error creating file:\n' + err.message);
-      }
-    }
 
     // Site Manager Modal Logic
     function openSitesModal() {
