@@ -2315,13 +2315,16 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 name = "ninety_ftp"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm 0.11.1",
  "base64 0.23.1",
  "chrono",
+ "rand 0.8.8",
  "rfd",
  "russh",
  "russh-sftp",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "ssh-key 0.6.7",
  "ssh2",
  "suppaftp",
@@ -3197,6 +3200,7 @@ version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
 dependencies = [
+ "libc",
  "rand_chacha",
  "rand_core 0.6.4",
 ]

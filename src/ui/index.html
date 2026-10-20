@@ -1735,7 +1735,7 @@
       <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;">
         <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted);">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#22c55e" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span style="font-family: var(--font-mono); font-size: 10.5px;">sites.json</span>
+          <span style="font-family: var(--font-mono); font-size: 10.5px;">Encrypted Vault (AES-256-GCM)</span>
           <button type="button" class="btn btn-secondary" onclick="openStorageFolder()" style="padding: 1px 6px; font-size: 10px;">Open</button>
         </div>
         <div style="display: flex; gap: 6px;">
@@ -2002,7 +2002,7 @@
             </label>
             <label class="options-checkbox-row">
               <input type="checkbox" id="optEncryptPasswords" checked>
-              <span>Secure credential storage in %APPDATA%\90FTP\sites.json</span>
+              <span>Encrypted Vault storage in %APPDATA%\90FTP (AES-256-GCM authenticated)</span>
             </label>
             <label class="options-checkbox-row">
               <input type="checkbox" id="optWipeOnDisconnect">
@@ -2029,7 +2029,7 @@
               <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
                 <div>
                   <div style="font-weight: 600;">Server Host Keys Cache</div>
-                  <div style="font-size: 11px; color: var(--text-dim);">Stored SHA-256 host key fingerprints in known_hosts.json</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Stored SHA-256 host key fingerprints in encrypted vault (.dat)</div>
                 </div>
                 <button type="button" class="btn btn-secondary" onclick="clearKnownHostsCache()" style="font-size: 11px; padding: 3px 8px;">Clear Cache</button>
               </div>
@@ -2037,7 +2037,7 @@
               <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
                 <div>
                   <div style="font-weight: 600;">Remote Navigation History</div>
-                  <div style="font-size: 11px; color: var(--text-dim);">Recent path history entries in history.json</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Recent path history entries in encrypted vault (.dat)</div>
                 </div>
                 <button type="button" class="btn btn-secondary" onclick="clearRemoteHistoryCache()" style="font-size: 11px; padding: 3px 8px;">Clear History</button>
               </div>
@@ -4539,7 +4539,7 @@
       }
       try {
         await sendRust('clear_known_hosts');
-        addLog('Cleared server host keys cache (%APPDATA%\\90FTP\\known_hosts.json)', 'success');
+        addLog('Cleared server host keys from encrypted vault (%APPDATA%\\90FTP)', 'success');
         alert('Server host keys cache has been cleared successfully.');
       } catch (err) {
         addLog('Failed to clear known hosts cache: ' + err.message, 'error');
@@ -4555,7 +4555,7 @@
         if (res && res.history) {
           updateRemoteHistory(res.history);
         }
-        addLog('Cleared remote path history (%APPDATA%\\90FTP\\remote_history.json)', 'success');
+        addLog('Cleared remote path history from encrypted vault (%APPDATA%\\90FTP)', 'success');
         alert('Remote navigation history has been cleared.');
       } catch (err) {
         addLog('Failed to clear remote history: ' + err.message, 'error');
