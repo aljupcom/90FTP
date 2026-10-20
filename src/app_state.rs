@@ -845,12 +845,41 @@ impl AppState {
                     return IpcResponse::err(id, action, "Host is empty");
                 }
 
-                // Construct remote cd command
-                let escaped_pwd = pwd.replace('\'', "'\\''");
-                let remote_cmd = format!("cd '{}' 2>/dev/null || cd ~; exec $SHELL -l", escaped_pwd);
+                // Check if user has NetSarang Xshell installed
+                let xshell_paths = [
+                    r"C:\Program Files (x86)\NetSarang\Xshell 8\Xshell.exe",
+                    r"C:\Program Files\NetSarang\Xshell 8\Xshell.exe",
+                    r"C:\Program Files (x86)\NetSarang\Xshell 7\Xshell.exe",
+                    r"C:\Program Files\NetSarang\Xshell 7\Xshell.exe",
+                ];
+                let mut xshell_exe = None;
+                for xp in &xshell_paths {
+                    if std::path::Path::new(xp).exists() {
+                        xshell_exe = Some(xp.to_string());
+                        break;
+                    }
+                }
+
+                if let Some(ref xe) = xshell_exe {
+                    // Launch via Xshell
+                    // Format: xshell.exe -url ssh://user:pass@host:port
+                    let conn_url = if !username.is_empty() {
+                        format!("ssh://{}@{}:{}", username, host, port)
+                    } else {
+                        format!("ssh://{}:{}", host, port)
+                    };
+
+                    let launched = std::process::Command::new(xe)
+                        .args(&["-url", &conn_url])
+                        .spawn()
+                        .is_ok();
+
+                    if launched {
+                        return IpcResponse::ok(id, action, json!({ "launched": true, "terminal": "xshell", "host": host }));
+                    }
+                }
 
                 let mut ssh_args = Vec::new();
-                ssh_args.push("-t".to_string());
                 if port != 22 && port != 0 {
                     ssh_args.push("-p".to_string());
                     ssh_args.push(port.to_string());
@@ -866,13 +895,10 @@ impl AppState {
                     host.to_string()
                 };
                 ssh_args.push(target);
-                ssh_args.push(remote_cmd);
 
                 // Priority: Windows Terminal (wt.exe) -> cmd.exe fallback
-                let wt_args: Vec<String> = vec!["-w".to_string(), "0".to_string(), "nt".to_string(), "--title".to_string(), format!("90FTP SSH: {}", host), "ssh".to_string()]
-                    .into_iter()
-                    .chain(ssh_args.clone().into_iter())
-                    .collect();
+                let mut wt_args: Vec<String> = vec!["-w".to_string(), "0".to_string(), "nt".to_string(), "--title".to_string(), format!("90FTP SSH: {}", host), "ssh".to_string()];
+                wt_args.extend(ssh_args.clone());
 
                 let launched = std::process::Command::new("wt.exe")
                     .args(&wt_args)
@@ -887,7 +913,7 @@ impl AppState {
                     }
                 }
 
-                IpcResponse::ok(id, action, json!({ "launched": true, "host": host, "remote_path": pwd }))
+                IpcResponse::ok(id, action, json!({ "launched": true, "terminal": "wt", "host": host, "remote_path": pwd }))
             }
 
             unknown => IpcResponse::err(id, action, &format!("Unknown action: {}", unknown)),
