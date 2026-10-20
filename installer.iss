@@ -2,9 +2,9 @@
 ; Inno Setup 7 Configuration
 
 #define MyAppName "90FTP"
-#define MyAppVersion "2.5.0"
+#define MyAppVersion "2.6.0"
 #define MyAppPublisher "aljailane"
-#define MyAppURL "https://github.com/aljailane/90FTP"
+#define MyAppURL "https://github.com/aljupcom/90FTP"
 #define MyAppExeName "90FTP.exe"
 
 [Setup]
@@ -19,7 +19,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=dist
-OutputBaseFilename=90FTP-Setup-v2.5.0
+OutputBaseFilename={#MyAppName}-Setup-v{#MyAppVersion}
 SetupIconFile=assets\app_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName} - Modern Site Manager
