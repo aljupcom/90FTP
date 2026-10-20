@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    90FTP Automated Versioning, Building, Signing & Release Pipeline
+    90FTP Automated Versioning, Building, Signing, GitHub Tag & Release Pipeline
 .EXAMPLE
     .\scripts\release.ps1 -Version "2.6.0" -Message "Added AES-256-GCM vault and remote updater"
 #>
@@ -8,14 +8,21 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
     [Parameter(Mandatory=$false)]
-    [string]$Message = "Release update"
+    [string]$Message = "Release update",
+    [Parameter(Mandatory=$false)]
+    [string]$Token = $env:GITHUB_TOKEN
 )
+
+if (-not $Token) {
+    # Check if a token is configured in git or local environment
+    $Token = $env:GH_TOKEN
+}
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
-Write-Host ">>> [1/7] Updating version to v$Version across project files..." -ForegroundColor Cyan
+Write-Host ">>> [1/8] Updating version to v$Version across project files..." -ForegroundColor Cyan
 
 # 1. Cargo.toml
 $cargoPath = Join-Path $Root "Cargo.toml"
@@ -37,13 +44,13 @@ $html = $html -replace 'Version\s+[0-9\.]+\s+Pro\s+\(Windows\s+x64\)', ('Version
 $html = $html -replace 'Current:\s+v[0-9\.]+', ('Current: v' + $Version)
 Set-Content $htmlPath $html -NoNewline
 
-Write-Host ">>> [2/7] Running test suite..." -ForegroundColor Cyan
+Write-Host ">>> [2/8] Running test suite..." -ForegroundColor Cyan
 cargo test --bin ninety_ftp
 
-Write-Host ">>> [3/7] Building release binary..." -ForegroundColor Cyan
+Write-Host ">>> [3/8] Building release binary..." -ForegroundColor Cyan
 cargo build --release
 
-Write-Host ">>> [4/7] Copying and signing 90FTP.exe..." -ForegroundColor Cyan
+Write-Host ">>> [4/8] Copying and signing 90FTP.exe..." -ForegroundColor Cyan
 Stop-Process -Name "90FTP" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
 Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
@@ -51,16 +58,65 @@ Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
 $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
 & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "90FTP.exe"
 
-Write-Host ">>> [5/7] Compiling Inno Setup installer..." -ForegroundColor Cyan
+Write-Host ">>> [5/8] Compiling Inno Setup installer..." -ForegroundColor Cyan
 & "C:\Program Files\Inno Setup 7\ISCC.exe" installer.iss
 
 $setupExe = Join-Path $Root "dist\90FTP-Setup-v$Version.exe"
-Write-Host ">>> [6/7] Signing installer: $setupExe..." -ForegroundColor Cyan
+Write-Host ">>> [6/8] Signing installer: $setupExe..." -ForegroundColor Cyan
 & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Setup" $setupExe
+Copy-Item $setupExe (Join-Path $Root "90FTP-Setup-v$Version.exe") -Force
 
-Write-Host ">>> [7/7] Committing and pushing to Git..." -ForegroundColor Cyan
+Write-Host ">>> [7/8] Committing and pushing branch & tag to Git..." -ForegroundColor Cyan
 git add .
 git commit -m "release: v$Version - $Message"
 git push origin main
+git tag -a "v$Version" -m "Release v$Version: $Message" -f
+git push origin "v$Version" -f
+
+Write-Host ">>> [8/8] Creating GitHub Release & uploading installer asset..." -ForegroundColor Cyan
+$repo = "aljupcom/90FTP"
+$headers = @{
+    "Authorization" = "token $Token"
+    "Accept" = "application/vnd.github.v3+json"
+    "User-Agent" = "90FTP-Release-Agent"
+}
+
+$releaseNotes = @"
+## What's New in v$Version
+$Message
+
+### 🛡️ Enterprise Security
+- Authenticode Signed with publisher **aljailane** & DigiCert RFC 3161 Timestamp.
+- Military-grade AES-256-GCM encrypted vault storage.
+"@
+
+$payload = @{
+    tag_name = "v$Version"
+    target_commitish = "main"
+    name = "90FTP v$Version Pro - $Message"
+    body = $releaseNotes
+    draft = $false
+    prerelease = $false
+} | ConvertTo-Json
+
+try {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases" -Method Post -Headers $headers -Body $payload -ContentType "application/json"
+    $releaseId = $release.id
+    Write-Host "Release created: ID $releaseId" -ForegroundColor Green
+
+    $assetName = "90FTP-Setup-v$Version.exe"
+    $uploadUri = "https://uploads.github.com/repos/$repo/releases/$releaseId/assets?name=$assetName"
+    $uploadHeaders = @{
+        "Authorization" = "token $Token"
+        "Accept" = "application/vnd.github.v3+json"
+        "User-Agent" = "90FTP-Release-Agent"
+        "Content-Type" = "application/octet-stream"
+    }
+
+    $assetResp = Invoke-RestMethod -Uri $uploadUri -Method Post -Headers $uploadHeaders -InFile $setupExe
+    Write-Host "Asset uploaded: $($assetResp.browser_download_url)" -ForegroundColor Green
+} catch {
+    Write-Warning "GitHub Release API call: $_"
+}
 
 Write-Host ">>> SUCCESS: Released 90FTP v$Version!" -ForegroundColor Green

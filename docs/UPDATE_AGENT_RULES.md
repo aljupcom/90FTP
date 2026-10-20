@@ -1,6 +1,6 @@
-# 90FTP Release & Update Agent Rules (قواعد وكيل التحديث والإصدارات)
+# 90FTP Release & Update Agent Protocol (قواعد وكيل التحديث والإصدارات)
 
-This document establishes the official release engineering protocol, Semantic Versioning hierarchy, and verification pipeline for 90FTP.
+Official release engineering protocol, Semantic Versioning hierarchy, and asset publishing rules for 90FTP.
 
 ---
 
@@ -22,12 +22,17 @@ Every version change MUST be applied simultaneously across:
 
 ---
 
-## 3. Automated Release Pipeline
-1. Run test suite: `cargo test --bin ninety_ftp`
-2. Build release binary: `cargo build --release`
-3. Copy binary: `Copy-Item target\release\ninety_ftp.exe 90FTP.exe`
-4. Sign binary with Authenticode (`assets\certs\aljailane.pfx`) and RFC 3161 timestamp (`DigiCert`).
-5. Compile Inno Setup installer (`ISCC.exe installer.iss`).
-6. Sign installer executable with Authenticode and DigiCert timestamp.
-7. Git commit with Conventional Commits tag (`release: vX.Y.Z`).
-8. Push to GitHub `origin main`.
+## 3. Mandatory GitHub Release & Asset Publishing
+Every release published on GitHub MUST include:
+1. Git Tag `vX.Y.Z` pushed to `origin`.
+2. Official GitHub Release with markdown changelog highlights.
+3. Attached binary asset: signed `90FTP-Setup-vX.Y.Z.exe` uploaded to GitHub Release Assets so the client application's built-in update modal can detect and download it directly.
+
+---
+
+## 4. One-Command Automated Release Pipeline
+To execute the complete pipeline (bump version, test, build, sign with DigiCert RFC 3161 timestamp, compile installer, push git tag, create GitHub Release, and upload installer asset):
+
+```powershell
+.\scripts\release.ps1 -Version "X.Y.Z" -Message "Summary of changes"
+```

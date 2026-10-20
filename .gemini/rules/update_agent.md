@@ -2,7 +2,7 @@
 trigger: always_on
 ---
 
-# قواعد وكيل التحديث والإصدارات (90FTP Release & Update Agent Rules)
+# قواعد وكيل التحديث والإصدارات الرسمية (90FTP Release & Update Agent Rules)
 
 تحدد هذه الوثيقة القواعد الإلزامية التي يجب على أي وكيل ذكاء اصطناعي اتباعها عند إجراء أي تعديل أو إصلاح أو رفع إصدار جديد لمشروع 90FTP:
 
@@ -42,8 +42,9 @@ trigger: always_on
 
 ---
 
-## 3. خط أنابيب البناء والتوقيع الإلزامي (Build & Verification Pipeline)
-قبل تنفيذ أي `git commit` أو `git push` لإصدار جديد، يجب تنفيذ الخطوات التالية بالترتيب:
+## 3. خط أنابيب البناء والتوقيع ورفع الإصدار (Release & Asset Publishing Pipeline)
+كل إصدار جديد **يجب** أن يُرفع كـ GitHub Release رسمي مصحوباً بسجل التغييرات (Release Notes) وحزمة التثبيت الموقعة رقمياً (`90FTP-Setup-vX.Y.Z.exe`) لكي يتعرف التطبيق تلقائياً على التحديث ويسمح بتنزيله:
+
 1. **تشغيل الاختبارات التلقائية:**
    ```powershell
    cargo test --bin ninety_ftp
@@ -52,25 +53,23 @@ trigger: always_on
    ```powershell
    cargo build --release
    ```
-3. **تحديث الملف التنفيذي الرئيسي:**
+3. **تحديث الملف التنفيذي وتوقيعه:**
+   - توقيع `90FTP.exe` بشهادة الناشر **aljailane** وختم زمني مشفر **DigiCert RFC 3161**.
+4. **بناء وتجميع حزمة التثبيت الأنيقة:**
+   - تجميع Inno Setup 7 لإنتاج `dist\90FTP-Setup-vX.Y.Z.exe`.
+   - توقيع حزمة التثبيت رقمياً بالشهادة والختم الزمني.
+5. **إنشاء ورفع وسم Git Tag:**
    ```powershell
-   Copy-Item -Path "target\release\ninety_ftp.exe" -Destination "90FTP.exe" -Force
+   git tag -a "vX.Y.Z" -m "Release vX.Y.Z"
+   git push origin "vX.Y.Z"
    ```
-4. **توقيع الملف التنفيذي برمز الناشر aljailane والختم الزمني المشفر DigiCert RFC 3161:**
-   ```powershell
-   & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "90FTP.exe"
-   ```
-5. **بناء وتجميع حزمة التثبيت الأنيقة:**
-   ```powershell
-   & "C:\Program Files\Inno Setup 7\ISCC.exe" installer.iss
-   ```
-6. **توقيع حزمة التثبيت الناتجة:**
-   ```powershell
-   & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Setup" "dist\90FTP-Setup-vX.Y.Z.exe"
-   ```
-7. **الالتزام في Git مع رسالة توضيحية ومطابقة لنمط Conventional Commits:**
-   ```powershell
-   git add .
-   git commit -m "release: bump version to vX.Y.Z with [feature/fix summary]"
-   git push origin main
-   ```
+6. **إنشاء GitHub Release رسمي ورفع حزمة التثبيت الموقعة:**
+   - استدعاء GitHub API لنشر الإصدار الرسمي وإرفاق `90FTP-Setup-vX.Y.Z.exe` كـ Release Asset، مما يتيح لنافذة فحص التحديثات في البرنامج عرض التحديث وتنزيل المثبت بنقرة واحدة.
+
+---
+
+## 4. التشغيل التلقائي عبر سكريبت الأتمتة
+لتنفيذ كافة الخطوات السابقة في أمر واحد:
+```powershell
+.\scripts\release.ps1 -Version "X.Y.Z" -Message "Changelog summary"
+```
