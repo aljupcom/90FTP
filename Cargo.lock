@@ -2319,7 +2319,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "ninety_ftp"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "aes-gcm 0.11.1",
  "base64 0.23.1",
