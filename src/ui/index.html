@@ -454,6 +454,29 @@
       color: #e4e4e7 !important;
     }
 
+    /* Item Opening & Loading Spinner Indication */
+    tr.item-loading {
+      background: rgba(56, 189, 248, 0.18) !important;
+      border-left: 3px solid var(--accent);
+      animation: pulseLoading 1.2s ease-in-out infinite;
+    }
+    @keyframes pulseLoading {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+    .file-opening-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(56, 189, 248, 0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-left: 6px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
     .file-cell {
       display: flex;
       align-items: center;
@@ -1415,7 +1438,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.11</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.12</span>
         </div>
       </div>
 
@@ -1530,6 +1553,11 @@
       <div class="menu-item" onclick="toggleMenu(event, 'toolsMenu')">
         <span>Tools</span>
         <div class="menu-dropdown" id="toolsMenu">
+          <div class="dropdown-item" onclick="openRemoteTerminal()">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+            <span>Open Remote Terminal (SSH)...</span>
+          </div>
+          <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openToolsModal()">
             <span class="menu-icon">🛠️</span>
             <span>Tools Suite (SOON)...</span>
@@ -1734,6 +1762,9 @@
             </button>
             <button class="btn-tool" title="Edit in Code Editor" onclick="editSelectedRemoteFile()">
               <svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-tool" style="color: #38bdf8;" title="Open Remote Terminal (SSH at current path)" onclick="openRemoteTerminal()">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
             </button>
             <button class="btn-tool" title="CHMOD Permissions" onclick="openChmodModal()">
               <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -2646,7 +2677,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.11';
+    let APP_CURRENT_VERSION = '0.0.0.12';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -3038,10 +3069,10 @@
           const data = JSON.parse(text);
           if (data.source === 'remote') {
             if (data.is_dir) {
-              alert('Folder download via drag & drop is not supported. Please select individual files.');
-              return;
+              await downloadFolderDirect(data.path, data.name);
+            } else {
+              await downloadFileDirect(data.path, data.name);
             }
-            await downloadFileDirect(data.path, data.name);
           }
         } catch (_) {}
       });
@@ -3070,10 +3101,10 @@
               return;
             }
             if (data.is_dir) {
-              alert('Folder upload via drag & drop is not supported. Please select individual files.');
-              return;
+              await uploadFolderDirect(data.path, data.name);
+            } else {
+              await uploadFileDirect(data.path, data.name);
             }
-            await uploadFileDirect(data.path, data.name);
           }
         } catch (_) {}
       });
@@ -3214,7 +3245,7 @@
             tr.classList.remove('dragging');
           };
           tr.onclick = () => selectLocalRow(idx);
-          tr.ondblclick = () => openLocalItem(f);
+          tr.ondblclick = () => openLocalItem(f, tr);
           tr.oncontextmenu = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -3249,14 +3280,31 @@
       selectedLocalFile = localFiles[idx];
     }
 
-    async function openLocalItem(item) {
-      if (item.is_dir) {
-        await navigateLocal(item.path);
-      } else {
-        if (appOptions && appOptions.dblLocal === 'transfer') {
-          uploadFileDirect(item.path, item.name);
+    async function openLocalItem(item, rowEl = null) {
+      if (rowEl) {
+        rowEl.classList.add('item-loading');
+        const cell = rowEl.querySelector('.file-cell');
+        if (cell && !cell.querySelector('.file-opening-spinner')) {
+          const sp = document.createElement('span');
+          sp.className = 'file-opening-spinner';
+          cell.appendChild(sp);
+        }
+      }
+      try {
+        if (item.is_dir) {
+          await navigateLocal(item.path);
         } else {
-          openLocalFileInEditor(item.path);
+          if (appOptions && appOptions.dblLocal === 'transfer') {
+            await uploadFileDirect(item.path, item.name);
+          } else {
+            await openLocalFileInEditor(item.path);
+          }
+        }
+      } finally {
+        if (rowEl) {
+          rowEl.classList.remove('item-loading');
+          const sp = rowEl.querySelector('.file-opening-spinner');
+          if (sp) sp.remove();
         }
       }
     }
@@ -3329,7 +3377,7 @@
           tr.classList.remove('dragging');
         };
         tr.onclick = () => selectRemoteRow(idx);
-        tr.ondblclick = () => openRemoteItem(f);
+        tr.ondblclick = () => openRemoteItem(f, tr);
         tr.oncontextmenu = (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -3360,14 +3408,31 @@
       selectedRemoteFile = remoteFiles[idx];
     }
 
-    async function openRemoteItem(item) {
-      if (item.is_dir) {
-        await navigateRemote(item.path);
-      } else {
-        if (appOptions && appOptions.dblRemote === 'transfer') {
-          downloadFileDirect(item.path, item.name);
+    async function openRemoteItem(item, rowEl = null) {
+      if (rowEl) {
+        rowEl.classList.add('item-loading');
+        const cell = rowEl.querySelector('.file-cell');
+        if (cell && !cell.querySelector('.file-opening-spinner')) {
+          const sp = document.createElement('span');
+          sp.className = 'file-opening-spinner';
+          cell.appendChild(sp);
+        }
+      }
+      try {
+        if (item.is_dir) {
+          await navigateRemote(item.path);
         } else {
-          openRemoteFileInEditor(item.path);
+          if (appOptions && appOptions.dblRemote === 'transfer') {
+            await downloadFileDirect(item.path, item.name);
+          } else {
+            await openRemoteFileInEditor(item.path);
+          }
+        }
+      } finally {
+        if (rowEl) {
+          rowEl.classList.remove('item-loading');
+          const sp = rowEl.querySelector('.file-opening-spinner');
+          if (sp) sp.remove();
         }
       }
     }
@@ -3561,6 +3626,144 @@
       handleDisconnect();
     }
 
+    async function uploadFolderDirect(localFolderPath, folderName) {
+      if (!isConnected) {
+        alert('Please connect to a server first');
+        return;
+      }
+      addLog(`Scanning local folder '${folderName}' for upload...`, 'cmd');
+      try {
+        const scanRes = await sendRust('local_scan_dir_recursive', { dir_path: localFolderPath });
+        const items = scanRes.items || [];
+        const baseRemote = currentRemotePath.endsWith('/') 
+          ? currentRemotePath + folderName 
+          : currentRemotePath + '/' + folderName;
+
+        // Ensure remote root folder exists
+        try {
+          await sendRust('remote_create_dir', { path: baseRemote });
+        } catch (_) {}
+
+        if (items.length === 0) {
+          addLog(`Created empty remote directory: ${baseRemote}`, 'success');
+          refreshRemote();
+          return;
+        }
+
+        addLog(`Starting recursive upload of folder '${folderName}' (${items.length} items)...`, 'info');
+        let uploadedFiles = 0;
+        let createdDirs = 0;
+
+        for (const item of items) {
+          const itemDest = baseRemote + '/' + item.rel_path;
+          if (item.is_dir) {
+            try {
+              await sendRust('remote_create_dir', { path: itemDest });
+              createdDirs++;
+            } catch (_) {}
+          } else {
+            const fileName = item.rel_path.split('/').pop();
+            const tx = addTransferItem('upload', fileName, item.abs_path, itemDest, formatBytes(item.size));
+            try {
+              const res = await sendRust('upload', {
+                local_path: item.abs_path,
+                remote_path: itemDest,
+              });
+              updateTransferItem(tx.id, {
+                percent: 100,
+                status: 'completed',
+                size: formatBytes(res.bytes || item.size)
+              });
+              uploadedFiles++;
+            } catch (err) {
+              updateTransferItem(tx.id, {
+                status: 'failed',
+                error: err.message || err
+              });
+              addLog(`Failed to upload ${item.rel_path}: ${err.message || err}`, 'error');
+            }
+          }
+        }
+
+        refreshRemote();
+        addLog(`Folder upload completed: '${folderName}' (${uploadedFiles} files, ${createdDirs} folders)`, 'success');
+      } catch (err) {
+        addLog(`Folder upload error: ${err.message || err}`, 'error');
+        alert(`Folder Upload Failed:\n${err.message || err}`);
+      }
+    }
+
+    async function downloadFolderDirect(remoteFolderPath, folderName) {
+      addLog(`Scanning remote folder '${folderName}' for download...`, 'cmd');
+      try {
+        const scanRes = await sendRust('remote_scan_dir_recursive', { remote_dir: remoteFolderPath });
+        const items = scanRes.items || [];
+        const baseLocal = currentLocalPath.endsWith('\\') 
+          ? currentLocalPath + folderName 
+          : currentLocalPath + '\\' + folderName;
+
+        // Ensure local root folder exists
+        try {
+          await sendRust('local_create_dir', { path: baseLocal });
+        } catch (_) {}
+
+        if (items.length === 0) {
+          addLog(`Created empty local directory: ${baseLocal}`, 'success');
+          refreshLocal();
+          return;
+        }
+
+        addLog(`Starting recursive download of folder '${folderName}' (${items.length} items)...`, 'info');
+        let downloadedFiles = 0;
+        let createdDirs = 0;
+
+        for (const item of items) {
+          const localRel = item.rel_path.replace(/\//g, '\\');
+          const itemDest = baseLocal + '\\' + localRel;
+
+          if (item.is_dir) {
+            try {
+              await sendRust('local_create_dir', { path: itemDest });
+              createdDirs++;
+            } catch (_) {}
+          } else {
+            // Ensure parent directory exists locally
+            const parentDir = itemDest.substring(0, itemDest.lastIndexOf('\\'));
+            try {
+              await sendRust('local_create_dir', { path: parentDir });
+            } catch (_) {}
+
+            const fileName = item.rel_path.split('/').pop();
+            const tx = addTransferItem('download', fileName, item.remote_path, itemDest, formatBytes(item.size));
+            try {
+              const res = await sendRust('download', {
+                remote_path: item.remote_path,
+                local_path: itemDest,
+              });
+              updateTransferItem(tx.id, {
+                percent: 100,
+                status: 'completed',
+                size: formatBytes(res.bytes || item.size)
+              });
+              downloadedFiles++;
+            } catch (err) {
+              updateTransferItem(tx.id, {
+                status: 'failed',
+                error: err.message || err
+              });
+              addLog(`Failed to download ${item.rel_path}: ${err.message || err}`, 'error');
+            }
+          }
+        }
+
+        refreshLocal();
+        addLog(`Folder download completed: '${folderName}' (${downloadedFiles} files, ${createdDirs} folders)`, 'success');
+      } catch (err) {
+        addLog(`Folder download error: ${err.message || err}`, 'error');
+        alert(`Folder Download Failed:\n${err.message || err}`);
+      }
+    }
+
     async function uploadFileDirect(localPath, fileName) {
       if (!isConnected) {
         alert('Please connect to a server first');
@@ -3678,21 +3881,7 @@
       }
     }
 
-    async function transferUpload() {
-      if (!selectedLocalFile) {
-        alert('Please select a local file to upload');
-        return;
-      }
-      await uploadFileDirect(selectedLocalFile.path, selectedLocalFile.name);
-    }
 
-    async function transferDownload() {
-      if (!selectedRemoteFile) {
-        alert('Please select a remote file to download');
-        return;
-      }
-      await downloadFileDirect(selectedRemoteFile.path, selectedRemoteFile.name);
-    }
 
     // Code Editor & Formatter Suite
     let editorFontSize = 13;
@@ -4114,6 +4303,12 @@
             <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             <span>Copy Directory Path</span>
           </div>
+          ${isRemote ? `
+          <div class="context-menu-item" onclick="openRemoteTerminal()">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span>Open Terminal Here</span>
+          </div>
+          ` : ''}
           <div class="context-menu-item" onclick="${isRemote ? 'refreshRemote()' : 'refreshLocal()'}">
             <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             <span>Refresh</span>
@@ -4142,14 +4337,14 @@
 
         if (isRemote) {
           html += `
-            <div class="context-menu-item" onclick="downloadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+            <div class="context-menu-item" onclick="${item.is_dir ? `downloadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `downloadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`}">
               <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               <span>Download to Local</span>
             </div>
           `;
         } else {
           html += `
-            <div class="context-menu-item" onclick="uploadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+            <div class="context-menu-item" onclick="${item.is_dir ? `uploadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `uploadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`}">
               <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               <span>Upload to Server</span>
             </div>
@@ -5427,6 +5622,24 @@
       }
     }
 
+    async function openRemoteTerminal() {
+      closeAllMenus();
+      if (!isConnected) {
+        alert('Please connect to an SSH / SFTP server first.');
+        return;
+      }
+      try {
+        addLog('Spawning remote terminal at ' + (currentRemotePath || '/') + '...', 'cmd');
+        const res = await sendRust('open_remote_terminal', { remote_path: currentRemotePath });
+        if (res && res.launched) {
+          addLog('Remote SSH terminal launched successfully', 'success');
+        }
+      } catch (err) {
+        addLog('Terminal launch error: ' + (err.message || err), 'error');
+        alert('Terminal Launch Error:\n' + (err.message || err));
+      }
+    }
+
     function openToolsModal() {
       closeAllMenus();
       const modal = document.getElementById('toolsModal');
@@ -5890,14 +6103,14 @@
         return;
       }
       if (!selectedLocalFile) {
-        alert('Please select a local file to upload');
+        alert('Please select a local file or folder to upload');
         return;
       }
       if (selectedLocalFile.is_dir) {
-        alert('Folder upload via menu is not supported. Please select individual files.');
-        return;
+        uploadFolderDirect(selectedLocalFile.path, selectedLocalFile.name);
+      } else {
+        uploadFileDirect(selectedLocalFile.path, selectedLocalFile.name);
       }
-      uploadFileDirect(selectedLocalFile.path, selectedLocalFile.name);
     }
 
     function transferDownload() {
@@ -5907,14 +6120,14 @@
         return;
       }
       if (!selectedRemoteFile) {
-        alert('Please select a remote file to download');
+        alert('Please select a remote file or folder to download');
         return;
       }
       if (selectedRemoteFile.is_dir) {
-        alert('Folder download via menu is not supported. Please select individual files.');
-        return;
+        downloadFolderDirect(selectedRemoteFile.path, selectedRemoteFile.name);
+      } else {
+        downloadFileDirect(selectedRemoteFile.path, selectedRemoteFile.name);
       }
-      downloadFileDirect(selectedRemoteFile.path, selectedRemoteFile.name);
     }
 
     function copyAllLogs() {

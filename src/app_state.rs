@@ -10,6 +10,7 @@ pub type ScriptCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub struct AppState {
     pub remote: Arc<Mutex<Option<RemoteClient>>>,
     pub exec_script: Option<ScriptCallback>,
+    pub current_connection: Arc<Mutex<Option<serde_json::Value>>>,
 }
 
 impl AppState {
@@ -17,6 +18,7 @@ impl AppState {
         Self {
             remote: Arc::new(Mutex::new(None)),
             exec_script,
+            current_connection: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -141,6 +143,18 @@ impl AppState {
                         let mut lock = self.remote.lock().unwrap();
                         *lock = Some(client);
 
+                        let mut conn_lock = self.current_connection.lock().unwrap();
+                        *conn_lock = Some(json!({
+                            "protocol": protocol,
+                            "host": host,
+                            "port": port,
+                            "username": user,
+                            "password": pass,
+                            "auth_type": auth_type,
+                            "key_path": key_path,
+                            "pwd": pwd
+                        }));
+
                         IpcResponse::ok(
                             id,
                             action,
@@ -187,6 +201,8 @@ impl AppState {
             "disconnect" => {
                 let mut lock = self.remote.lock().unwrap();
                 *lock = None;
+                let mut conn_lock = self.current_connection.lock().unwrap();
+                *conn_lock = None;
                 IpcResponse::ok(id, action, json!({ "connected": false }))
             }
 
@@ -385,6 +401,88 @@ impl AppState {
                                 }),
                             )
                         }
+                        Err(e) => IpcResponse::err(id, action, &e),
+                    }
+                } else {
+                    IpcResponse::err(id, action, "Not connected")
+                }
+            }
+
+            "local_scan_dir_recursive" => {
+                let dir_path = payload["dir_path"].as_str().unwrap_or("");
+                let base = std::path::Path::new(dir_path);
+                if !base.exists() || !base.is_dir() {
+                    return IpcResponse::err(id, action, "Directory does not exist");
+                }
+
+                fn walk(dir: &std::path::Path, base: &std::path::Path, out: &mut Vec<serde_json::Value>) {
+                    if let Ok(entries) = std::fs::read_dir(dir) {
+                        for entry in entries.flatten() {
+                            let p = entry.path();
+                            let rel = match p.strip_prefix(base) {
+                                Ok(r) => r.to_string_lossy().replace('\\', "/"),
+                                Err(_) => continue,
+                            };
+                            let is_dir = p.is_dir();
+                            let size = if is_dir { 0 } else { p.metadata().map(|m| m.len()).unwrap_or(0) };
+                            out.push(serde_json::json!({
+                                "rel_path": rel,
+                                "abs_path": p.to_string_lossy().to_string(),
+                                "is_dir": is_dir,
+                                "size": size
+                            }));
+                            if is_dir {
+                                walk(&p, base, out);
+                            }
+                        }
+                    }
+                }
+
+                let mut items = Vec::new();
+                walk(base, base, &mut items);
+                IpcResponse::ok(id, action, json!({ "items": items }))
+            }
+
+            "remote_scan_dir_recursive" => {
+                let remote_dir = payload["remote_dir"].as_str().unwrap_or("/");
+                let mut lock = self.remote.lock().unwrap();
+                if let Some(client) = lock.as_mut() {
+                    fn walk_remote(client: &mut RemoteClient, current: &str, base: &str, out: &mut Vec<serde_json::Value>) -> Result<(), String> {
+                        let list = client.list(Some(current))?;
+                        for item in list {
+                            if item.name == "." || item.name == ".." {
+                                continue;
+                            }
+                            let item_path = if current.ends_with('/') {
+                                format!("{}{}", current, item.name)
+                            } else {
+                                format!("{}/{}", current, item.name)
+                            };
+
+                            let rel_path = if item_path.starts_with(base) {
+                                item_path[base.len()..].trim_start_matches('/').to_string()
+                            } else {
+                                item.name.clone()
+                            };
+
+                            out.push(serde_json::json!({
+                                "rel_path": rel_path,
+                                "remote_path": item_path,
+                                "is_dir": item.is_dir,
+                                "size": item.size
+                            }));
+
+                            if item.is_dir {
+                                let _ = walk_remote(client, &item_path, base, out);
+                            }
+                        }
+                        Ok(())
+                    }
+
+                    let mut items = Vec::new();
+                    let trimmed_base = remote_dir.trim_end_matches('/');
+                    match walk_remote(client, remote_dir, trimmed_base, &mut items) {
+                        Ok(_) => IpcResponse::ok(id, action, json!({ "items": items })),
                         Err(e) => IpcResponse::err(id, action, &e),
                     }
                 } else {
@@ -622,6 +720,74 @@ impl AppState {
                     }
                 }
                 IpcResponse::ok(id, action, json!({ "opened": true }))
+            }
+
+            "open_remote_terminal" => {
+                let conn_lock = self.current_connection.lock().unwrap();
+                let conn = match conn_lock.as_ref() {
+                    Some(c) => c.clone(),
+                    None => return IpcResponse::err(id, action, "No active connection"),
+                };
+
+                let protocol = conn["protocol"].as_str().unwrap_or("").to_lowercase();
+                let host = conn["host"].as_str().unwrap_or("");
+                let port = conn["port"].as_u64().unwrap_or(22);
+                let username = conn["username"].as_str().unwrap_or("");
+                let auth_type = conn["auth_type"].as_str().unwrap_or("password");
+                let key_path = conn["key_path"].as_str().unwrap_or("");
+                let pwd = payload.get("remote_path").and_then(|v| v.as_str()).unwrap_or(conn["pwd"].as_str().unwrap_or("~"));
+
+                if protocol != "sftp" && protocol != "ssh" {
+                    return IpcResponse::err(id, action, "Terminal shell is only available for SSH/SFTP sessions");
+                }
+
+                if host.is_empty() {
+                    return IpcResponse::err(id, action, "Host is empty");
+                }
+
+                // Construct remote cd command
+                let escaped_pwd = pwd.replace('\'', "'\\''");
+                let remote_cmd = format!("cd '{}' 2>/dev/null || cd ~; exec $SHELL -l", escaped_pwd);
+
+                let mut ssh_args = Vec::new();
+                ssh_args.push("-t".to_string());
+                if port != 22 && port != 0 {
+                    ssh_args.push("-p".to_string());
+                    ssh_args.push(port.to_string());
+                }
+                if auth_type == "key" && !key_path.is_empty() {
+                    ssh_args.push("-i".to_string());
+                    ssh_args.push(key_path.to_string());
+                }
+
+                let target = if !username.is_empty() {
+                    format!("{}@{}", username, host)
+                } else {
+                    host.to_string()
+                };
+                ssh_args.push(target);
+                ssh_args.push(remote_cmd);
+
+                // Priority: Windows Terminal (wt.exe) -> cmd.exe fallback
+                let wt_args: Vec<String> = vec!["-w".to_string(), "0".to_string(), "nt".to_string(), "--title".to_string(), format!("90FTP SSH: {}", host), "ssh".to_string()]
+                    .into_iter()
+                    .chain(ssh_args.clone().into_iter())
+                    .collect();
+
+                let launched = std::process::Command::new("wt.exe")
+                    .args(&wt_args)
+                    .spawn()
+                    .is_ok();
+
+                if !launched {
+                    let mut cmd_args = vec!["/c".to_string(), "start".to_string(), format!("90FTP SSH: {}", host), "ssh".to_string()];
+                    cmd_args.extend(ssh_args);
+                    if let Err(e) = std::process::Command::new("cmd.exe").args(&cmd_args).spawn() {
+                        return IpcResponse::err(id, action, &format!("Failed to spawn terminal: {}", e));
+                    }
+                }
+
+                IpcResponse::ok(id, action, json!({ "launched": true, "host": host, "remote_path": pwd }))
             }
 
             unknown => IpcResponse::err(id, action, &format!("Unknown action: {}", unknown)),
