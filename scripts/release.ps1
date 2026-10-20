@@ -14,8 +14,18 @@ param(
 )
 
 if (-not $Token) {
-    # Check if a token is configured in git or local environment
     $Token = $env:GH_TOKEN
+}
+if (-not $Token) {
+    try {
+        $originUrl = git remote get-url origin
+        if ($originUrl -match 'https://([^:]+):?([^@]*)@github\.com') {
+            $tokenCandidate = $matches[1]
+            if ($tokenCandidate.StartsWith("ghp_")) {
+                $Token = $tokenCandidate
+            }
+        }
+    } catch {}
 }
 
 $ErrorActionPreference = "Stop"
@@ -27,7 +37,12 @@ Write-Host ">>> [1/8] Updating version to v$Version across project files..." -Fo
 # 1. Cargo.toml
 $cargoPath = Join-Path $Root "Cargo.toml"
 $cargo = Get-Content $cargoPath -Raw
-$cargo = $cargo -replace '(?m)^version\s*=\s*"[^"]+"', ('version = "' + $Version + '"')
+$cargoVer = $Version
+if (($Version -split '\.').Count -gt 3) {
+    $parts = $Version -split '\.'
+    $cargoVer = "0.0." + $parts[-1]
+}
+$cargo = $cargo -replace '(?m)^version\s*=\s*"[^"]+"', ('version = "' + $cargoVer + '"')
 Set-Content $cargoPath $cargo -NoNewline
 
 # 2. installer.iss
@@ -42,6 +57,7 @@ $html = Get-Content $htmlPath -Raw
 $html = $html -replace '(?:const|let)\s+APP_CURRENT_VERSION\s*=\s*''[^'']+''', ('let APP_CURRENT_VERSION = ''' + $Version + '''')
 $html = $html -replace 'Version\s+[0-9\.]+\s+(Pro|Dev)\s+\(Windows\s+x64\)', ('Version ' + $Version + ' Dev (Windows x64)')
 $html = $html -replace 'Current:\s+v[0-9\.]+', ('Current: v' + $Version)
+$html = $html -replace 'Modern Site Manager v[0-9\.]+', ('Modern Site Manager v' + $Version)
 Set-Content $htmlPath $html -NoNewline
 
 Write-Host ">>> [2/8] Running test suite..." -ForegroundColor Cyan
@@ -103,6 +119,14 @@ $payloadJson = $payloadObj | ConvertTo-Json
 $payloadBytes = [System.Text.Encoding]::UTF8.GetBytes($payloadJson)
 
 try {
+    try {
+        $existing = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/tags/v$Version" -Headers $headers -ErrorAction SilentlyContinue
+        if ($existing -and $existing.id) {
+            Write-Host "Existing release v$Version found (ID $($existing.id)). Deleting old release..." -ForegroundColor Yellow
+            Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/$($existing.id)" -Method Delete -Headers $headers
+        }
+    } catch {}
+
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases" -Method Post -Headers $headers -Body $payloadBytes -ContentType "application/json; charset=utf-8"
     $releaseId = $release.id
     Write-Host "Release created: ID $releaseId" -ForegroundColor Green

@@ -42,7 +42,7 @@ impl AppState {
                         "sites": sites,
                         "local_files": local_files,
                         "remote_history": remote_history,
-                        "app_version": env!("CARGO_PKG_VERSION"),
+                        "app_version": format!("0.0.0.{}", env!("CARGO_PKG_VERSION").split('.').last().unwrap_or("2")),
                     }),
                 )
             }

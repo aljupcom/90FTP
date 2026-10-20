@@ -16,19 +16,25 @@ pub fn get_initial_dir() -> String {
         .unwrap_or_else(|_| "C:\\".to_string())
 }
 
+#[cfg(target_os = "windows")]
+unsafe extern "system" {
+    fn GetLogicalDrives() -> u32;
+}
+
 pub fn list_drives() -> Vec<String> {
     let mut drives = Vec::new();
     #[cfg(target_os = "windows")]
     {
-        for b in b'A'..=b'Z' {
-            let drive = format!("{}:\\", b as char);
-            if Path::new(&drive).exists() {
-                drives.push(drive);
+        let mask = unsafe { GetLogicalDrives() };
+        for i in 0..26 {
+            if (mask & (1 << i)) != 0 {
+                let letter = (b'A' + i as u8) as char;
+                drives.push(format!("{}:\\", letter));
             }
         }
     }
     if drives.is_empty() {
-        drives.push(get_initial_dir());
+        drives.push("C:\\".to_string());
     }
     drives
 }
@@ -127,4 +133,26 @@ pub fn delete_path(path_str: &str) -> Result<(), String> {
 
 pub fn rename_path(old_str: &str, new_str: &str) -> Result<(), String> {
     fs::rename(old_str, new_str).map_err(|e| format!("Failed to rename: {}", e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_desktop_listing() {
+        let dir = get_initial_dir();
+        println!("Initial dir is: {}", dir);
+        match list_dir(&dir) {
+            Ok(files) => {
+                println!("Desktop listing succeeded! Found {} files.", files.len());
+                for f in files.iter().take(5) {
+                    println!("File: {} (dir={})", f.name, f.is_dir);
+                }
+            }
+            Err(e) => {
+                panic!("Desktop listing FAILED: {}", e);
+            }
+        }
+    }
 }

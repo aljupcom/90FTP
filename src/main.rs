@@ -77,39 +77,39 @@ fn main() {
 
     let mut context = wry::WebContext::new(Some(webview_dir));
 
+    let app_state_ipc = app_state.clone();
+    let proxy_ipc = proxy.clone();
+    let ipc_handler = move |req: wry::http::Request<String>| {
+        let body = req.body().clone();
+        let app_state = app_state_ipc.clone();
+        let proxy = proxy_ipc.clone();
+
+        std::thread::spawn(move || {
+            match serde_json::from_str::<IpcRequest>(&body) {
+                Ok(ipc_req) => {
+                    let resp = app_state.handle_request(ipc_req);
+                    match serde_json::to_string(&resp) {
+                        Ok(resp_json) => {
+                            let script = format!("window.onRustResponse({});", resp_json);
+                            let _ = proxy.send_event(AppEvent::ExecScript(script));
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to serialize IPC response: {:?}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to parse IPC request: {:?}. Body: {}", e, body);
+                }
+            }
+        });
+    };
+
     let webview = WebViewBuilder::new_with_web_context(&mut context)
         .with_devtools(true)
         .with_background_color((17, 17, 19, 255))
         .with_html(html_content)
-        .with_ipc_handler({
-            let app_state = app_state.clone();
-            let proxy = proxy.clone();
-            move |req| {
-                let body = req.body().clone();
-                let app_state = app_state.clone();
-                let proxy = proxy.clone();
-
-                std::thread::spawn(move || {
-                    match serde_json::from_str::<IpcRequest>(&body) {
-                        Ok(ipc_req) => {
-                            let resp = app_state.handle_request(ipc_req);
-                            match serde_json::to_string(&resp) {
-                                Ok(resp_json) => {
-                                    let script = format!("window.onRustResponse({});", resp_json);
-                                    let _ = proxy.send_event(AppEvent::ExecScript(script));
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to serialize IPC response: {:?}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to parse IPC request: {:?}. Body: {}", e, body);
-                        }
-                    }
-                });
-            }
-        })
+        .with_ipc_handler(ipc_handler)
         .build(&window)
         .expect("Failed to initialize WebView");
 

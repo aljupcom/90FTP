@@ -1155,7 +1155,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge">Modern Site Manager</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.2</span>
         </div>
       </div>
 
@@ -2115,7 +2115,7 @@
         </svg>
         <div>
           <div style="font-size: 17px; font-weight: 700; color: var(--text-main);">90FTP - Modern Site Manager</div>
-          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.3 Dev (Windows x64)</div>
+          <div id="aboutAppVersion" style="font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px;">Version 0.0.0.2 Dev (Windows x64)</div>
         </div>
         <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; max-width: 360px;">
           High-Performance Asynchronous SFTP, FTP & FTPS Transfer Engine.
@@ -2157,7 +2157,7 @@
             <div id="updateSubtext" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Querying GitHub releases for aljupcom/90FTP...</div>
           </div>
           <div id="updateCurrentBadge" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25); white-space: nowrap;">
-            Current: v0.0.3
+            Current: v0.0.0.2
           </div>
         </div>
 
@@ -2302,7 +2302,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.3';
+    let APP_CURRENT_VERSION = '0.0.0.2';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -2322,25 +2322,29 @@
     const pendingCallbacks = new Map();
 
     async function ensureIpcReady() {
-      let attempts = 0;
-      while ((!window.ipc || typeof window.ipc.postMessage !== 'function') && attempts < 60) {
-        await new Promise(r => setTimeout(r, 50));
-        attempts++;
+      if (window.ipc && typeof window.ipc.postMessage === 'function') return true;
+      if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
+        window.ipc = { postMessage: (msg) => window.chrome.webview.postMessage(msg) };
+        return true;
       }
-      return !!(window.ipc && typeof window.ipc.postMessage === 'function');
+      for (let i = 0; i < 80; i++) {
+        if (window.ipc && typeof window.ipc.postMessage === 'function') return true;
+        if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
+          window.ipc = { postMessage: (msg) => window.chrome.webview.postMessage(msg) };
+          return true;
+        }
+        await new Promise(r => setTimeout(r, 25));
+      }
+      return false;
     }
 
     async function sendRust(action, payload = {}) {
-      const ready = await ensureIpcReady();
-      if (!ready) {
-        throw new Error('IPC bridge between WebView and Native Rust engine is not ready.');
-      }
+      await ensureIpcReady();
       return new Promise((resolve, reject) => {
         const id = 'req_' + (++reqCounter);
-        // Generous timeouts for network / file operations: 120s for connect/transfers, 30s for local operations
-        const timeoutMs = ['connect', 'upload', 'download', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'init'].includes(action) 
-          ? 120000 
-          : 30000;
+        const timeoutMs = ['connect', 'upload', 'download', 'remote_read', 'remote_write', 'remote_list', 'remote_cd'].includes(action) 
+          ? 60000 
+          : 15000;
 
         const timer = setTimeout(() => {
           if (pendingCallbacks.has(id)) {
@@ -2361,7 +2365,15 @@
         });
 
         try {
-          window.ipc.postMessage(JSON.stringify({ id, action, payload }));
+          if (window.ipc && typeof window.ipc.postMessage === 'function') {
+            window.ipc.postMessage(JSON.stringify({ id, action, payload }));
+          } else if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
+            window.chrome.webview.postMessage(JSON.stringify({ id, action, payload }));
+          } else {
+            clearTimeout(timer);
+            pendingCallbacks.delete(id);
+            reject(new Error('IPC bridge between WebView and Native Rust engine is not ready.'));
+          }
         } catch (e) {
           clearTimeout(timer);
           pendingCallbacks.delete(id);
@@ -2785,6 +2797,8 @@
             if (curBadge) curBadge.textContent = 'Current: v' + APP_CURRENT_VERSION;
             const aboutVer = document.getElementById('aboutAppVersion');
             if (aboutVer) aboutVer.textContent = 'Version ' + APP_CURRENT_VERSION + ' Dev (Windows x64)';
+            const topBadge = document.getElementById('topBrandBadge');
+            if (topBadge) topBadge.textContent = 'Modern Site Manager v' + APP_CURRENT_VERSION;
           }
 
           if (data.remote_history) {
