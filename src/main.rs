@@ -144,9 +144,10 @@ fn main() {
                 }
             }
             Event::UserEvent(AppEvent::OpenNativeTerminal(params)) => {
-                let host = params.get("host").and_then(|v| v.as_str()).unwrap_or("remote-host");
+                let host = params.get("host").and_then(|v| v.as_str()).unwrap_or("LocalPC");
                 let user = params.get("user").and_then(|v| v.as_str()).unwrap_or("root");
-                let title = format!("{}@{} - 90FTP Native PuTTY Terminal", user, host);
+                let cwd = params.get("cwd").and_then(|v| v.as_str()).unwrap_or("~");
+                let title = format!("{}@{}:{} - 90FTP Native Terminal", user, host, cwd);
 
                 if let Some((ref term_win, ref term_wv)) = terminal_instance {
                     term_win.set_title(&title);

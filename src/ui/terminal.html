@@ -44,7 +44,7 @@
     let fitAddon = null;
     let currentCwd = '~';
     let currentMode = 'remote';
-    let currentHost = 'remote-host';
+    let currentHost = 'LocalPC';
     let currentUser = 'root';
     let sessionId = 'native_term_1';
     let lineBuffer = '';
@@ -52,19 +52,41 @@
     let historyIdx = -1;
     let isBusy = false;
 
+    function applyParams(p) {
+      if (!p) return;
+      if (p.cwd && String(p.cwd).trim()) currentCwd = String(p.cwd).trim();
+      if (p.host && String(p.host).trim()) currentHost = String(p.host).trim();
+      if (p.user && String(p.user).trim()) currentUser = String(p.user).trim();
+      if (p.mode && String(p.mode).trim()) currentMode = String(p.mode).trim();
+      if (p.session_id && String(p.session_id).trim()) sessionId = String(p.session_id).trim();
+    }
+
+    if (window.__INIT_PARAMS__) {
+      applyParams(window.__INIT_PARAMS__);
+    }
+
     window.initTerminal = function(params) {
       if (params) {
-        if (params.cwd) currentCwd = params.cwd;
-        if (params.host) currentHost = params.host;
-        if (params.user) currentUser = params.user;
-        if (params.mode) currentMode = params.mode;
-        if (params.session_id) sessionId = params.session_id;
+        applyParams(params);
       }
-      setupXterm();
+      if (!term) {
+        setupXterm();
+      } else {
+        document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Native Terminal';
+        term.writeln('\r\n\x1b[1;36m======================================================================\x1b[0m');
+        term.writeln('\x1b[1;32m  Connected: ' + currentUser + '@' + currentHost + ' | Directory: ' + currentCwd + '\x1b[0m');
+        term.writeln('\x1b[1;36m======================================================================\x1b[0m\r\n');
+        lineBuffer = '';
+        printPrompt();
+      }
     };
 
     function setupXterm() {
       if (term) return;
+      if (window.__INIT_PARAMS__) {
+        applyParams(window.__INIT_PARAMS__);
+      }
+      document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Native Terminal';
       const container = document.getElementById('terminalContainer');
       term = new Terminal({
         cursorBlink: true,
@@ -238,6 +260,9 @@
 
     // Auto-setup on load
     window.addEventListener('DOMContentLoaded', () => {
+      if (window.__INIT_PARAMS__) {
+        applyParams(window.__INIT_PARAMS__);
+      }
       setupXterm();
     });
   </script>

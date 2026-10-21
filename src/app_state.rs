@@ -1030,28 +1030,78 @@ impl AppState {
             }
 
             "open_native_terminal" => {
-                let cwd = payload.get("cwd").and_then(|v| v.as_str()).unwrap_or("~").to_string();
-                let host = payload.get("host").and_then(|v| v.as_str()).unwrap_or("remote-host").to_string();
-                let user = payload.get("user").and_then(|v| v.as_str()).unwrap_or("root").to_string();
-                let mode = payload.get("mode").and_then(|v| v.as_str()).unwrap_or("remote").to_string();
+                let req_cwd = payload.get("cwd").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let req_host = payload.get("host").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let req_user = payload.get("user").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let req_mode = payload.get("mode").and_then(|v| v.as_str()).unwrap_or("auto").to_string();
                 let session_id = payload.get("session_id").and_then(|v| v.as_str()).unwrap_or("native_1").to_string();
 
-                let (actual_host, actual_user) = {
+                let (actual_host, actual_user, conn_pwd, is_connected) = {
                     let conn = self.current_connection.lock().unwrap();
                     if let Some(ref c) = *conn {
-                        let h = c.get("host").and_then(|v| v.as_str()).unwrap_or(&host).to_string();
-                        let u = c.get("username").or_else(|| c.get("user")).and_then(|v| v.as_str()).unwrap_or(&user).to_string();
-                        (h, u)
+                        let h = c.get("host").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let u = c.get("username").or_else(|| c.get("user")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let p = c.get("pwd").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        (h, u, p, true)
                     } else {
-                        (host, user)
+                        (String::new(), String::new(), String::new(), false)
                     }
                 };
 
+                let remote_pwd = {
+                    let rem = self.remote.lock().unwrap();
+                    if let Some(ref client) = *rem {
+                        client.pwd()
+                    } else {
+                        String::new()
+                    }
+                };
+
+                let final_host = if !actual_host.is_empty() {
+                    actual_host
+                } else if !req_host.is_empty() && req_host != "remote-host" {
+                    req_host
+                } else if is_connected {
+                    "connected-server".to_string()
+                } else {
+                    "LocalPC".to_string()
+                };
+
+                let final_user = if !actual_user.is_empty() {
+                    actual_user
+                } else if !req_user.is_empty() && req_user != "root" {
+                    req_user
+                } else if is_connected {
+                    "root".to_string()
+                } else {
+                    "PowerShell".to_string()
+                };
+
+                let final_mode = if is_connected && (req_mode == "remote" || req_mode == "auto") {
+                    "remote".to_string()
+                } else if req_mode == "local" || !is_connected {
+                    "local".to_string()
+                } else {
+                    "remote".to_string()
+                };
+
+                let final_cwd = if !req_cwd.is_empty() && req_cwd != "~" && req_cwd != "." {
+                    req_cwd
+                } else if !remote_pwd.is_empty() {
+                    remote_pwd
+                } else if !conn_pwd.is_empty() {
+                    conn_pwd
+                } else if final_mode == "remote" {
+                    "~".to_string()
+                } else {
+                    std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| ".".to_string())
+                };
+
                 let params = json!({
-                    "cwd": cwd,
-                    "host": actual_host,
-                    "user": actual_user,
-                    "mode": mode,
+                    "cwd": final_cwd,
+                    "host": final_host,
+                    "user": final_user,
+                    "mode": final_mode,
                     "session_id": session_id,
                 });
 
