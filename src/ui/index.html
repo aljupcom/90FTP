@@ -1535,7 +1535,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.15</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.16</span>
         </div>
       </div>
 
@@ -2028,6 +2028,9 @@
         </div>
         <button type="button" class="btn-terminal-tab" onclick="addNewTerminalTab()" style="padding: 2px 8px; font-size: 12px; font-weight: bold; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 3px; color: #94a3b8; cursor: pointer;" title="Open New Terminal Tab (+)">
           +
+        </button>
+        <button type="button" class="btn-terminal-tab" id="btnToggleTerminalMode" onclick="toggleCurrentSessionMode()" style="padding: 2px 8px; font-size: 10.5px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 3px; color: #38bdf8; cursor: pointer;" title="Toggle between Remote SSH and Local PowerShell">
+          Switch Mode
         </button>
         <div style="font-size: 10.5px; color: #64748b; margin-left: 8px; padding-right: 4px; display: flex; align-items: center; gap: 6px;">
           <span id="terminalSessionInfo">SSH2</span>
@@ -2840,7 +2843,7 @@
     let selectedQuickSite = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.15';
+    let APP_CURRENT_VERSION = '0.0.0.16';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -3678,6 +3681,9 @@
         addLog(`Connected successfully to ${params.host}! Remote directory: ${currentRemotePath}`, 'success');
         pendingConnection = null;
         finishConnectionSuccess(res.pwd);
+        if (typeof ensureTerminalActiveSession === 'function') {
+          ensureTerminalActiveSession(params.host, params.user, currentRemotePath, 'remote');
+        }
       } catch (err) {
         hideConnectionLoading();
         setConnectedState(false);
@@ -3761,8 +3767,10 @@
       const termBadge = document.getElementById('terminalBadge');
 
       if (termBadge) {
-        termBadge.style.display = connected ? 'inline-block' : 'none';
-        termBadge.textContent = connected ? 'Online' : 'Offline';
+        termBadge.style.display = 'inline-block';
+        termBadge.textContent = connected ? 'SSH Online' : 'Local PS';
+        termBadge.style.color = connected ? '#22c55e' : '#a855f7';
+        termBadge.style.background = connected ? 'rgba(34, 197, 94, 0.18)' : 'rgba(168, 85, 247, 0.18)';
       }
 
       if (connected) {
@@ -6030,19 +6038,33 @@
 
     function initTerminalSession(targetCwd) {
       if (terminalSessions.length > 0) return;
-      addNewTerminalTab(targetCwd);
+      addNewTerminalTab(targetCwd, isConnected ? 'remote' : 'local');
     }
 
-    function addNewTerminalTab(initialCwd) {
+    function addNewTerminalTab(initialCwd, preferredMode) {
       terminalSeq++;
       const id = 'sess_' + terminalSeq;
-      const host = (currentConnectionProfile && currentConnectionProfile.host) || (activeSiteProfile && activeSiteProfile.host) || 'remote-host';
-      const user = (currentConnectionProfile && currentConnectionProfile.username) || (activeSiteProfile && activeSiteProfile.username) || 'root';
-      const cwd = initialCwd || currentRemotePath || '~';
+      const isRemoteConn = isConnected;
+      const mode = preferredMode || (isRemoteConn ? 'remote' : 'local');
+      
+      let host = 'localhost';
+      let user = 'user';
+      let cwd = initialCwd;
+
+      if (mode === 'remote' && isRemoteConn) {
+        host = (currentConnectionProfile && currentConnectionProfile.host) || (activeSiteProfile && activeSiteProfile.host) || 'remote-host';
+        user = (currentConnectionProfile && currentConnectionProfile.username) || (activeSiteProfile && activeSiteProfile.username) || 'root';
+        if (!cwd) cwd = currentRemotePath || '~';
+      } else {
+        host = 'LocalPC';
+        user = 'PowerShell';
+        if (!cwd) cwd = currentLocalPath || '.';
+      }
 
       const session = {
         id: id,
-        title: `${user}@${host}`,
+        mode: mode,
+        title: mode === 'remote' ? `${user}@${host}` : `Local: ${host}`,
         host: host,
         user: user,
         cwd: cwd,
@@ -6052,15 +6074,25 @@
         busy: false
       };
 
-      // Add Welcome Banner
-      session.logs.push({
-        type: 'banner',
-        text: `\x1b[36m======================================================================\x1b[0m\n` +
-              `\x1b[32m  90FTP Embedded SSH Terminal  [Tab #${terminalSeq}]\x1b[0m\n` +
-              `  Target: \x1b[33m${user}@${host}\x1b[0m | Working Directory: \x1b[34m${cwd}\x1b[0m\n` +
-              `  Type remote shell commands or '\x1b[35mhelp\x1b[0m' for quick shortcuts.\n` +
-              `\x1b[36m======================================================================\x1b[0m\n`
-      });
+      if (mode === 'remote') {
+        session.logs.push({
+          type: 'banner',
+          text: `\x1b[36m======================================================================\x1b[0m\n` +
+                `\x1b[32m  90FTP Embedded Terminal - Remote SSH  [Tab #${terminalSeq}]\x1b[0m\n` +
+                `  Host: \x1b[33m${user}@${host}\x1b[0m | Directory: \x1b[34m${cwd}\x1b[0m\n` +
+                `  Type any shell command (e.g. ls, top, df, cd, git, docker).\n` +
+                `\x1b[36m======================================================================\x1b[0m\n`
+        });
+      } else {
+        session.logs.push({
+          type: 'banner',
+          text: `\x1b[36m======================================================================\x1b[0m\n` +
+                `\x1b[35m  90FTP Embedded Terminal - Local PowerShell  [Tab #${terminalSeq}]\x1b[0m\n` +
+                `  Environment: \x1b[33mWindows (${user})\x1b[0m | Directory: \x1b[34m${cwd}\x1b[0m\n` +
+                `  Type local commands (dir, git, ping, python, etc.) or connect to SSH.\n` +
+                `\x1b[36m======================================================================\x1b[0m\n`
+        });
+      }
 
       terminalSessions.push(session);
       renderTerminalTabs();
@@ -6072,7 +6104,7 @@
       if (!container) return;
       container.innerHTML = terminalSessions.map(s => `
         <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" onclick="switchTerminalSession('${s.id}')">
-          <span style="font-size: 8px; color: ${s.busy ? '#38bdf8' : '#22c55e'};">●</span>
+          <span style="font-size: 8px; color: ${s.busy ? '#38bdf8' : (s.mode === 'remote' ? '#22c55e' : '#a855f7')};">●</span>
           <span>${escapeHtml(s.title)} (${escapeHtml(s.cwd.length > 15 ? '...' + s.cwd.slice(-12) : s.cwd)})</span>
           ${terminalSessions.length > 1 ? `<span class="terminal-tab-close" onclick="closeTerminalSession('${s.id}', event)" title="Close tab">✕</span>` : ''}
         </div>
@@ -6092,12 +6124,29 @@
       const sessionInfo = document.getElementById('terminalSessionInfo');
       const badge = document.getElementById('terminalBadge');
 
-      if (userSpan) userSpan.textContent = session.user;
-      if (hostSpan) hostSpan.textContent = session.host;
+      if (userSpan) {
+        userSpan.textContent = session.user;
+        userSpan.style.color = session.mode === 'remote' ? '#22c55e' : '#c084fc';
+      }
+      if (hostSpan) {
+        hostSpan.textContent = session.host;
+        hostSpan.style.color = session.mode === 'remote' ? '#38bdf8' : '#60a5fa';
+      }
       if (promptCwd) promptCwd.textContent = session.cwd;
       if (cwdDisplay) cwdDisplay.textContent = session.cwd;
-      if (sessionInfo) sessionInfo.textContent = `SSH2 - ${session.host}`;
-      if (badge) badge.style.display = isConnected ? 'inline-block' : 'none';
+      if (sessionInfo) sessionInfo.textContent = session.mode === 'remote' ? `SSH2 - ${session.host}` : `Local - PowerShell`;
+      if (badge) {
+        badge.style.display = 'inline-block';
+        if (session.mode === 'remote') {
+          badge.textContent = 'SSH Online';
+          badge.style.color = '#22c55e';
+          badge.style.background = 'rgba(34, 197, 94, 0.18)';
+        } else {
+          badge.textContent = 'Local PS';
+          badge.style.color = '#a855f7';
+          badge.style.background = 'rgba(168, 85, 247, 0.18)';
+        }
+      }
 
       renderTerminalScreen();
       focusTerminalInput();
@@ -6128,7 +6177,9 @@
       let html = '';
       session.logs.forEach(item => {
         if (item.type === 'cmd') {
-          html += `<div class="terminal-cmd-entry"><span style="color:#22c55e;">${escapeHtml(session.user)}</span>@<span style="color:#38bdf8;">${escapeHtml(session.host)}</span>:<span style="color:#fbbf24;">${escapeHtml(item.cwd)}</span>$ <span style="color:#f8fafc; font-weight:600;">${escapeHtml(item.command)}</span></div>`;
+          const userColor = session.mode === 'remote' ? '#22c55e' : '#c084fc';
+          const sep = session.mode === 'remote' ? '$' : '>';
+          html += `<div class="terminal-cmd-entry"><span style="color:${userColor};">${escapeHtml(session.user)}</span>@<span style="color:#38bdf8;">${escapeHtml(session.host)}</span>:<span style="color:#fbbf24;">${escapeHtml(item.cwd)}</span>${sep} <span style="color:#f8fafc; font-weight:600;">${escapeHtml(item.command)}</span></div>`;
         } else if (item.type === 'output') {
           html += `<div style="color:#cbd5e1; white-space:pre-wrap;">${ansiToHtml(item.text)}</div>`;
         } else if (item.type === 'error') {
@@ -6154,6 +6205,34 @@
         renderTerminalScreen();
       }
       focusTerminalInput();
+    }
+
+    function toggleCurrentSessionMode() {
+      const session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      if (!session) return;
+      if (session.mode === 'remote') {
+        session.mode = 'local';
+        session.host = 'LocalPC';
+        session.user = 'PowerShell';
+        session.cwd = currentLocalPath || '.';
+        session.title = `Local: ${session.host}`;
+        session.logs.push({
+          type: 'banner',
+          text: `\x1b[35m[Switched to Local Windows PowerShell mode]\x1b[0m\n`
+        });
+      } else {
+        session.mode = 'remote';
+        session.host = (currentConnectionProfile && currentConnectionProfile.host) || (activeSiteProfile && activeSiteProfile.host) || 'remote-host';
+        session.user = (currentConnectionProfile && currentConnectionProfile.username) || (activeSiteProfile && activeSiteProfile.username) || 'root';
+        session.cwd = currentRemotePath || '~';
+        session.title = `${session.user}@${session.host}`;
+        session.logs.push({
+          type: 'banner',
+          text: `\x1b[32m[Switched to Remote SSH mode (${session.user}@${session.host})]\x1b[0m\n`
+        });
+      }
+      renderTerminalTabs();
+      switchTerminalSession(session.id);
     }
 
     function adjustTerminalFontSize(delta) {
@@ -6183,8 +6262,15 @@
     }
 
     function syncTerminalPathWithRemote() {
-      if (!currentRemotePath) return;
-      runQuickCommand(`cd "${currentRemotePath}"`);
+      const session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      if (!session) return;
+      if (session.mode === 'remote') {
+        if (!currentRemotePath) return;
+        runQuickCommand(`cd "${currentRemotePath}"`);
+      } else {
+        if (!currentLocalPath) return;
+        runQuickCommand(`Set-Location "${currentLocalPath}"`);
+      }
     }
 
     function runQuickCommand(cmd) {
@@ -6275,9 +6361,9 @@
           text: `\x1b[36m90FTP Embedded Terminal Commands:\x1b[0m\n` +
                 `  \x1b[33mclear\x1b[0m               Clear terminal screen (Ctrl+L)\n` +
                 `  \x1b[33mcd <path>\x1b[0m           Change directory and update prompt\n` +
-                `  \x1b[33msync\x1b[0m                Sync directory to remote browser's current folder\n` +
+                `  \x1b[33msync\x1b[0m                Sync directory to active file pane\n` +
                 `  \x1b[33mexit\x1b[0m                Close current terminal session tab\n` +
-                `  \x1b[32mAny SSH command\x1b[0m     e.g., ls -la, top, df -h, free, git status, docker ps\n`
+                `  \x1b[32mAny command\x1b[0m         Executes directly in current session mode\n`
         });
         renderTerminalScreen();
         return;
@@ -6290,15 +6376,6 @@
       });
       renderTerminalScreen();
 
-      if (!isConnected) {
-        session.logs.push({
-          type: 'error',
-          text: `Error: No active SSH/SFTP connection. Please connect to a server first.\n`
-        });
-        renderTerminalScreen();
-        return;
-      }
-
       const spinner = document.getElementById('terminalBusySpinner');
       if (spinner) spinner.style.display = 'flex';
       session.busy = true;
@@ -6307,7 +6384,8 @@
       try {
         const res = await sendRust('terminal_exec', {
           command: cmd,
-          cwd: session.cwd
+          cwd: session.cwd,
+          mode: session.mode
         });
 
         if (res) {
@@ -6340,26 +6418,29 @@
       }
     }
 
-    function ensureTerminalActiveSession(host, user, remotePath) {
+    function ensureTerminalActiveSession(host, user, remotePath, mode) {
+      const targetMode = mode || (isConnected ? 'remote' : 'local');
       if (terminalSessions.length === 0) {
-        addNewTerminalTab(remotePath);
+        addNewTerminalTab(remotePath, targetMode);
       } else {
-        const active = terminalSessions.find(s => s.id === activeTerminalSessionId);
+        let active = terminalSessions.find(s => s.id === activeTerminalSessionId);
+        if (!active) active = terminalSessions[0];
         if (active) {
+          active.mode = targetMode;
           if (host) active.host = host;
           if (user) active.user = user;
+          active.title = targetMode === 'remote' ? `${user}@${host}` : `Local: ${host}`;
           if (remotePath && remotePath !== active.cwd) {
-            runQuickCommand(`cd "${remotePath}"`);
-          } else {
-            switchTerminalSession(active.id);
+            active.cwd = remotePath;
           }
+          switchTerminalSession(active.id);
         }
       }
     }
 
     async function openRemoteTerminal(targetPath) {
       closeAllMenus();
-      const path = targetPath || currentRemotePath || '/';
+      const path = targetPath || (isConnected ? currentRemotePath : currentLocalPath) || '.';
       switchBottomTab('terminal');
       const panel = document.getElementById('logPanel');
       if (panel) {
@@ -6373,23 +6454,22 @@
         }
       }
 
-      if (!isConnected) {
-        ensureTerminalActiveSession('server', 'user', path);
-        focusTerminalInput();
-        return;
-      }
-
-      try {
-        const res = await sendRust('open_remote_terminal', { remote_path: path });
-        if (res && res.opened) {
-          ensureTerminalActiveSession(res.host, res.username, res.remote_path);
+      if (isConnected) {
+        try {
+          const res = await sendRust('open_remote_terminal', { remote_path: path });
+          if (res && res.opened) {
+            ensureTerminalActiveSession(res.host, res.username, res.remote_path, 'remote');
+          }
+        } catch (_) {
+          ensureTerminalActiveSession(
+            (currentConnectionProfile && currentConnectionProfile.host) || 'remote-host',
+            (currentConnectionProfile && currentConnectionProfile.username) || 'root',
+            path,
+            'remote'
+          );
         }
-      } catch (err) {
-        ensureTerminalActiveSession(
-          (currentConnectionProfile && currentConnectionProfile.host) || 'host',
-          (currentConnectionProfile && currentConnectionProfile.username) || 'user',
-          path
-        );
+      } else {
+        ensureTerminalActiveSession('LocalPC', 'PowerShell', path, 'local');
       }
       focusTerminalInput();
     }

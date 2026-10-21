@@ -824,10 +824,13 @@ impl AppState {
 
             "terminal_init" => {
                 let remote_lock = self.remote.lock().unwrap();
-                let remote = match remote_lock.as_ref() {
-                    Some(r) => r,
-                    None => return IpcResponse::err(id, action, "No active SSH/SFTP connection"),
+                let is_connected = remote_lock.is_some();
+                let cwd = if let Some(ref r) = *remote_lock {
+                    r.pwd()
+                } else {
+                    crate::local_fs::get_initial_dir()
                 };
+
                 let conn_lock = self.current_connection.lock().unwrap();
                 let (host, user, port) = match conn_lock.as_ref() {
                     Some(c) => (
@@ -835,12 +838,12 @@ impl AppState {
                         c["username"].as_str().unwrap_or("").to_string(),
                         c["port"].as_u64().unwrap_or(22),
                     ),
-                    None => ("".to_string(), "".to_string(), 22),
+                    None => ("localhost".to_string(), "local".to_string(), 0),
                 };
 
-                let cwd = remote.pwd();
                 IpcResponse::ok(id, action, json!({
-                    "connected": true,
+                    "connected": is_connected,
+                    "mode": if is_connected { "remote" } else { "local" },
                     "host": host,
                     "username": user,
                     "port": port,
@@ -851,17 +854,13 @@ impl AppState {
             "terminal_exec" => {
                 let cmd_raw = payload["command"].as_str().unwrap_or("").trim();
                 let cwd = payload["cwd"].as_str().unwrap_or("").trim();
-
-                let remote_lock = self.remote.lock().unwrap();
-                let remote = match remote_lock.as_ref() {
-                    Some(r) => r,
-                    None => return IpcResponse::err(id, action, "No active remote session"),
-                };
+                let req_mode = payload.get("mode").and_then(|v| v.as_str()).unwrap_or("auto");
 
                 if cmd_raw.is_empty() {
                     return IpcResponse::ok(id, action, json!({
                         "output": "",
                         "cwd": cwd,
+                        "mode": req_mode,
                     }));
                 }
 
@@ -873,55 +872,118 @@ impl AppState {
                     }));
                 }
 
-                let safe_cwd = if cwd.is_empty() { "~" } else { cwd };
-                let wrapped_cmd = format!(
-                    "cd \"{}\" 2>/dev/null; {}; printf \"\\n__90FTP_PWD__%s\\n\" \"$(pwd)\"",
-                    safe_cwd, cmd_raw
-                );
+                let is_remote = {
+                    let lock = self.remote.lock().unwrap();
+                    (req_mode == "remote" || req_mode == "auto") && lock.is_some()
+                };
 
-                match remote.exec_command(&wrapped_cmd) {
-                    Ok(raw_output) => {
-                        let mut output = raw_output;
-                        let mut new_cwd = cwd.to_string();
+                if is_remote {
+                    let remote_lock = self.remote.lock().unwrap();
+                    let remote = remote_lock.as_ref().unwrap();
 
-                        if let Some(pos) = output.rfind("__90FTP_PWD__") {
-                            let (pre, post) = output.split_at(pos);
-                            let pwd_part = &post["__90FTP_PWD__".len()..];
-                            let detected_pwd = pwd_part.lines().next().unwrap_or("").trim();
-                            if !detected_pwd.is_empty() {
-                                new_cwd = detected_pwd.to_string();
+                    let safe_cwd = if cwd.is_empty() { "~" } else { cwd };
+                    let wrapped_cmd = format!(
+                        "cd \"{}\" 2>/dev/null; {}; printf \"\\n__90FTP_PWD__%s\\n\" \"$(pwd)\"",
+                        safe_cwd, cmd_raw
+                    );
+
+                    match remote.exec_command(&wrapped_cmd) {
+                        Ok(raw_output) => {
+                            let mut output = raw_output;
+                            let mut new_cwd = cwd.to_string();
+
+                            if let Some(pos) = output.rfind("__90FTP_PWD__") {
+                                let (pre, post) = output.split_at(pos);
+                                let pwd_part = &post["__90FTP_PWD__".len()..];
+                                let detected_pwd = pwd_part.lines().next().unwrap_or("").trim();
+                                if !detected_pwd.is_empty() {
+                                    new_cwd = detected_pwd.to_string();
+                                }
+                                output = pre.trim_end_matches(['\r', '\n']).to_string();
                             }
-                            output = pre.trim_end_matches(['\r', '\n']).to_string();
-                        }
 
-                        IpcResponse::ok(id, action, json!({
-                            "output": output,
-                            "cwd": new_cwd,
-                        }))
+                            IpcResponse::ok(id, action, json!({
+                                "output": output,
+                                "cwd": new_cwd,
+                                "mode": "remote",
+                            }))
+                        }
+                        Err(e) => IpcResponse::err(id, action, &e),
                     }
-                    Err(e) => IpcResponse::err(id, action, &e),
+                } else {
+                    // Local Terminal execution (PowerShell)
+                    let run_dir = if !cwd.is_empty() && std::path::Path::new(cwd).exists() {
+                        cwd.to_string()
+                    } else {
+                        crate::local_fs::get_initial_dir()
+                    };
+
+                    let full_ps = format!(
+                        "Set-Location -LiteralPath '{}'; {}; Write-Output \"`n__90FTP_PWD__$((Get-Location).Path)\"",
+                        run_dir.replace("'", "''"),
+                        cmd_raw
+                    );
+
+                    let output_res = std::process::Command::new("powershell.exe")
+                        .args(["-NoProfile", "-NonInteractive", "-Command", &full_ps])
+                        .output();
+
+                    match output_res {
+                        Ok(out) => {
+                            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+                            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+                            let mut combined = if !stderr.is_empty() && !stdout.is_empty() {
+                                format!("{}\n{}", stdout, stderr)
+                            } else if !stderr.is_empty() {
+                                stderr
+                            } else {
+                                stdout
+                            };
+
+                            let mut new_cwd = run_dir;
+                            if let Some(pos) = combined.rfind("__90FTP_PWD__") {
+                                let (pre, post) = combined.split_at(pos);
+                                let pwd_part = &post["__90FTP_PWD__".len()..];
+                                let detected = pwd_part.lines().next().unwrap_or("").trim();
+                                if !detected.is_empty() {
+                                    new_cwd = detected.to_string();
+                                }
+                                combined = pre.trim_end_matches(['\r', '\n']).to_string();
+                            }
+
+                            IpcResponse::ok(id, action, json!({
+                                "output": combined,
+                                "cwd": new_cwd,
+                                "mode": "local",
+                            }))
+                        }
+                        Err(e) => IpcResponse::err(id, action, &format!("Failed to execute command: {}", e)),
+                    }
                 }
             }
 
             "open_remote_terminal" => {
                 let remote_lock = self.remote.lock().unwrap();
-                let remote = match remote_lock.as_ref() {
-                    Some(r) => r,
-                    None => return IpcResponse::err(id, action, "No active SSH/SFTP connection"),
+                let is_connected = remote_lock.is_some();
+                let pwd = if let Some(ref r) = *remote_lock {
+                    payload.get("remote_path").and_then(|v| v.as_str()).unwrap_or(&r.pwd()).to_string()
+                } else {
+                    payload.get("remote_path").and_then(|v| v.as_str()).unwrap_or("").to_string()
                 };
+
                 let conn_lock = self.current_connection.lock().unwrap();
                 let (host, user) = match conn_lock.as_ref() {
                     Some(c) => (
                         c["host"].as_str().unwrap_or("").to_string(),
                         c["username"].as_str().unwrap_or("").to_string(),
                     ),
-                    None => ("".to_string(), "".to_string()),
+                    None => ("localhost".to_string(), "local".to_string()),
                 };
-                let pwd = payload.get("remote_path").and_then(|v| v.as_str()).unwrap_or(&remote.pwd()).to_string();
 
                 IpcResponse::ok(id, action, json!({
                     "opened": true,
                     "embedded": true,
+                    "connected": is_connected,
                     "host": host,
                     "username": user,
                     "remote_path": pwd,
