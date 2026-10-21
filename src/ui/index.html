@@ -1786,7 +1786,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.20</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.21</span>
         </div>
       </div>
 
@@ -3162,7 +3162,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.20';
+    let APP_CURRENT_VERSION = '0.0.0.21';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -3319,11 +3319,12 @@
     }
 
     function formatBytes(bytes) {
-      if (bytes === 0) return '0 B';
+      const b = Number(bytes);
+      if (!b || b <= 0 || isNaN(b)) return '0 B';
       const k = 1024;
       const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+      const i = Math.max(0, Math.min(sizes.length - 1, Math.floor(Math.log(b) / Math.log(k))));
+      return parseFloat((b / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
     // Remote History Management
@@ -3928,43 +3929,48 @@
       }
 
       remoteFiles.forEach((f, idx) => {
-        const tr = document.createElement('tr');
-        tr.draggable = true;
-        tr.ondragstart = (e) => {
-          e.dataTransfer.setData('text/plain', JSON.stringify({
-            source: 'remote',
-            path: f.path,
-            name: f.name,
-            is_dir: f.is_dir
-          }));
-          tr.classList.add('dragging');
-        };
-        tr.ondragend = () => {
-          tr.classList.remove('dragging');
-        };
-        tr.onclick = () => selectRemoteRow(idx);
-        tr.ondblclick = () => openRemoteItem(f, tr);
-        tr.oncontextmenu = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          selectRemoteRow(idx);
-          openContextMenu(e, 'remote', f, idx);
-        };
+        try {
+          const tr = document.createElement('tr');
+          tr.draggable = true;
+          tr.ondragstart = (e) => {
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+              source: 'remote',
+              path: f.path,
+              name: f.name,
+              is_dir: f.is_dir
+            }));
+            tr.classList.add('dragging');
+          };
+          tr.ondragend = () => {
+            tr.classList.remove('dragging');
+          };
+          tr.onclick = () => selectRemoteRow(idx);
+          tr.ondblclick = () => openRemoteItem(f, tr);
+          tr.oncontextmenu = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            selectRemoteRow(idx);
+            openContextMenu(e, 'remote', f, idx);
+          };
 
-        const { svg, iconClass } = getFileIcon(f.name, f.is_dir);
+          const fileName = (f.name || '').toString();
+          const { svg, iconClass } = getFileIcon(fileName, !!f.is_dir);
 
-        tr.innerHTML = `
-          <td>
-            <div class="file-cell">
-              <span class="file-icon ${iconClass}">${svg}</span>
-              <span>${escapeHtml(f.name)}</span>
-            </div>
-          </td>
-          <td class="mono-cell">${f.is_dir ? '-' : formatBytes(f.size)}</td>
-          <td class="mono-cell">${f.modified}</td>
-          <td class="mono-cell">${f.permissions}</td>
-        `;
-        tbody.appendChild(tr);
+          tr.innerHTML = `
+            <td>
+              <div class="file-cell">
+                <span class="file-icon ${iconClass}">${svg}</span>
+                <span>${escapeHtml(fileName)}</span>
+              </div>
+            </td>
+            <td class="mono-cell">${f.is_dir ? '-' : formatBytes(f.size || 0)}</td>
+            <td class="mono-cell">${f.modified || '-'}</td>
+            <td class="mono-cell">${f.permissions || '-'}</td>
+          `;
+          tbody.appendChild(tr);
+        } catch (itemErr) {
+          console.error('Error rendering remote file item:', f, itemErr);
+        }
       });
     }
 

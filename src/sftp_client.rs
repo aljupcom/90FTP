@@ -43,27 +43,6 @@ impl Handler for ClientHandler {
 
         std::future::ready(Ok(trusted))
     }
-
-    fn data(
-        &mut self,
-        channel: russh::ChannelId,
-        data: &[u8],
-        session: &mut russh::client::Session,
-    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send {
-        let _ = session.data(channel, data.to_vec());
-        std::future::ready(Ok(()))
-    }
-
-    fn extended_data(
-        &mut self,
-        channel: russh::ChannelId,
-        ext: u32,
-        data: &[u8],
-        session: &mut russh::client::Session,
-    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send {
-        let _ = session.extended_data(channel, ext, data.to_vec());
-        std::future::ready(Ok(()))
-    }
 }
 
 #[allow(dead_code)]
