@@ -519,6 +519,243 @@
       color: #38bdf8;
     }
 
+    /* __XTERM_CSS__ */
+
+    /* PuTTY-style Floating & Draggable Separate Terminal Window */
+    .putty-window {
+      position: fixed;
+      z-index: 10000;
+      top: 90px;
+      left: 120px;
+      width: 780px;
+      height: 520px;
+      min-width: 460px;
+      min-height: 320px;
+      background: #0c0d12;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 8px;
+      box-shadow: 0 25px 65px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-family: Consolas, "Lucida Console", "Courier New", monospace;
+      animation: puttyWindowPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes puttyWindowPop {
+      0% { opacity: 0; transform: scale(0.96) translateY(-8px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .putty-window.maximized {
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      border-radius: 0 !important;
+      border: none !important;
+    }
+
+    .putty-titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 34px;
+      padding: 0 8px 0 12px;
+      background: linear-gradient(180deg, #1e222d 0%, #13161f 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: move;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    .putty-title-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+
+    .putty-title-text {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #e2e8f0;
+      letter-spacing: 0.3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .putty-title-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .putty-win-btn {
+      width: 26px;
+      height: 22px;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+
+    .putty-win-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+    }
+
+    .putty-win-btn.putty-close-btn:hover {
+      background: #ef4444;
+      color: #ffffff;
+    }
+
+    .putty-btn-pill {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+      cursor: pointer;
+      margin-right: 4px;
+    }
+    .putty-btn-pill.local {
+      border-color: rgba(168, 85, 247, 0.4);
+      background: rgba(168, 85, 247, 0.15);
+      color: #c084fc;
+    }
+
+    .putty-subbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 30px;
+      padding: 0 10px;
+      background: #0f1118;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      flex-shrink: 0;
+    }
+
+    .putty-tabs-container {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+    }
+
+    .putty-xterm-body {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      position: relative;
+      background: #0c0d12;
+      padding: 4px 6px;
+      overflow: hidden;
+    }
+
+    .putty-xterm-body .xterm {
+      height: 100%;
+      padding: 0;
+    }
+
+    .putty-xterm-body .xterm-viewport {
+      background-color: #0c0d12 !important;
+    }
+
+    .putty-cmd-line {
+      display: flex;
+      align-items: center;
+      background: #07080c;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 6px 10px;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .putty-prompt {
+      font-size: 12px;
+      font-weight: 600;
+      color: #22c55e;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .putty-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #f8fafc;
+      font-family: inherit;
+      font-size: 12.5px;
+      caret-color: #38bdf8;
+    }
+
+    .putty-busy-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(56, 189, 248, 0.2);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      flex-shrink: 0;
+    }
+
+    .putty-resize-handle-se {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 14px;
+      height: 14px;
+      cursor: nwse-resize;
+      background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.25) 50%, transparent 60%, rgba(255, 255, 255, 0.25) 60%, transparent 70%);
+      z-index: 10;
+    }
+
+    /* Minimized Floating Dock Badge */
+    .putty-dock-pill {
+      position: fixed;
+      bottom: 18px;
+      right: 24px;
+      z-index: 9999;
+      background: #11141e;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      border-radius: 20px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s;
+    }
+    .putty-dock-pill:hover {
+      background: #1a2030;
+      border-color: #38bdf8;
+      transform: translateY(-2px);
+    }
+    .putty-dock-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+    }
+
     /* Bottom Resizable Log Console (Floating Glassmorphic Panel) */
     .gutter-horizontal {
       height: 6px;
@@ -1549,7 +1786,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.18</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.19</span>
         </div>
       </div>
 
@@ -1988,6 +2225,9 @@
           </div>
           <button type="button" class="btn btn-secondary" onclick="clearTerminalScreen()" style="padding: 2px 8px; font-size: 11px;" title="Clear Terminal Screen (Ctrl+L)">
             Clear
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="openPuttyTerminalWindow()" style="padding: 2px 8px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="Detach & Pop Out PuTTY-Style Floating Terminal Window">
+            ⧉ Pop Out (PuTTY)
           </button>
           <button type="button" class="btn btn-secondary" id="btnTerminalMaximize" onclick="toggleTerminalMaximize()" style="padding: 2px 7px; font-size: 11px;" title="Maximize / Restore Terminal">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
@@ -2811,6 +3051,70 @@
     </div>
   </div>
 
+  <!-- PuTTY Detached Floating & Movable Terminal Window (powered by xterm.js) -->
+  <div id="puttyWindow" class="putty-window" style="display: none;">
+    <!-- Draggable Header / Titlebar -->
+    <div class="putty-titlebar" id="puttyTitlebar">
+      <div class="putty-title-left">
+        <svg class="putty-icon" viewBox="0 0 24 24" width="16" height="16">
+          <rect x="2" y="3" width="20" height="14" rx="2" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+          <line x1="8" y1="21" x2="16" y2="21" stroke="#38bdf8" stroke-width="2"/>
+          <line x1="12" y1="17" x2="12" y2="21" stroke="#38bdf8" stroke-width="2"/>
+          <polyline points="6 8 9 10 6 12" fill="none" stroke="#22c55e" stroke-width="1.5"/>
+          <line x1="11" y1="12" x2="15" y2="12" stroke="#f8fafc" stroke-width="1.5"/>
+        </svg>
+        <span id="puttyTitleText" class="putty-title-text">root@host - PuTTY Terminal</span>
+      </div>
+      <div class="putty-title-controls">
+        <button type="button" class="putty-btn-pill" id="puttyModeBtn" onclick="toggleCurrentSessionMode()" title="Switch Remote SSH / Local PowerShell Mode">SSH</button>
+        <button type="button" class="putty-win-btn" onclick="minimizePuttyWindow()" title="Minimize to Dock">&#x2014;</button>
+        <button type="button" class="putty-win-btn" id="btnPuttyMaximize" onclick="togglePuttyMaximize()" title="Maximize / Restore">&#x25A2;</button>
+        <button type="button" class="putty-win-btn" onclick="dockPuttyWindow()" title="Dock to Bottom Panel">&#x2913;</button>
+        <button type="button" class="putty-win-btn putty-close-btn" onclick="closePuttyWindow()" title="Close Terminal">&#x2715;</button>
+      </div>
+    </div>
+
+    <!-- Quick Action Subbar -->
+    <div class="putty-subbar">
+      <div class="putty-tabs-container" id="puttyTabsContainer"></div>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <button type="button" class="btn btn-secondary" onclick="addNewTerminalTab()" style="padding: 1px 6px; font-size: 11px;" title="New Terminal Tab">+ Tab</button>
+        <button type="button" class="btn btn-secondary" onclick="syncTerminalPathWithRemote()" style="padding: 1px 6px; font-size: 11px;" title="Sync Directory to Remote Browser">Sync Path</button>
+        <button type="button" class="btn btn-secondary" onclick="clearPuttyTerminal()" style="padding: 1px 6px; font-size: 11px;" title="Clear Screen (Ctrl+L)">Clear</button>
+        <div style="display: flex; align-items: center; gap: 3px; font-size: 11px; margin-left: 4px;">
+          <span style="cursor: pointer; color: #94a3b8; font-weight: 600; padding: 0 4px;" onclick="adjustPuttyFontSize(-1)" title="Decrease font size">A-</span>
+          <span style="cursor: pointer; color: #94a3b8; font-weight: 600; padding: 0 4px;" onclick="adjustPuttyFontSize(1)" title="Increase font size">A+</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Embedded xterm.js Terminal -->
+    <div class="putty-xterm-body" id="puttyXtermContainer" onclick="focusPuttyInput()"></div>
+
+    <!-- Command Input Bar -->
+    <div class="putty-cmd-line">
+      <span id="puttyPrompt" class="putty-prompt">root@host:/home$</span>
+      <input type="text" id="puttyInput" class="putty-input" autocomplete="off" spellcheck="false" placeholder="Type command and press Enter..." />
+      <div id="puttyBusy" class="putty-busy-spinner" style="display: none;"></div>
+    </div>
+
+    <!-- Resizing Gripper Corner -->
+    <div class="putty-resize-handle-se" id="puttyResizeSE" title="Drag to Resize Window"></div>
+  </div>
+
+  <!-- Minimized Floating Dock Pill -->
+  <div id="puttyDockPill" class="putty-dock-pill" style="display: none;" onclick="restorePuttyWindow()" title="Click to Restore PuTTY Terminal">
+    <span class="putty-dock-dot"></span>
+    <span id="puttyDockTitle" style="font-size: 12px; color: #e2e8f0; font-weight: 600; font-family: Consolas, monospace;">PuTTY Terminal</span>
+  </div>
+
+  <script>
+    // __XTERM_JS__
+  </script>
+  <script>
+    // __XTERM_FIT_JS__
+  </script>
+
   <script>
     window.onerror = function(msg, url, line, col, error) {
       console.error(`JS error at ${line}:${col} - ${msg}`, error);
@@ -2858,7 +3162,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.18';
+    let APP_CURRENT_VERSION = '0.0.0.19';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -6220,6 +6524,8 @@
     function switchTerminalSession(id) {
       activeTerminalSessionId = id;
       renderTerminalTabs();
+      if (typeof renderPuttyTabs === 'function') renderPuttyTabs();
+      if (typeof updatePuttyHeader === 'function') updatePuttyHeader();
       const session = terminalSessions.find(s => s.id === id);
       if (!session) return;
 
@@ -6269,6 +6575,8 @@
         const nextId = terminalSessions[Math.max(0, idx - 1)].id;
         switchTerminalSession(nextId);
       }
+      if (typeof renderPuttyTabs === 'function') renderPuttyTabs();
+      if (typeof updatePuttyHeader === 'function') updatePuttyHeader();
     }
 
     function renderTerminalScreen() {
@@ -6338,6 +6646,8 @@
         });
       }
       renderTerminalTabs();
+      if (typeof renderPuttyTabs === 'function') renderPuttyTabs();
+      if (typeof updatePuttyHeader === 'function') updatePuttyHeader();
       switchTerminalSession(session.id);
     }
 
@@ -6552,6 +6862,11 @@
       let cleanText = text.replace(/[\r\n]*__90FTP_PWD__[\s\S]*$/, '');
       if (!cleanText) return;
 
+      // Stream directly into xterm.js if active
+      if (puttyTerm) {
+        puttyTerm.write(cleanText.replace(/\r?\n/g, '\r\n'));
+      }
+
       let session = terminalSessions.find(s => s.id === sessionId);
       if (!session) {
         session = terminalSessions.find(s => s.id === activeTerminalSessionId);
@@ -6597,9 +6912,22 @@
 
       const spinner = document.getElementById('terminalBusySpinner');
       if (spinner) spinner.style.display = 'none';
+      const puttyBusy = document.getElementById('puttyBusy');
+      if (puttyBusy) puttyBusy.style.display = 'none';
+
+      if (typeof updatePuttyHeader === 'function') updatePuttyHeader();
+      if (typeof renderPuttyTabs === 'function') renderPuttyTabs();
+
+      if (puttyTerm && session) {
+        const userColor = session.mode === 'remote' ? '\x1b[32m' : '\x1b[35m';
+        const sep = session.mode === 'remote' ? '$' : '>';
+        puttyTerm.write(`\r\n${userColor}${session.user}@${session.host}\x1b[0m:\x1b[34m${session.cwd}\x1b[0m${sep} `);
+      }
+
       renderTerminalTabs();
       renderTerminalScreen();
       focusTerminalInput();
+      if (typeof focusPuttyInput === 'function') focusPuttyInput();
     };
 
     function ensureTerminalActiveSession(host, user, remotePath, mode) {
@@ -6625,37 +6953,497 @@
     async function openRemoteTerminal(targetPath) {
       closeAllMenus();
       const path = targetPath || (isConnected ? currentRemotePath : currentLocalPath) || '.';
-      switchBottomTab('terminal');
-      const panel = document.getElementById('logPanel');
-      if (panel) {
-        if (panel.classList.contains('collapsed')) {
-          toggleLogPanel();
-        }
-        const curHeight = parseInt(panel.style.height) || 0;
-        if (curHeight < 280) {
-          panel.style.height = '320px';
-          lastLogHeight = 320;
-        }
+      openPuttyTerminalWindow(path);
+    }
+
+    // ========================================================
+    // PuTTY Detached Floating Window (Powered by xterm.js)
+    // ========================================================
+    let puttyTerm = null;
+    let puttyFitAddon = null;
+    let puttyWindowVisible = false;
+    let puttyIsMaximized = false;
+    let puttyPreMaxRect = null;
+    let puttyHistoryIndex = -1;
+
+    function initPuttyXterm() {
+      if (puttyTerm) return;
+      const container = document.getElementById('puttyXtermContainer');
+      if (!container) return;
+
+      if (typeof Terminal === 'undefined') {
+        console.error('xterm.js Terminal class is not loaded');
+        return;
       }
 
-      if (isConnected) {
-        try {
-          const res = await sendRust('open_remote_terminal', { remote_path: path });
-          if (res && res.opened) {
-            ensureTerminalActiveSession(res.host, res.username, res.remote_path, 'remote');
-          }
-        } catch (_) {
-          ensureTerminalActiveSession(
-            (currentConnectedProfile && currentConnectedProfile.host) || (selectedQuickSite && selectedQuickSite.host) || 'remote-host',
-            (currentConnectedProfile && (currentConnectedProfile.username || currentConnectedProfile.user)) || (selectedQuickSite && (selectedQuickSite.username || selectedQuickSite.user)) || 'root',
-            path,
-            'remote'
-          );
-        }
-      } else {
-        ensureTerminalActiveSession('LocalPC', 'PowerShell', path, 'local');
+      puttyTerm = new Terminal({
+        cursorBlink: true,
+        cursorStyle: 'block',
+        fontSize: terminalFontSize || 13,
+        fontFamily: 'Consolas, "Lucida Console", "Courier New", monospace',
+        fontWeight: 'normal',
+        fontWeightBold: 'bold',
+        letterSpacing: 0,
+        lineHeight: 1.15,
+        theme: {
+          background: '#0c0d12',
+          foreground: '#cbd5e1',
+          cursor: '#22c55e',
+          cursorAccent: '#000000',
+          selectionBackground: 'rgba(56, 189, 248, 0.35)',
+          black: '#000000',
+          red: '#ef4444',
+          green: '#22c55e',
+          yellow: '#eab308',
+          blue: '#38bdf8',
+          magenta: '#c084fc',
+          cyan: '#06b6d4',
+          white: '#f8fafc',
+          brightBlack: '#64748b',
+          brightRed: '#f87171',
+          brightGreen: '#4ade80',
+          brightYellow: '#fde047',
+          brightBlue: '#60a5fa',
+          brightMagenta: '#d8b4fe',
+          brightCyan: '#22d3ee',
+          brightWhite: '#ffffff'
+        },
+        convertEol: true,
+        scrollback: 10000,
+        tabStopWidth: 4
+      });
+
+      if (typeof FitAddon !== 'undefined' && FitAddon.FitAddon) {
+        puttyFitAddon = new FitAddon.FitAddon();
+        puttyTerm.loadAddon(puttyFitAddon);
       }
-      focusTerminalInput();
+
+      puttyTerm.open(container);
+      if (puttyFitAddon) {
+        setTimeout(() => {
+          try { puttyFitAddon.fit(); } catch (_) {}
+        }, 50);
+      }
+
+      // Welcome Banner in PuTTY style
+      puttyTerm.writeln('\x1b[1;36m======================================================================\x1b[0m');
+      puttyTerm.writeln('\x1b[1;32m  90FTP PuTTY Interactive Terminal  (Source: xterm.js)\x1b[0m');
+      puttyTerm.writeln('\x1b[90m  Real-time streaming SSH & PowerShell terminal window\x1b[0m');
+      puttyTerm.writeln('\x1b[1;36m======================================================================\x1b[0m\r\n');
+
+      container.addEventListener('click', () => {
+        focusPuttyInput();
+      });
+
+      const input = document.getElementById('puttyInput');
+      if (input) {
+        input.addEventListener('keydown', handlePuttyInputKey);
+      }
+
+      setupPuttyWindowDragAndResize();
+    }
+
+    function setupPuttyWindowDragAndResize() {
+      const titlebar = document.getElementById('puttyTitlebar');
+      const win = document.getElementById('puttyWindow');
+      const resizeHandle = document.getElementById('puttyResizeSE');
+      if (!titlebar || !win) return;
+
+      let isDragging = false;
+      let startX = 0, startY = 0;
+      let startLeft = 0, startTop = 0;
+
+      titlebar.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button')) return;
+        if (puttyIsMaximized) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = win.getBoundingClientRect();
+        startLeft = rect.left;
+        startTop = rect.top;
+        win.style.transition = 'none';
+
+        function onMouseMove(moveEvent) {
+          if (!isDragging) return;
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
+          const maxLeft = Math.max(0, window.innerWidth - 80);
+          const maxTop = Math.max(0, window.innerHeight - 40);
+          const newLeft = Math.max(0, Math.min(maxLeft, startLeft + dx));
+          const newTop = Math.max(0, Math.min(maxTop, startTop + dy));
+          win.style.left = newLeft + 'px';
+          win.style.top = newTop + 'px';
+        }
+
+        function onMouseUp() {
+          if (isDragging) {
+            isDragging = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            savePuttyWindowState();
+          }
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+
+      if (resizeHandle) {
+        let isResizing = false;
+        let rStartX = 0, rStartY = 0;
+        let rStartW = 0, rStartH = 0;
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          if (puttyIsMaximized) return;
+          isResizing = true;
+          rStartX = e.clientX;
+          rStartY = e.clientY;
+          rStartW = win.offsetWidth;
+          rStartH = win.offsetHeight;
+          win.style.transition = 'none';
+
+          function onResizeMove(moveEvent) {
+            if (!isResizing) return;
+            const dw = moveEvent.clientX - rStartX;
+            const dh = moveEvent.clientY - rStartY;
+            const newW = Math.max(460, rStartW + dw);
+            const newH = Math.max(300, rStartH + dh);
+            win.style.width = newW + 'px';
+            win.style.height = newH + 'px';
+            if (puttyFitAddon) {
+              try { puttyFitAddon.fit(); } catch (_) {}
+            }
+          }
+
+          function onResizeUp() {
+            if (isResizing) {
+              isResizing = false;
+              document.removeEventListener('mousemove', onResizeMove);
+              document.removeEventListener('mouseup', onResizeUp);
+              if (puttyFitAddon) {
+                try { puttyFitAddon.fit(); } catch (_) {}
+              }
+              savePuttyWindowState();
+            }
+          }
+
+          document.addEventListener('mousemove', onResizeMove);
+          document.addEventListener('mouseup', onResizeUp);
+        });
+      }
+    }
+
+    function savePuttyWindowState() {
+      const win = document.getElementById('puttyWindow');
+      if (!win || puttyIsMaximized) return;
+      const rect = {
+        left: win.style.left,
+        top: win.style.top,
+        width: win.style.width,
+        height: win.style.height
+      };
+      appStorage.setItem('90ftp_putty_geom', JSON.stringify(rect));
+    }
+
+    function openPuttyTerminalWindow(targetPath) {
+      closeAllMenus();
+      const win = document.getElementById('puttyWindow');
+      const dock = document.getElementById('puttyDockPill');
+      if (!win) return;
+
+      if (dock) dock.style.display = 'none';
+      win.style.display = 'flex';
+      puttyWindowVisible = true;
+
+      const savedGeom = appStorage.getItem('90ftp_putty_geom');
+      if (savedGeom) {
+        try {
+          const g = JSON.parse(savedGeom);
+          if (g.left) win.style.left = g.left;
+          if (g.top) win.style.top = g.top;
+          if (g.width) win.style.width = g.width;
+          if (g.height) win.style.height = g.height;
+        } catch (_) {}
+      }
+
+      const host = (currentConnectedProfile && currentConnectedProfile.host) || (selectedQuickSite && selectedQuickSite.host) || 'remote-host';
+      const user = (currentConnectedProfile && (currentConnectedProfile.username || currentConnectedProfile.user)) || (selectedQuickSite && (selectedQuickSite.username || selectedQuickSite.user)) || 'root';
+      const mode = isConnected ? 'remote' : 'local';
+      const path = targetPath || (isConnected ? currentRemotePath : currentLocalPath) || '.';
+      ensureTerminalActiveSession(host, user, path, mode);
+
+      initPuttyXterm();
+      updatePuttyHeader();
+      renderPuttyTabs();
+
+      setTimeout(() => {
+        if (puttyFitAddon) {
+          try { puttyFitAddon.fit(); } catch (_) {}
+        }
+        focusPuttyInput();
+      }, 50);
+    }
+
+    function updatePuttyHeader() {
+      const session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      if (!session) return;
+      const titleText = document.getElementById('puttyTitleText');
+      const modeBtn = document.getElementById('puttyModeBtn');
+      const promptEl = document.getElementById('puttyPrompt');
+      const dockTitle = document.getElementById('puttyDockTitle');
+
+      const titleStr = `${session.user}@${session.host}:${session.cwd} - PuTTY Terminal`;
+      if (titleText) titleText.textContent = titleStr;
+      if (dockTitle) dockTitle.textContent = `${session.user}@${session.host}`;
+      if (modeBtn) {
+        if (session.mode === 'remote') {
+          modeBtn.textContent = 'SSH';
+          modeBtn.className = 'putty-btn-pill';
+        } else {
+          modeBtn.textContent = 'PowerShell';
+          modeBtn.className = 'putty-btn-pill local';
+        }
+      }
+      if (promptEl) {
+        const sep = session.mode === 'remote' ? '$' : '>';
+        promptEl.textContent = `${session.user}@${session.host}:${session.cwd}${sep}`;
+        promptEl.style.color = session.mode === 'remote' ? '#22c55e' : '#c084fc';
+      }
+    }
+
+    function renderPuttyTabs() {
+      const container = document.getElementById('puttyTabsContainer');
+      if (!container) return;
+      container.innerHTML = terminalSessions.map(s => `
+        <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" onclick="switchTerminalSession('${s.id}')" style="padding: 1px 8px; font-size: 11px;">
+          <span style="font-size: 7px; color: ${s.busy ? '#38bdf8' : (s.mode === 'remote' ? '#22c55e' : '#a855f7')};">●</span>
+          <span>${escapeHtml(s.title)}</span>
+          ${terminalSessions.length > 1 ? `<span class="terminal-tab-close" onclick="closeTerminalSession('${s.id}', event)" title="Close tab">✕</span>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function focusPuttyInput() {
+      const inp = document.getElementById('puttyInput');
+      if (inp) inp.focus();
+    }
+
+    function minimizePuttyWindow() {
+      const win = document.getElementById('puttyWindow');
+      const dock = document.getElementById('puttyDockPill');
+      if (win) win.style.display = 'none';
+      if (dock) dock.style.display = 'flex';
+      puttyWindowVisible = false;
+    }
+
+    function restorePuttyWindow() {
+      openPuttyTerminalWindow();
+    }
+
+    function togglePuttyMaximize() {
+      const win = document.getElementById('puttyWindow');
+      const btn = document.getElementById('btnPuttyMaximize');
+      if (!win) return;
+
+      if (!puttyIsMaximized) {
+        puttyIsMaximized = true;
+        puttyPreMaxRect = {
+          left: win.style.left,
+          top: win.style.top,
+          width: win.style.width,
+          height: win.style.height
+        };
+        win.classList.add('maximized');
+        if (btn) btn.innerHTML = '&#x25A3;';
+      } else {
+        puttyIsMaximized = false;
+        win.classList.remove('maximized');
+        if (puttyPreMaxRect) {
+          win.style.left = puttyPreMaxRect.left;
+          win.style.top = puttyPreMaxRect.top;
+          win.style.width = puttyPreMaxRect.width;
+          win.style.height = puttyPreMaxRect.height;
+        }
+        if (btn) btn.innerHTML = '&#x25A2;';
+      }
+
+      setTimeout(() => {
+        if (puttyFitAddon) {
+          try { puttyFitAddon.fit(); } catch (_) {}
+        }
+        focusPuttyInput();
+      }, 50);
+    }
+
+    function dockPuttyWindow() {
+      closePuttyWindow();
+      switchBottomTab('terminal');
+      const panel = document.getElementById('logPanel');
+      if (panel && panel.classList.contains('collapsed')) {
+        toggleLogPanel();
+      }
+    }
+
+    function closePuttyWindow() {
+      const win = document.getElementById('puttyWindow');
+      const dock = document.getElementById('puttyDockPill');
+      if (win) win.style.display = 'none';
+      if (dock) dock.style.display = 'none';
+      puttyWindowVisible = false;
+    }
+
+    function clearPuttyTerminal() {
+      if (puttyTerm) {
+        puttyTerm.clear();
+      }
+      clearTerminalScreen();
+      focusPuttyInput();
+    }
+
+    function adjustPuttyFontSize(delta) {
+      adjustTerminalFontSize(delta);
+      if (puttyTerm) {
+        puttyTerm.options.fontSize = terminalFontSize;
+        if (puttyFitAddon) {
+          try { puttyFitAddon.fit(); } catch (_) {}
+        }
+      }
+    }
+
+    function handlePuttyInputKey(e) {
+      const session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      if (!session) return;
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const cmd = e.target.value.trim();
+        e.target.value = '';
+        if (!cmd) return;
+        executePuttyCommand(cmd);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (session.history.length > 0) {
+          if (puttyHistoryIndex === -1) {
+            puttyHistoryIndex = session.history.length - 1;
+          } else if (puttyHistoryIndex > 0) {
+            puttyHistoryIndex--;
+          }
+          e.target.value = session.history[puttyHistoryIndex] || '';
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (puttyHistoryIndex !== -1) {
+          if (puttyHistoryIndex < session.history.length - 1) {
+            puttyHistoryIndex++;
+            e.target.value = session.history[puttyHistoryIndex] || '';
+          } else {
+            puttyHistoryIndex = -1;
+            e.target.value = '';
+          }
+        }
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        e.target.value = '';
+        puttyHistoryIndex = -1;
+        if (puttyTerm) puttyTerm.write('^C\r\n');
+        updatePuttyHeader();
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        clearPuttyTerminal();
+      }
+    }
+
+    async function executePuttyCommand(cmd) {
+      const session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      if (!session) return;
+
+      session.history.push(cmd);
+      puttyHistoryIndex = -1;
+
+      if (cmd === 'clear') {
+        clearPuttyTerminal();
+        return;
+      }
+      if (cmd === 'exit') {
+        closePuttyWindow();
+        return;
+      }
+      if (cmd === 'sync') {
+        syncTerminalPathWithRemote();
+        return;
+      }
+
+      if (puttyTerm) {
+        const userColor = session.mode === 'remote' ? '\x1b[32m' : '\x1b[35m';
+        const sep = session.mode === 'remote' ? '$' : '>';
+        puttyTerm.writeln(`${userColor}${session.user}@${session.host}\x1b[0m:\x1b[34m${session.cwd}\x1b[0m${sep} \x1b[1;37m${cmd}\x1b[0m`);
+      }
+
+      session.logs.push({
+        type: 'cmd',
+        cwd: session.cwd,
+        command: cmd
+      });
+      renderTerminalScreen();
+
+      const puttyBusy = document.getElementById('puttyBusy');
+      const spinner = document.getElementById('terminalBusySpinner');
+      if (puttyBusy) puttyBusy.style.display = 'block';
+      if (spinner) spinner.style.display = 'flex';
+      session.busy = true;
+      renderTerminalTabs();
+      renderPuttyTabs();
+
+      try {
+        const res = await sendRust('terminal_exec', {
+          command: cmd,
+          cwd: session.cwd,
+          mode: session.mode,
+          session_id: session.id
+        });
+
+        if (res && res.started) {
+          return;
+        }
+
+        session.busy = false;
+        if (puttyBusy) puttyBusy.style.display = 'none';
+        if (spinner) spinner.style.display = 'none';
+
+        if (res) {
+          if (res.cwd) {
+            session.cwd = res.cwd;
+            updatePuttyHeader();
+          }
+          if (res.output && res.output.trim().length > 0) {
+            if (puttyTerm) puttyTerm.write(res.output.replace(/\r?\n/g, '\r\n'));
+            session.logs.push({
+              type: 'output',
+              text: res.output
+            });
+          }
+        }
+        renderTerminalTabs();
+        renderPuttyTabs();
+        renderTerminalScreen();
+        focusPuttyInput();
+      } catch (err) {
+        session.busy = false;
+        if (puttyBusy) puttyBusy.style.display = 'none';
+        if (spinner) spinner.style.display = 'none';
+        const errStr = `\x1b[31mCommand error: ${err.message || err}\x1b[0m\r\n`;
+        if (puttyTerm) puttyTerm.write(errStr);
+        session.logs.push({
+          type: 'error',
+          text: `Command error: ${err.message || err}\n`
+        });
+        renderTerminalTabs();
+        renderPuttyTabs();
+        renderTerminalScreen();
+        focusPuttyInput();
+      }
     }
 
     function openToolsModal() {

@@ -63,7 +63,10 @@ fn main() {
     };
     let app_state = Arc::new(AppState::new(Some(proxy_cb)));
 
-    let html_content = include_str!("ui/index.html");
+    let html_content = include_str!("ui/index.html")
+        .replace("/* __XTERM_CSS__ */", include_str!("ui/xterm.css"))
+        .replace("// __XTERM_JS__", include_str!("ui/xterm.js"))
+        .replace("// __XTERM_FIT_JS__", include_str!("ui/xterm-addon-fit.js"));
 
     let mut webview_dir = sessions::get_storage_dir();
     webview_dir.push("webview_data");
