@@ -5,155 +5,32 @@
   <title>90FTP Terminal</title>
   <style>
     /* __XTERM_CSS__ */
-    * {
-      box-sizing: border-box;
+    html, body {
       margin: 0;
       padding: 0;
-    }
-    html, body {
       width: 100%;
       height: 100%;
-      background: #0a0d14;
-      color: #e2e8f0;
-      overflow: hidden;
-      font-family: "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, "Courier New", monospace;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* Modern Top Terminal Controls Bar */
-    .terminal-app-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 34px;
-      padding: 0 12px;
-      background: rgba(14, 18, 27, 0.95);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 11.5px;
-      user-select: none;
-      flex-shrink: 0;
-      gap: 10px;
-    }
-    .bar-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      overflow: hidden;
-      flex: 1;
-    }
-    .status-indicator {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #22c55e;
-      box-shadow: 0 0 8px rgba(34, 197, 94, 0.7);
-      flex-shrink: 0;
-    }
-    .status-indicator.local {
-      background: #a855f7;
-      box-shadow: 0 0 8px rgba(168, 85, 247, 0.7);
-    }
-    .session-label {
-      font-weight: 700;
-      color: #f1f5f9;
-      font-size: 12px;
-      letter-spacing: 0.2px;
-      white-space: nowrap;
-    }
-    .path-badge {
-      font-size: 11px;
-      color: #94a3b8;
-      background: rgba(255, 255, 255, 0.05);
-      padding: 2px 8px;
-      border-radius: 4px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      max-width: 380px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-family: inherit;
-    }
-    .bar-right {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-    .term-select {
-      background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      color: #e2e8f0;
-      border-radius: 4px;
-      padding: 3px 8px;
-      font-size: 11px;
-      font-family: inherit;
-      outline: none;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-    }
-    .term-select:hover {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.25);
-    }
-    .term-btn {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #000000;
       color: #cbd5e1;
-      border-radius: 4px;
-      padding: 3px 9px;
-      font-size: 11px;
-      font-family: inherit;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-    .term-btn:hover {
-      background: rgba(255, 255, 255, 0.14);
-      border-color: rgba(255, 255, 255, 0.25);
-      color: #ffffff;
-    }
-
-    #terminalContainer {
-      flex: 1;
-      width: 100%;
-      min-height: 0;
-      box-sizing: border-box;
-      padding: 6px 12px 6px 12px;
       overflow: hidden;
+      font-family: Consolas, "Lucida Console", "Courier New", monospace;
+    }
+    #terminalContainer {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      padding: 6px;
     }
     .xterm {
       height: 100%;
       padding: 0;
     }
     .xterm-viewport {
-      background-color: transparent !important;
+      background-color: #000000 !important;
     }
   </style>
 </head>
 <body>
-  <div class="terminal-app-bar">
-    <div class="bar-left">
-      <div class="status-indicator" id="statusDot"></div>
-      <span class="session-label" id="sessionLabel">root@host</span>
-      <span class="path-badge" id="pathBadge">~</span>
-    </div>
-    <div class="bar-right">
-      <select id="themeSelect" onchange="changeTheme(this.value)" class="term-select" title="Switch Terminal Color Palette">
-        <option value="obsidian">🌌 Obsidian Matrix</option>
-        <option value="crimson">🩸 Crimson Ruby</option>
-        <option value="tokyo">💜 Tokyo Night</option>
-        <option value="matrix">⚡ Matrix Emerald</option>
-        <option value="nordic">❄️ Nordic Frost</option>
-      </select>
-      <button type="button" class="term-btn" onclick="adjustFontSize(-1)" title="Decrease Font Size (Ctrl + Minus)">A−</button>
-      <button type="button" class="term-btn" onclick="adjustFontSize(1)" title="Increase Font Size (Ctrl + Plus)">A+</button>
-      <button type="button" class="term-btn" onclick="clearTerminalScreen()" title="Clear Screen (Ctrl + L)">Clear</button>
-    </div>
-  </div>
-
   <div id="terminalContainer"></div>
 
   <script>
@@ -174,126 +51,6 @@
     let commandHistory = [];
     let historyIdx = -1;
     let isBusy = false;
-    let currentFontSize = parseInt(localStorage.getItem('90ftp_term_fontsize')) || 13;
-    let currentThemeKey = localStorage.getItem('90ftp_term_theme') || 'obsidian';
-
-    const THEMES = {
-      obsidian: {
-        background: '#0a0d14',
-        foreground: '#e2e8f0',
-        cursor: '#38bdf8',
-        cursorAccent: '#0a0d14',
-        selectionBackground: 'rgba(56, 189, 248, 0.35)',
-        black: '#0a0d14',
-        red: '#f87171',
-        green: '#34d399',
-        yellow: '#fbbf24',
-        blue: '#38bdf8',
-        magenta: '#c084fc',
-        cyan: '#22d3ee',
-        white: '#f8fafc',
-        brightBlack: '#64748b',
-        brightRed: '#ef4444',
-        brightGreen: '#10b981',
-        brightYellow: '#f59e0b',
-        brightBlue: '#60a5fa',
-        brightMagenta: '#a855f7',
-        brightCyan: '#06b6d4',
-        brightWhite: '#ffffff'
-      },
-      crimson: {
-        background: '#0e0b0d',
-        foreground: '#ffe4e6',
-        cursor: '#ef4444',
-        cursorAccent: '#0e0b0d',
-        selectionBackground: 'rgba(239, 68, 68, 0.35)',
-        black: '#0e0b0d',
-        red: '#f43f5e',
-        green: '#4ade80',
-        yellow: '#fde047',
-        blue: '#fb7185',
-        magenta: '#e11d48',
-        cyan: '#fda4af',
-        white: '#fff1f2',
-        brightBlack: '#57534e',
-        brightRed: '#e11d48',
-        brightGreen: '#22c55e',
-        brightYellow: '#eab308',
-        brightBlue: '#f43f5e',
-        brightMagenta: '#be123c',
-        brightCyan: '#fecdd3',
-        brightWhite: '#ffffff'
-      },
-      tokyo: {
-        background: '#1a1b26',
-        foreground: '#c0caf5',
-        cursor: '#bb9af7',
-        cursorAccent: '#1a1b26',
-        selectionBackground: 'rgba(187, 154, 247, 0.35)',
-        black: '#15161e',
-        red: '#f7768e',
-        green: '#9ece6a',
-        yellow: '#e0af68',
-        blue: '#7aa2f7',
-        magenta: '#bb9af7',
-        cyan: '#7dcfff',
-        white: '#c0caf5',
-        brightBlack: '#414868',
-        brightRed: '#f7768e',
-        brightGreen: '#9ece6a',
-        brightYellow: '#e0af68',
-        brightBlue: '#7aa2f7',
-        brightMagenta: '#bb9af7',
-        brightCyan: '#7dcfff',
-        brightWhite: '#c0caf5'
-      },
-      matrix: {
-        background: '#040d06',
-        foreground: '#86efac',
-        cursor: '#22c55e',
-        cursorAccent: '#040d06',
-        selectionBackground: 'rgba(34, 197, 94, 0.35)',
-        black: '#040d06',
-        red: '#f87171',
-        green: '#22c55e',
-        yellow: '#a3e635',
-        blue: '#4ade80',
-        magenta: '#16a34a',
-        cyan: '#34d399',
-        white: '#dcfce7',
-        brightBlack: '#365314',
-        brightRed: '#ef4444',
-        brightGreen: '#4ade80',
-        brightYellow: '#bef264',
-        brightBlue: '#86efac',
-        brightMagenta: '#22c55e',
-        brightCyan: '#6ee7b7',
-        brightWhite: '#f0fdf4'
-      },
-      nordic: {
-        background: '#1e222a',
-        foreground: '#eceff4',
-        cursor: '#88c0d0',
-        cursorAccent: '#1e222a',
-        selectionBackground: 'rgba(136, 192, 208, 0.35)',
-        black: '#1e222a',
-        red: '#bf616a',
-        green: '#a3be8c',
-        yellow: '#ebcb8b',
-        blue: '#81a1c1',
-        magenta: '#b48ead',
-        cyan: '#88c0d0',
-        white: '#eceff4',
-        brightBlack: '#4c566a',
-        brightRed: '#d08770',
-        brightGreen: '#a3be8c',
-        brightYellow: '#ebcb8b',
-        brightBlue: '#5e81ac',
-        brightMagenta: '#b48ead',
-        brightCyan: '#8fbcbb',
-        brightWhite: '#ffffff'
-      }
-    };
 
     function applyParams(p) {
       if (!p) return;
@@ -315,16 +72,13 @@
       if (!term) {
         setupXterm();
       } else {
-        document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Terminal';
-        term.writeln('\r\n\x1b[1;36m╭────────────────────────────────────────────────────────────────────╮\x1b[0m');
-        term.writeln('\x1b[1;36m│\x1b[0m  \x1b[1;32m● Active Session Connected\x1b[0m                                        \x1b[1;36m│\x1b[0m');
-        const info = 'Host: ' + currentUser + '@' + currentHost + '   │   Path: ' + currentCwd;
-        term.writeln('\x1b[1;36m│\x1b[0m  \x1b[90m' + info.padEnd(66, ' ') + '\x1b[0m\x1b[1;36m│\x1b[0m');
-        term.writeln('\x1b[1;36m╰────────────────────────────────────────────────────────────────────╯\x1b[0m\r\n');
+        document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Native Terminal';
+        term.writeln('\r\n\x1b[1;36m======================================================================\x1b[0m');
+        term.writeln('\x1b[1;32m  Connected: ' + currentUser + '@' + currentHost + ' | Directory: ' + currentCwd + '\x1b[0m');
+        term.writeln('\x1b[1;36m======================================================================\x1b[0m\r\n');
         lineBuffer = '';
         printPrompt();
       }
-      updateUiBar();
     };
 
     function setupXterm() {
@@ -332,21 +86,39 @@
       if (window.__INIT_PARAMS__) {
         applyParams(window.__INIT_PARAMS__);
       }
-      document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Terminal';
+      document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Native Terminal';
       const container = document.getElementById('terminalContainer');
-      const activeTheme = THEMES[currentThemeKey] || THEMES.obsidian;
-      document.body.style.backgroundColor = activeTheme.background;
-
       term = new Terminal({
         cursorBlink: true,
         cursorStyle: 'block',
-        fontSize: currentFontSize,
-        fontFamily: '"Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, "Courier New", monospace',
+        fontSize: 13.5,
+        fontFamily: 'Consolas, "Lucida Console", "Courier New", monospace',
         fontWeight: 'normal',
         fontWeightBold: 'bold',
-        lineHeight: 1.2,
-        letterSpacing: 0.4,
-        theme: activeTheme,
+        lineHeight: 1.15,
+        theme: {
+          background: '#000000',
+          foreground: '#d1d5db',
+          cursor: '#22c55e',
+          cursorAccent: '#000000',
+          selectionBackground: 'rgba(56, 189, 248, 0.35)',
+          black: '#000000',
+          red: '#ef4444',
+          green: '#22c55e',
+          yellow: '#eab308',
+          blue: '#38bdf8',
+          magenta: '#c084fc',
+          cyan: '#06b6d4',
+          white: '#f9fafb',
+          brightBlack: '#6b7280',
+          brightRed: '#f87171',
+          brightGreen: '#4ade80',
+          brightYellow: '#fde047',
+          brightBlue: '#60a5fa',
+          brightMagenta: '#d8b4fe',
+          brightCyan: '#22d3ee',
+          brightWhite: '#ffffff'
+        },
         convertEol: true,
         scrollback: 10000
       });
@@ -354,18 +126,20 @@
       fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
       term.open(container);
-      setTimeout(() => fitAddon.fit(), 50);
+      setTimeout(() => {
+        try { fitAddon.fit(); } catch (_) {}
+      }, 50);
 
       window.addEventListener('resize', () => {
-        if (fitAddon) fitAddon.fit();
+        if (fitAddon) {
+          try { fitAddon.fit(); } catch (_) {}
+        }
       });
 
-      // Sleek High-Fidelity Banner without technical engine mentions
-      term.writeln('\x1b[1;36m╭────────────────────────────────────────────────────────────────────╮\x1b[0m');
-      term.writeln('\x1b[1;36m│\x1b[0m  \x1b[1;32m● 90FTP Terminal Engine\x1b[0m                                           \x1b[1;36m│\x1b[0m');
-      const bannerInfo = 'Session: ' + currentUser + '@' + currentHost + '   │   Directory: ' + currentCwd;
-      term.writeln('\x1b[1;36m│\x1b[0m  \x1b[90m' + bannerInfo.padEnd(66, ' ') + '\x1b[0m\x1b[1;36m│\x1b[0m');
-      term.writeln('\x1b[1;36m╰────────────────────────────────────────────────────────────────────╯\x1b[0m\r\n');
+      // Clean, elegant PuTTY banner without engine label
+      term.writeln('\x1b[1;36m======================================================================\x1b[0m');
+      term.writeln('\x1b[1;32m  Session: ' + currentUser + '@' + currentHost + ' | Directory: ' + currentCwd + '\x1b[0m');
+      term.writeln('\x1b[1;36m======================================================================\x1b[0m\r\n');
       printPrompt();
 
       // Keyboard input
@@ -402,7 +176,8 @@
         } else if (data === '\u0017') {
           deleteWordBackwards();
         } else if (data === '\u000c') {
-          clearTerminalScreen();
+          term.clear();
+          printPrompt();
         } else if (data === '\x1b[A') {
           if (commandHistory.length > 0) {
             if (historyIdx === -1) historyIdx = commandHistory.length - 1;
@@ -424,32 +199,13 @@
           term.write(data);
         }
       });
-
-      updateUiBar();
-      const themeSelect = document.getElementById('themeSelect');
-      if (themeSelect) themeSelect.value = currentThemeKey;
     }
 
     function printPrompt() {
       if (!term) return;
-      const userColor = currentMode === 'remote' ? '\x1b[1;32m' : '\x1b[1;35m';
-      const promptSymbol = currentMode === 'remote' ? '\x1b[1;32m$\x1b[0m' : '\x1b[1;35m>\x1b[0m';
-      term.write(userColor + currentUser + '@' + currentHost + '\x1b[0m:\x1b[1;34m' + currentCwd + '\x1b[0m ' + promptSymbol + ' ');
-      updateUiBar();
-    }
-
-    function updateUiBar() {
-      const lbl = document.getElementById('sessionLabel');
-      const pth = document.getElementById('pathBadge');
-      const dot = document.getElementById('statusDot');
-      if (lbl) lbl.textContent = currentUser + '@' + currentHost;
-      if (pth) {
-        pth.textContent = currentCwd;
-        pth.title = currentCwd;
-      }
-      if (dot) {
-        dot.className = 'status-indicator' + (currentMode === 'local' ? ' local' : '');
-      }
+      const userColor = currentMode === 'remote' ? '\x1b[32m' : '\x1b[35m';
+      const sep = currentMode === 'remote' ? '$' : '>';
+      term.write(userColor + currentUser + '@' + currentHost + '\x1b[0m:\x1b[34m' + currentCwd + '\x1b[0m' + sep + ' ');
     }
 
     function replaceCurrentLine(newStr) {
@@ -460,35 +216,6 @@
       }
       lineBuffer = newStr;
       term.write(newStr);
-    }
-
-    function clearTerminalScreen() {
-      if (term) {
-        term.clear();
-        lineBuffer = '';
-        printPrompt();
-      }
-    }
-
-    function adjustFontSize(delta) {
-      currentFontSize = Math.max(10, Math.min(24, currentFontSize + delta));
-      localStorage.setItem('90ftp_term_fontsize', currentFontSize);
-      if (term) {
-        term.options.fontSize = currentFontSize;
-        if (fitAddon) fitAddon.fit();
-      }
-    }
-
-    function changeTheme(themeKey) {
-      currentThemeKey = themeKey;
-      const theme = THEMES[themeKey] || THEMES.obsidian;
-      localStorage.setItem('90ftp_term_theme', themeKey);
-      document.body.style.backgroundColor = theme.background;
-      if (term) {
-        term.options.theme = theme;
-      }
-      const select = document.getElementById('themeSelect');
-      if (select && select.value !== themeKey) select.value = themeKey;
     }
 
     function deleteWordBackwards() {
@@ -504,7 +231,7 @@
       lineBuffer = lineBuffer.slice(0, newLen);
     }
 
-    // Keyboard shortcuts & accelerator protection
+    // Keyboard accelerators protection
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey) {
         if (e.key === 'w' || e.key === 'W') {
@@ -516,15 +243,6 @@
           e.preventDefault();
           e.stopPropagation();
           return false;
-        } else if (e.key === '=' || e.key === '+') {
-          e.preventDefault();
-          adjustFontSize(1);
-        } else if (e.key === '-' || e.key === '_') {
-          e.preventDefault();
-          adjustFontSize(-1);
-        } else if (e.key === 'l' || e.key === 'L') {
-          e.preventDefault();
-          clearTerminalScreen();
         }
       }
     });
@@ -541,7 +259,8 @@
 
     function runCommand(cmd) {
       if (cmd === 'clear') {
-        clearTerminalScreen();
+        term.clear();
+        printPrompt();
         return;
       }
       isBusy = true;
@@ -565,13 +284,12 @@
       isBusy = false;
       if (newCwd && newCwd.trim()) {
         currentCwd = newCwd.trim();
-        document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Terminal';
+        document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Native Terminal';
       }
       if (term) {
         term.write('\r\n');
         printPrompt();
       }
-      updateUiBar();
     };
 
     // Auto-setup on load
