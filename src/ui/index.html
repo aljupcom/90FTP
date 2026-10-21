@@ -505,6 +505,20 @@
       color: var(--text-muted);
     }
 
+    .parent-dir-row {
+      cursor: pointer;
+      user-select: none;
+    }
+    .parent-dir-row:hover td {
+      background: rgba(56, 189, 248, 0.08) !important;
+    }
+    .parent-dir-dots {
+      font-weight: 700;
+      font-size: 13.5px;
+      letter-spacing: 1px;
+      color: #38bdf8;
+    }
+
     /* Bottom Resizable Log Console (Floating Glassmorphic Panel) */
     .gutter-horizontal {
       height: 6px;
@@ -1535,7 +1549,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.17</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.18</span>
         </div>
       </div>
 
@@ -2844,7 +2858,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.17';
+    let APP_CURRENT_VERSION = '0.0.0.18';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -2884,7 +2898,7 @@
       await ensureIpcReady();
       return new Promise((resolve, reject) => {
         const id = 'req_' + (++reqCounter);
-        const timeoutMs = ['connect', 'upload', 'download', 'remote_read', 'remote_write', 'remote_list', 'remote_cd'].includes(action) 
+        const timeoutMs = ['connect', 'upload', 'download', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'terminal_exec'].includes(action) 
           ? 60000 
           : 15000;
 
@@ -3383,6 +3397,18 @@
       }
     }
 
+    function isLocalRoot(path) {
+      if (!path) return true;
+      const p = path.trim().replace(/[/\\]+$/, '');
+      return /^[a-zA-Z]:?$/.test(p) || p === '' || p === '\\' || p === '/';
+    }
+
+    function isRemoteRoot(path) {
+      if (!path) return true;
+      const p = path.trim();
+      return p === '/' || p === '.' || p === '';
+    }
+
     // Local Directory Listing
     function renderLocalFiles(files) {
       localFiles = files || [];
@@ -3390,8 +3416,41 @@
       if (!tbody) return;
       tbody.innerHTML = '';
 
+      const canGoUp = !isLocalRoot(currentLocalPath);
+      if (canGoUp) {
+        const trUp = document.createElement('tr');
+        trUp.className = 'parent-dir-row';
+        trUp.title = 'Parent Directory (Double-click to go up)';
+        trUp.ondblclick = (e) => {
+          e.preventDefault();
+          localNavigateUp();
+        };
+        trUp.onclick = () => {
+          const rows = document.querySelectorAll('#localFileList tr');
+          rows.forEach(r => r.classList.remove('selected'));
+          trUp.classList.add('selected');
+          selectedLocalFile = null;
+        };
+
+        const { svg, iconClass } = getFileIcon('..', true);
+        trUp.innerHTML = `
+          <td>
+            <div class="file-cell">
+              <span class="file-icon ${iconClass}">${svg}</span>
+              <span class="parent-dir-dots">..</span>
+            </div>
+          </td>
+          <td class="mono-cell">-</td>
+          <td class="mono-cell">-</td>
+          <td class="mono-cell">Parent Directory</td>
+        `;
+        tbody.appendChild(trUp);
+      }
+
       if (localFiles.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 30px 10px;">Folder is empty</td></tr>`;
+        const emptyTr = document.createElement('tr');
+        emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '30px'} 10px; font-style: italic;">Folder is empty</td>`;
+        tbody.appendChild(emptyTr);
         return;
       }
 
@@ -3442,8 +3501,10 @@
     }
 
     function selectLocalRow(idx) {
-      const rows = document.querySelectorAll('#localFileList tr');
+      const rows = document.querySelectorAll('#localFileList tr:not(.parent-dir-row)');
       rows.forEach((r, i) => r.classList.toggle('selected', i === idx));
+      const upRow = document.querySelector('#localFileList tr.parent-dir-row');
+      if (upRow) upRow.classList.remove('selected');
       selectedLocalFile = localFiles[idx];
     }
 
@@ -3519,16 +3580,50 @@
 
     // Remote Directory Listing
     function renderRemoteFiles(files) {
-      remoteFiles = files;
+      remoteFiles = files || [];
       const tbody = document.getElementById('remoteFileList');
+      if (!tbody) return;
       tbody.innerHTML = '';
 
-      if (files.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 25px;">Empty Directory</td></tr>`;
+      const canGoUp = !isRemoteRoot(currentRemotePath);
+      if (canGoUp) {
+        const trUp = document.createElement('tr');
+        trUp.className = 'parent-dir-row';
+        trUp.title = 'Parent Directory (Double-click to go up)';
+        trUp.ondblclick = (e) => {
+          e.preventDefault();
+          remoteNavigateUp();
+        };
+        trUp.onclick = () => {
+          const rows = document.querySelectorAll('#remoteFileList tr');
+          rows.forEach(r => r.classList.remove('selected'));
+          trUp.classList.add('selected');
+          selectedRemoteFile = null;
+        };
+
+        const { svg, iconClass } = getFileIcon('..', true);
+        trUp.innerHTML = `
+          <td>
+            <div class="file-cell">
+              <span class="file-icon ${iconClass}">${svg}</span>
+              <span class="parent-dir-dots">..</span>
+            </div>
+          </td>
+          <td class="mono-cell">-</td>
+          <td class="mono-cell">-</td>
+          <td class="mono-cell">Parent Directory</td>
+        `;
+        tbody.appendChild(trUp);
+      }
+
+      if (remoteFiles.length === 0) {
+        const emptyTr = document.createElement('tr');
+        emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '25px'}; font-style: italic;">Empty Directory</td>`;
+        tbody.appendChild(emptyTr);
         return;
       }
 
-      files.forEach((f, idx) => {
+      remoteFiles.forEach((f, idx) => {
         const tr = document.createElement('tr');
         tr.draggable = true;
         tr.ondragstart = (e) => {
@@ -3570,8 +3665,10 @@
     }
 
     function selectRemoteRow(idx) {
-      const rows = document.querySelectorAll('#remoteFileList tr');
+      const rows = document.querySelectorAll('#remoteFileList tr:not(.parent-dir-row)');
       rows.forEach((r, i) => r.classList.toggle('selected', i === idx));
+      const upRow = document.querySelector('#remoteFileList tr.parent-dir-row');
+      if (upRow) upRow.classList.remove('selected');
       selectedRemoteFile = remoteFiles[idx];
     }
 
@@ -6040,6 +6137,8 @@
         if (styles.length === 0) return '</span>';
         return `<span style="${styles.join(';')}">`;
       });
+      // Strip any other terminal escape sequences (cursor movements, clear screen/line, window title, etc.)
+      html = html.replace(/\x1b(\[[0-9;?]*[A-Za-z]|\][^\x07\x1b]*(\x07|\x1b\\))/g, '');
       return html;
     }
 
@@ -6392,8 +6491,19 @@
         const res = await sendRust('terminal_exec', {
           command: cmd,
           cwd: session.cwd,
-          mode: session.mode
+          mode: session.mode,
+          session_id: session.id
         });
+
+        if (res && res.started) {
+          // Command is running asynchronously in streaming mode.
+          // Chunks are received via window.onTerminalStream, and completion is signaled by window.onTerminalDone.
+          return;
+        }
+
+        // Synchronous / immediate completion
+        session.busy = false;
+        if (spinner) spinner.style.display = 'none';
 
         if (res) {
           if (res.cwd) {
@@ -6411,19 +6521,86 @@
             });
           }
         }
+        renderTerminalTabs();
+        renderTerminalScreen();
+        focusTerminalInput();
       } catch (err) {
+        session.busy = false;
+        if (spinner) spinner.style.display = 'none';
         session.logs.push({
           type: 'error',
           text: `Command error: ${err.message || err}\n`
         });
-      } finally {
-        session.busy = false;
-        if (spinner) spinner.style.display = 'none';
         renderTerminalTabs();
         renderTerminalScreen();
         focusTerminalInput();
       }
     }
+
+    let terminalStreamRaf = null;
+    function scheduleTerminalScreenRender() {
+      if (terminalStreamRaf) return;
+      terminalStreamRaf = requestAnimationFrame(() => {
+        terminalStreamRaf = null;
+        renderTerminalScreen();
+      });
+    }
+
+    window.onTerminalStream = function(sessionId, text) {
+      if (!text) return;
+      // Filter out internal pwd marker if it leaks into stream chunks
+      let cleanText = text.replace(/[\r\n]*__90FTP_PWD__[\s\S]*$/, '');
+      if (!cleanText) return;
+
+      let session = terminalSessions.find(s => s.id === sessionId);
+      if (!session) {
+        session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      }
+      if (!session) return;
+
+      const last = session.logs[session.logs.length - 1];
+      if (last && last.type === 'output') {
+        last.text += cleanText;
+      } else {
+        session.logs.push({
+          type: 'output',
+          text: cleanText
+        });
+      }
+
+      if (session.id === activeTerminalSessionId) {
+        scheduleTerminalScreenRender();
+      }
+    };
+
+    window.onTerminalDone = function(sessionId, newCwd, exitCode) {
+      if (terminalStreamRaf) {
+        cancelAnimationFrame(terminalStreamRaf);
+        terminalStreamRaf = null;
+      }
+      let session = terminalSessions.find(s => s.id === sessionId);
+      if (!session) {
+        session = terminalSessions.find(s => s.id === activeTerminalSessionId);
+      }
+      if (session) {
+        session.busy = false;
+        if (newCwd && newCwd.trim()) {
+          session.cwd = newCwd.trim();
+          if (session.id === activeTerminalSessionId) {
+            const promptCwd = document.getElementById('terminalPromptCwd');
+            const cwdDisplay = document.getElementById('terminalCwdDisplay');
+            if (promptCwd) promptCwd.textContent = session.cwd;
+            if (cwdDisplay) cwdDisplay.textContent = session.cwd;
+          }
+        }
+      }
+
+      const spinner = document.getElementById('terminalBusySpinner');
+      if (spinner) spinner.style.display = 'none';
+      renderTerminalTabs();
+      renderTerminalScreen();
+      focusTerminalInput();
+    };
 
     function ensureTerminalActiveSession(host, user, remotePath, mode) {
       const targetMode = mode || (isConnected ? 'remote' : 'local');

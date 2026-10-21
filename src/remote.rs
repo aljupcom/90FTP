@@ -118,4 +118,14 @@ impl RemoteClient {
             RemoteClient::Sftp(c) => c.exec_command(cmd),
         }
     }
+
+    pub fn exec_command_streaming<F>(&self, cmd: &str, on_chunk: F) -> Result<String, String>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
+        match self {
+            RemoteClient::Ftp(_) => Err("Terminal command execution is not supported on standard FTP/FTPS. Please connect with SSH/SFTP.".to_string()),
+            RemoteClient::Sftp(c) => c.exec_command_streaming(cmd, on_chunk),
+        }
+    }
 }

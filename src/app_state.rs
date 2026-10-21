@@ -852,9 +852,10 @@ impl AppState {
             }
 
             "terminal_exec" => {
-                let cmd_raw = payload["command"].as_str().unwrap_or("").trim();
-                let cwd = payload["cwd"].as_str().unwrap_or("").trim();
-                let req_mode = payload.get("mode").and_then(|v| v.as_str()).unwrap_or("auto");
+                let cmd_raw = payload["command"].as_str().unwrap_or("").trim().to_string();
+                let cwd = payload["cwd"].as_str().unwrap_or("").trim().to_string();
+                let req_mode = payload.get("mode").and_then(|v| v.as_str()).unwrap_or("auto").to_string();
+                let session_id = payload.get("session_id").and_then(|v| v.as_str()).unwrap_or("sess_1").to_string();
 
                 if cmd_raw.is_empty() {
                     return IpcResponse::ok(id, action, json!({
@@ -877,88 +878,148 @@ impl AppState {
                     (req_mode == "remote" || req_mode == "auto") && lock.is_some()
                 };
 
+                let exec_cb = self.exec_script.clone();
+                let sess_id = session_id.clone();
+
                 if is_remote {
-                    let remote_lock = self.remote.lock().unwrap();
-                    let remote = remote_lock.as_ref().unwrap();
+                    let remote_arc = self.remote.clone();
+                    std::thread::spawn(move || {
+                        let remote_lock = remote_arc.lock().unwrap();
+                        if let Some(ref remote) = *remote_lock {
+                            let safe_cwd = if cwd.is_empty() { "~" } else { &cwd };
+                            let wrapped_cmd = format!(
+                                "cd \"{}\" 2>/dev/null; {}; printf \"\\n__90FTP_PWD__%s\\n\" \"$(pwd)\"",
+                                safe_cwd, cmd_raw
+                            );
 
-                    let safe_cwd = if cwd.is_empty() { "~" } else { cwd };
-                    let wrapped_cmd = format!(
-                        "cd \"{}\" 2>/dev/null; {}; printf \"\\n__90FTP_PWD__%s\\n\" \"$(pwd)\"",
-                        safe_cwd, cmd_raw
-                    );
-
-                    match remote.exec_command(&wrapped_cmd) {
-                        Ok(raw_output) => {
-                            let mut output = raw_output;
-                            let mut new_cwd = cwd.to_string();
-
-                            if let Some(pos) = output.rfind("__90FTP_PWD__") {
-                                let (pre, post) = output.split_at(pos);
-                                let pwd_part = &post["__90FTP_PWD__".len()..];
-                                let detected_pwd = pwd_part.lines().next().unwrap_or("").trim();
-                                if !detected_pwd.is_empty() {
-                                    new_cwd = detected_pwd.to_string();
+                            let cb_clone = exec_cb.clone();
+                            let s_id = sess_id.clone();
+                            let on_chunk = move |chunk: &str| {
+                                if let Some(ref cb) = cb_clone {
+                                    let json_str = serde_json::to_string(chunk).unwrap_or_default();
+                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", s_id, json_str));
                                 }
-                                output = pre.trim_end_matches(['\r', '\n']).to_string();
-                            }
-
-                            IpcResponse::ok(id, action, json!({
-                                "output": output,
-                                "cwd": new_cwd,
-                                "mode": "remote",
-                            }))
-                        }
-                        Err(e) => IpcResponse::err(id, action, &e),
-                    }
-                } else {
-                    // Local Terminal execution (PowerShell)
-                    let run_dir = if !cwd.is_empty() && std::path::Path::new(cwd).exists() {
-                        cwd.to_string()
-                    } else {
-                        crate::local_fs::get_initial_dir()
-                    };
-
-                    let full_ps = format!(
-                        "Set-Location -LiteralPath '{}'; {}; Write-Output \"`n__90FTP_PWD__$((Get-Location).Path)\"",
-                        run_dir.replace("'", "''"),
-                        cmd_raw
-                    );
-
-                    let output_res = std::process::Command::new("powershell.exe")
-                        .args(["-NoProfile", "-NonInteractive", "-Command", &full_ps])
-                        .output();
-
-                    match output_res {
-                        Ok(out) => {
-                            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-                            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-                            let mut combined = if !stderr.is_empty() && !stdout.is_empty() {
-                                format!("{}\n{}", stdout, stderr)
-                            } else if !stderr.is_empty() {
-                                stderr
-                            } else {
-                                stdout
                             };
 
-                            let mut new_cwd = run_dir;
-                            if let Some(pos) = combined.rfind("__90FTP_PWD__") {
-                                let (pre, post) = combined.split_at(pos);
-                                let pwd_part = &post["__90FTP_PWD__".len()..];
-                                let detected = pwd_part.lines().next().unwrap_or("").trim();
-                                if !detected.is_empty() {
-                                    new_cwd = detected.to_string();
+                            match remote.exec_command_streaming(&wrapped_cmd, on_chunk) {
+                                Ok(all_out) => {
+                                    let mut new_cwd = cwd.clone();
+                                    if let Some(pos) = all_out.rfind("__90FTP_PWD__") {
+                                        let post = &all_out[pos + "__90FTP_PWD__".len()..];
+                                        let detected = post.lines().next().unwrap_or("").trim();
+                                        if !detected.is_empty() {
+                                            new_cwd = detected.to_string();
+                                        }
+                                    }
+                                    if let Some(ref cb) = exec_cb {
+                                        let json_cwd = serde_json::to_string(&new_cwd).unwrap_or_default();
+                                        cb(format!("if(window.onTerminalDone)window.onTerminalDone('{}', {}, 0);", sess_id, json_cwd));
+                                    }
                                 }
-                                combined = pre.trim_end_matches(['\r', '\n']).to_string();
+                                Err(e) => {
+                                    if let Some(ref cb) = exec_cb {
+                                        let err_str = format!("\x1b[31mRemote error: {}\x1b[0m\n", e);
+                                        let json_err = serde_json::to_string(&err_str).unwrap_or_default();
+                                        cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", sess_id, json_err));
+                                        let json_cwd = serde_json::to_string(&cwd).unwrap_or_default();
+                                        cb(format!("if(window.onTerminalDone)window.onTerminalDone('{}', {}, 1);", sess_id, json_cwd));
+                                    }
+                                }
                             }
-
-                            IpcResponse::ok(id, action, json!({
-                                "output": combined,
-                                "cwd": new_cwd,
-                                "mode": "local",
-                            }))
                         }
-                        Err(e) => IpcResponse::err(id, action, &format!("Failed to execute command: {}", e)),
-                    }
+                    });
+
+                    IpcResponse::ok(id, action, json!({
+                        "started": true,
+                        "session_id": session_id,
+                        "mode": "remote",
+                    }))
+                } else {
+                    // Local Terminal execution (PowerShell)
+                    std::thread::spawn(move || {
+                        let run_dir = if !cwd.is_empty() && std::path::Path::new(&cwd).exists() {
+                            cwd.clone()
+                        } else {
+                            crate::local_fs::get_initial_dir()
+                        };
+
+                        let full_ps = format!(
+                            "Set-Location -LiteralPath '{}'; {}; Write-Output \"`n__90FTP_PWD__$((Get-Location).Path)\"",
+                            run_dir.replace("'", "''"),
+                            cmd_raw
+                        );
+
+                        use std::io::Read;
+                        use std::process::{Command, Stdio};
+
+                        let mut child = match Command::new("powershell.exe")
+                            .args(["-NoProfile", "-NonInteractive", "-Command", &full_ps])
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped())
+                            .spawn()
+                        {
+                            Ok(c) => c,
+                            Err(e) => {
+                                if let Some(ref cb) = exec_cb {
+                                    let err_str = format!("\x1b[31mFailed to start PowerShell: {}\x1b[0m\n", e);
+                                    let json_err = serde_json::to_string(&err_str).unwrap_or_default();
+                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", sess_id, json_err));
+                                    let json_cwd = serde_json::to_string(&run_dir).unwrap_or_default();
+                                    cb(format!("if(window.onTerminalDone)window.onTerminalDone('{}', {}, 1);", sess_id, json_cwd));
+                                }
+                                return;
+                            }
+                        };
+
+                        let mut all_output = String::new();
+                        let mut buffer = [0u8; 1024];
+
+                        if let Some(mut stdout) = child.stdout.take() {
+                            while let Ok(n) = stdout.read(&mut buffer) {
+                                if n == 0 { break; }
+                                let text = String::from_utf8_lossy(&buffer[..n]).to_string();
+                                all_output.push_str(&text);
+                                if let Some(ref cb) = exec_cb {
+                                    let json_chunk = serde_json::to_string(&text).unwrap_or_default();
+                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", sess_id, json_chunk));
+                                }
+                            }
+                        }
+
+                        if let Some(mut stderr) = child.stderr.take() {
+                            while let Ok(n) = stderr.read(&mut buffer) {
+                                if n == 0 { break; }
+                                let text = String::from_utf8_lossy(&buffer[..n]).to_string();
+                                all_output.push_str(&text);
+                                if let Some(ref cb) = exec_cb {
+                                    let json_chunk = serde_json::to_string(&text).unwrap_or_default();
+                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", sess_id, json_chunk));
+                                }
+                            }
+                        }
+
+                        let _ = child.wait();
+
+                        let mut new_cwd = run_dir.clone();
+                        if let Some(pos) = all_output.rfind("__90FTP_PWD__") {
+                            let post = &all_output[pos + "__90FTP_PWD__".len()..];
+                            let detected = post.lines().next().unwrap_or("").trim();
+                            if !detected.is_empty() {
+                                new_cwd = detected.to_string();
+                            }
+                        }
+
+                        if let Some(ref cb) = exec_cb {
+                            let json_cwd = serde_json::to_string(&new_cwd).unwrap_or_default();
+                            cb(format!("if(window.onTerminalDone)window.onTerminalDone('{}', {}, 0);", sess_id, json_cwd));
+                        }
+                    });
+
+                    IpcResponse::ok(id, action, json!({
+                        "started": true,
+                        "session_id": session_id,
+                        "mode": "local",
+                    }))
                 }
             }
 
