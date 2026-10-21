@@ -143,33 +143,20 @@
 <body>
   <div class="terminal-header-bar">
     <div class="quick-group">
-      <div class="quick-dropdown-container">
-        <button class="quick-btn" onclick="toggleDropdown('webDropdown')">
-          <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
-          <span>Web Server</span> ▾
-        </button>
-        <div id="webDropdown" class="quick-menu">
-          <div class="quick-menu-header">Web Server Services</div>
-          <div class="quick-menu-item" onclick="executeQuick('systemctl restart lsws')">⚡ Restart LiteSpeed (lsws)</div>
-          <div class="quick-menu-item" onclick="executeQuick('systemctl restart nginx')">⚡ Restart Nginx</div>
-          <div class="quick-menu-item" onclick="executeQuick('systemctl restart apache2')">⚡ Restart Apache2</div>
-          <div class="quick-menu-item" onclick="executeQuick('systemctl restart httpd')">⚡ Restart HTTPD</div>
-        </div>
-      </div>
+      <button class="quick-btn" title="Restart LiteSpeed Web Server" onclick="executeQuick('systemctl restart lsws')">
+        <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span>Restart LSWS</span>
+      </button>
 
-      <div class="quick-dropdown-container">
-        <button class="quick-btn" onclick="toggleDropdown('panelDropdown')">
-          <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          <span>Panel & Services</span> ▾
-        </button>
-        <div id="panelDropdown" class="quick-menu">
-          <div class="quick-menu-header">Control Panels & Databases</div>
-          <div class="quick-menu-item" onclick="executeQuick('systemctl restart lscpd')">🎛️ Restart CyberPanel (lscpd)</div>
-          <div class="quick-menu-item" onclick="executeQuick('systemctl restart mariadb')">🗄️ Restart MariaDB</div>
-          <div class="quick-menu-item" onclick="executeQuick('systemctl restart mysql')">🗄️ Restart MySQL</div>
-          <div class="quick-menu-item" onclick="executeQuick('systemctl restart redis')">⚡ Restart Redis</div>
-        </div>
-      </div>
+      <button class="quick-btn" title="Restart CyberPanel Service" onclick="executeQuick('systemctl restart lscpd')">
+        <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Restart Panel</span>
+      </button>
+
+      <button class="quick-btn" title="Restart MariaDB Database" onclick="executeQuick('systemctl restart mariadb')">
+        <svg class="icon-sm" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        <span>Restart MariaDB</span>
+      </button>
 
       <div class="quick-dropdown-container">
         <button class="quick-btn" onclick="toggleDropdown('sysDropdown')">
@@ -182,6 +169,7 @@
           <div class="quick-menu-item" onclick="executeQuick('free -m')">🧠 Memory Usage (free -m)</div>
           <div class="quick-menu-item" onclick="executeQuick('uptime')">⏱️ System Uptime & Load</div>
           <div class="quick-menu-item" onclick="executeQuick('top -b -n 1 | head -n 20')">📊 Top Processes</div>
+          <div class="quick-menu-item" onclick="executeQuick('systemctl restart redis')">⚡ Restart Redis</div>
           <div class="quick-menu-separator"></div>
           <div class="quick-menu-item danger" onclick="confirmReboot()">⚠️ Reboot Server</div>
         </div>
