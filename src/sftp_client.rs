@@ -334,45 +334,27 @@ impl SftpClient {
 
             let _ = channel.request_pty(false, "xterm-256color", pty_cols, pty_rows, 0, 0, &[]).await;
 
-            channel.exec(false, cmd_s).await
+            channel.exec(true, cmd_s).await
                 .map_err(|e| format!("Failed to execute command: {}", e))?;
 
             let mut all_output = String::new();
-            let mut chunk_buf = String::with_capacity(8192);
-            let mut flush_interval = tokio::time::interval(tokio::time::Duration::from_millis(15));
-            flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-            // Stream chunks with micro-batching for buttery-smooth 60+ FPS terminal rendering
+            // Stream chunks as they arrive from remote server with a generous 10-minute idle timeout
             loop {
                 tokio::select! {
-                    _ = flush_interval.tick() => {
-                        if !chunk_buf.is_empty() {
-                            on_chunk(&chunk_buf);
-                            all_output.push_str(&chunk_buf);
-                            chunk_buf.clear();
-                        }
-                    }
                     wait_res = tokio::time::timeout(tokio::time::Duration::from_secs(600), channel.wait()) => {
                         match wait_res {
                             Ok(Some(msg)) => {
                                 match msg {
                                     russh::ChannelMsg::Data { ref data } => {
-                                        let text = String::from_utf8_lossy(data);
-                                        chunk_buf.push_str(&text);
-                                        if chunk_buf.len() >= 4096 {
-                                            on_chunk(&chunk_buf);
-                                            all_output.push_str(&chunk_buf);
-                                            chunk_buf.clear();
-                                        }
+                                        let text = String::from_utf8_lossy(data).to_string();
+                                        on_chunk(&text);
+                                        all_output.push_str(&text);
                                     }
                                     russh::ChannelMsg::ExtendedData { ref data, ext: _ } => {
-                                        let text = String::from_utf8_lossy(data);
-                                        chunk_buf.push_str(&text);
-                                        if chunk_buf.len() >= 4096 {
-                                            on_chunk(&chunk_buf);
-                                            all_output.push_str(&chunk_buf);
-                                            chunk_buf.clear();
-                                        }
+                                        let text = String::from_utf8_lossy(data).to_string();
+                                        on_chunk(&text);
+                                        all_output.push_str(&text);
                                     }
                                     russh::ChannelMsg::ExitStatus { .. } | russh::ChannelMsg::Eof | russh::ChannelMsg::Close => {
                                         break;
@@ -391,11 +373,6 @@ impl SftpClient {
                         }
                     }
                 }
-            }
-
-            if !chunk_buf.is_empty() {
-                on_chunk(&chunk_buf);
-                all_output.push_str(&chunk_buf);
             }
 
             Ok(all_output)

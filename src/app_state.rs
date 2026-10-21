@@ -145,9 +145,14 @@ impl AppState {
                     path.replace("'''", "")
                 );
 
-                let output = std::process::Command::new("python")
-                    .args(&["-c", &py_script])
-                    .output();
+                let mut cmd = std::process::Command::new("python");
+                cmd.args(&["-c", &py_script]);
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x08000000);
+                }
+                let output = cmd.output();
 
                 match output {
                     Ok(out) => {
@@ -203,9 +208,14 @@ impl AppState {
                     )
                 };
 
-                let _ = std::process::Command::new("python")
-                    .args(&["-c", &py_script])
-                    .spawn();
+                let mut cmd = std::process::Command::new("python");
+                cmd.args(&["-c", &py_script]);
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x08000000);
+                }
+                let _ = cmd.spawn();
 
                 IpcResponse::ok(id, action, json!({ "invoked": true, "path": path }))
             }
@@ -960,11 +970,16 @@ impl AppState {
                         use std::io::Read;
                         use std::process::{Command, Stdio};
 
-                        let mut child = match Command::new("powershell.exe")
-                            .args(["-NoProfile", "-NonInteractive", "-Command", &full_ps])
+                        let mut cmd = Command::new("powershell.exe");
+                        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &full_ps])
                             .stdout(Stdio::piped())
-                            .stderr(Stdio::piped())
-                            .spawn()
+                            .stderr(Stdio::piped());
+                        #[cfg(target_os = "windows")]
+                        {
+                            use std::os::windows::process::CommandExt;
+                            cmd.creation_flags(0x08000000);
+                        }
+                        let mut child = match cmd.spawn()
                         {
                             Ok(c) => c,
                             Err(e) => {
