@@ -2209,7 +2209,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.29</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.30</span>
         </div>
       </div>
 
@@ -3626,7 +3626,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.29';
+    let APP_CURRENT_VERSION = '0.0.0.30';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4041,22 +4041,38 @@
       rightPane.addEventListener('drop', async (e) => {
         e.preventDefault();
         rightPane.classList.remove('drag-target');
+
+        if (!isConnected) {
+          alert('Please connect to a server before dropping files to upload');
+          return;
+        }
+
+        // 1. Internal drag from left pane
         const text = e.dataTransfer.getData('text/plain');
-        if (!text) return;
-        try {
-          const data = JSON.parse(text);
-          if (data.source === 'local') {
-            if (!isConnected) {
-              alert('Please connect to a server before dropping files to upload');
+        if (text) {
+          try {
+            const data = JSON.parse(text);
+            if (data.source === 'local') {
+              if (data.is_dir) {
+                await uploadFolderDirect(data.path, data.name);
+              } else {
+                await uploadFileDirect(data.path, data.name);
+              }
               return;
             }
-            if (data.is_dir) {
-              await uploadFolderDirect(data.path, data.name);
-            } else {
-              await uploadFileDirect(data.path, data.name);
+          } catch (_) {}
+        }
+
+        // 2. External drag & drop from Windows Explorer / Desktop
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          for (let i = 0; i < e.dataTransfer.files.length; i++) {
+            const f = e.dataTransfer.files[i];
+            const resolvedPath = f.path || (currentLocalPath ? (currentLocalPath.endsWith('\\') ? currentLocalPath + f.name : currentLocalPath + '\\' + f.name) : '');
+            if (resolvedPath) {
+              await uploadFileDirect(resolvedPath, f.name);
             }
           }
-        } catch (_) {}
+        }
       });
     }
 

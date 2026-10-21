@@ -614,6 +614,9 @@ impl AppState {
                 if let Some(client) = lock.as_mut() {
                     match client.download_file(remote_path) {
                         Ok(data) => {
+                            if let Some(parent) = std::path::Path::new(local_path).parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
                             if let Err(e) = std::fs::write(local_path, &data) {
                                 return IpcResponse::err(id, action, &format!("Failed to write local file: {}", e));
                             }

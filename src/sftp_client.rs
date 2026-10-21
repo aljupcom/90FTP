@@ -244,9 +244,14 @@ impl SftpClient {
     pub fn download_file(&self, remote_file: &str) -> Result<Vec<u8>, String> {
         let file_s = remote_file.to_string();
         self.rt.block_on(async {
-            let data = self.sftp.read(&file_s).await
+            use tokio::io::AsyncReadExt;
+            let mut file = self.sftp.open(&file_s).await
+                .map_err(|e| format!("Failed to open remote file {}: {}", file_s, e))?;
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer).await
                 .map_err(|e| format!("Failed to read remote file {}: {}", file_s, e))?;
-            Ok(data)
+            let _ = file.close().await;
+            Ok(buffer)
         })
     }
 
@@ -254,8 +259,12 @@ impl SftpClient {
         let file_s = remote_file.to_string();
         let bytes = data.to_vec();
         self.rt.block_on(async {
-            self.sftp.write(&file_s, &bytes).await
-                .map_err(|e| format!("Failed to write remote file data: {}", e))?;
+            use tokio::io::AsyncWriteExt;
+            let mut file = self.sftp.create(&file_s).await
+                .map_err(|e| format!("Failed to create remote file {}: {}", file_s, e))?;
+            file.write_all(&bytes).await
+                .map_err(|e| format!("Failed to write remote file data {}: {}", file_s, e))?;
+            let _ = file.close().await;
             Ok(())
         })
     }
