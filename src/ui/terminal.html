@@ -299,7 +299,7 @@
       if (!term || !text) return;
       const clean = text.replace(/[\r\n]*__90FTP_PWD__[\s\S]*$/, '');
       if (clean) {
-        term.write(clean.replace(/\r?\n/g, '\r\n'));
+        term.write(clean);
       }
     };
 

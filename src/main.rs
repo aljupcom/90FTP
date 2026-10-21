@@ -138,14 +138,27 @@ fn main() {
                 println!("90FTP Desktop Client Started.");
             }
             Event::UserEvent(AppEvent::ExecScript(script)) => {
-                if let Err(e) = webview.evaluate_script(&script) {
-                    logger::log_error(&format!("Main WebView evaluate_script error: {:?}", e));
-                }
-                // Forward only terminal-targeted events to terminal_wv, protecting it from main UI overhead
-                if script.contains("onTerminalStream") || script.contains("onTerminalDone") || script.contains("initTerminal") {
+                let is_native = script.contains("native_term_");
+                let is_main_term = script.contains("sess_");
+
+                if is_native {
                     if let Some((_, ref term_wv)) = terminal_instance {
                         if let Err(e) = term_wv.evaluate_script(&script) {
                             logger::log_error(&format!("Terminal WebView evaluate_script error: {:?}", e));
+                        }
+                    }
+                } else if is_main_term {
+                    if let Err(e) = webview.evaluate_script(&script) {
+                        logger::log_error(&format!("Main WebView evaluate_script error: {:?}", e));
+                    }
+                } else {
+                    // General scripts (e.g. onRustResponse, dialogs, connection changes)
+                    if let Err(e) = webview.evaluate_script(&script) {
+                        logger::log_error(&format!("Main WebView evaluate_script error: {:?}", e));
+                    }
+                    if script.contains("initTerminal") {
+                        if let Some((_, ref term_wv)) = terminal_instance {
+                            let _ = term_wv.evaluate_script(&script);
                         }
                     }
                 }

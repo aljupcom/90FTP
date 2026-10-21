@@ -980,7 +980,7 @@ impl AppState {
                         };
 
                         let mut all_output = String::new();
-                        let mut buffer = [0u8; 1024];
+                        let mut buffer = [0u8; 4096];
 
                         if let Some(mut stdout) = child.stdout.take() {
                             while let Ok(n) = stdout.read(&mut buffer) {
