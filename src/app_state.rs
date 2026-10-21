@@ -1140,6 +1140,15 @@ impl AppState {
                 }))
             }
 
+            "get_error_logs" => {
+                let logs = crate::logger::read_recent_errors(300);
+                let path = crate::logger::get_log_file_path().to_string_lossy().to_string();
+                IpcResponse::ok(id, action, json!({
+                    "logs": logs,
+                    "path": path,
+                }))
+            }
+
             unknown => IpcResponse::err(id, action, &format!("Unknown action: {}", unknown)),
         }
     }

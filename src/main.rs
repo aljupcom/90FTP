@@ -3,6 +3,7 @@
 mod app_state;
 mod ftp_client;
 mod local_fs;
+mod logger;
 mod models;
 mod remote;
 mod sessions;
@@ -29,6 +30,7 @@ enum AppEvent {
 }
 
 fn main() {
+    logger::init_logger();
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
 
     let saved_state = sessions::load_window_state();
@@ -137,10 +139,15 @@ fn main() {
             }
             Event::UserEvent(AppEvent::ExecScript(script)) => {
                 if let Err(e) = webview.evaluate_script(&script) {
-                    eprintln!("WebView evaluate_script error: {:?}", e);
+                    logger::log_error(&format!("Main WebView evaluate_script error: {:?}", e));
                 }
-                if let Some((_, ref term_wv)) = terminal_instance {
-                    let _ = term_wv.evaluate_script(&script);
+                // Forward only terminal-targeted events to terminal_wv, protecting it from main UI overhead
+                if script.contains("onTerminalStream") || script.contains("onTerminalDone") || script.contains("initTerminal") {
+                    if let Some((_, ref term_wv)) = terminal_instance {
+                        if let Err(e) = term_wv.evaluate_script(&script) {
+                            logger::log_error(&format!("Terminal WebView evaluate_script error: {:?}", e));
+                        }
+                    }
                 }
             }
             Event::UserEvent(AppEvent::OpenNativeTerminal(params)) => {
@@ -180,11 +187,16 @@ fn main() {
                             let proxy = proxy_term.clone();
 
                             std::thread::spawn(move || {
-                                if let Ok(ipc_req) = serde_json::from_str::<IpcRequest>(&body) {
-                                    let resp = app_state.handle_request(ipc_req);
-                                    if let Ok(resp_json) = serde_json::to_string(&resp) {
-                                        let script = format!("if(window.onRustResponse)window.onRustResponse({});", resp_json);
-                                        let _ = proxy.send_event(AppEvent::ExecScript(script));
+                                match serde_json::from_str::<IpcRequest>(&body) {
+                                    Ok(ipc_req) => {
+                                        let resp = app_state.handle_request(ipc_req);
+                                        if let Ok(resp_json) = serde_json::to_string(&resp) {
+                                            let script = format!("if(window.onRustResponse)window.onRustResponse({});", resp_json);
+                                            let _ = proxy.send_event(AppEvent::ExecScript(script));
+                                        }
+                                    }
+                                    Err(e) => {
+                                        logger::log_error(&format!("Failed to parse terminal IPC request: {:?}. Body: {}", e, body));
                                     }
                                 }
                             });

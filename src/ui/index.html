@@ -1624,6 +1624,185 @@
       background: var(--bg-hover) !important;
     }
 
+    /* ========================================================
+       Authentic Native OS Window Dialogs & Frames
+       ======================================================== */
+    .native-window-dialog {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: popIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .native-titlebar {
+      height: 32px;
+      padding: 0 10px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .native-title-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      overflow: hidden;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .native-win-close {
+      width: 26px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 11px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .native-win-close:hover {
+      background: #dc2626 !important;
+      color: #ffffff !important;
+    }
+    .native-win-ctrl {
+      width: 26px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 11px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .native-win-ctrl:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+    }
+
+    /* Native Connection Dialog */
+    .loading-spinner-compact {
+      width: 24px;
+      height: 24px;
+      border: 3px solid rgba(59, 130, 246, 0.2);
+      border-top-color: var(--accent);
+      border-right-color: var(--accent-hover);
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      flex-shrink: 0;
+    }
+    .native-dialog-body {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Native Tools Dialog Rows */
+    .tool-native-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .tool-native-row:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+    .tool-tag {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 10px;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+    .tool-tag.ready {
+      background: rgba(34, 197, 94, 0.14);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .tool-tag.soon {
+      background: rgba(245, 158, 11, 0.14);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    /* Native Code Editor Menubar & Canvas */
+    .editor-native-menubar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-color);
+      user-select: none;
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+    .editor-menu-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.1s, color 0.1s;
+    }
+    .editor-menu-item:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-main);
+    }
+    .editor-canvas-container {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      background: #090c13;
+      overflow: hidden;
+      position: relative;
+    }
+    .editor-native-statusbar {
+      height: 26px;
+      padding: 0 12px;
+      background: var(--bg-header);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-dim);
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .ed-status-left, .ed-status-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ed-status-sep {
+      color: var(--border-color);
+    }
+
     /* Elegant Connection Loading Overlay */
     .loading-overlay {
       position: fixed;
@@ -2030,7 +2209,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.24</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.25</span>
         </div>
       </div>
 
@@ -2558,66 +2737,48 @@
     </div>
   </div>
 
-  <!-- Modal: Built-in Code Editor & Formatter -->
+  <!-- Modal: Built-in Code Editor & Formatter (Authentic Native OS Window Frame) -->
   <div class="modal-overlay" id="editorModal">
-    <div class="modal-content" style="width: 1040px; max-width: 96vw;">
-      <div class="modal-header" style="padding: 8px 14px;">
-        <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; max-width: 65%;">
+    <div class="native-window-dialog" id="editorWindowFrame" style="width: 1060px; max-width: 96vw; height: 86vh; max-height: 96vh;">
+      <!-- Native OS Titlebar -->
+      <div class="native-titlebar" style="cursor: move;">
+        <div class="native-title-left">
           <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           <span id="editorTitle" style="font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Code Editor</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span id="editorStatus" style="font-size: 11.5px; color: var(--accent); font-weight: 600;"></span>
-          <button type="button" class="btn btn-secondary" onclick="closeEditorModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <span id="editorStatus" style="font-size: 11px; color: var(--accent); font-weight: 600; margin-right: 8px;"></span>
+          <button type="button" class="native-win-ctrl" onclick="toggleEditorMaximize()" title="Maximize / Restore">🗖</button>
+          <button type="button" class="native-win-close" onclick="closeEditorModal()" title="Close Editor (Esc)">✕</button>
         </div>
       </div>
 
-      <!-- Editor Action Toolbar -->
-      <div class="editor-toolbar">
-        <div class="editor-tool-group">
-          <!-- Find & Replace Trigger -->
-          <button type="button" class="btn btn-secondary" onclick="toggleFindBar(false)" style="padding: 3px 9px; font-size: 11.5px; display: flex; align-items: center; gap: 4px;" title="Find Text (Ctrl+F)">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <span>Find</span>
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="toggleFindBar(true)" style="padding: 3px 9px; font-size: 11.5px; display: flex; align-items: center; gap: 4px;" title="Find & Replace (Ctrl+H)">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-            <span>Replace</span>
-          </button>
-
-          <div style="width: 1px; height: 18px; background: var(--border-color); margin: 0 4px;"></div>
-
-          <!-- Format & Beautify -->
-          <button type="button" class="btn btn-secondary" onclick="formatEditorCode()" style="padding: 3px 10px; font-size: 11.5px; display: flex; align-items: center; gap: 5px;" title="Format & Beautify Code (JSON, XML, HTML, JS, CSS)">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
-            <span>Format Code</span>
-          </button>
-
-          <div style="width: 1px; height: 18px; background: var(--border-color); margin: 0 4px;"></div>
-
-          <!-- Case Tools -->
-          <button type="button" class="btn btn-secondary" onclick="convertEditorCase('upper')" style="padding: 3px 8px; font-size: 11px;" title="Convert selected text to UPPERCASE">
-            AA
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="convertEditorCase('lower')" style="padding: 3px 8px; font-size: 11px;" title="Convert selected text to lowercase">
-            aa
-          </button>
-
-          <div style="width: 1px; height: 18px; background: var(--border-color); margin: 0 4px;"></div>
-
-          <!-- Word Wrap Toggle -->
-          <button type="button" class="btn btn-secondary" id="btnWordWrap" onclick="toggleWordWrap()" style="padding: 3px 8px; font-size: 11px;" title="Toggle Word Wrap">
-            ↩ Wrap
-          </button>
-
-          <!-- Font Size Zoom -->
-          <button type="button" class="btn btn-secondary" onclick="changeEditorFontSize(-1)" style="padding: 3px 7px; font-size: 11px;" title="Decrease Font Size">A-</button>
-          <button type="button" class="btn btn-secondary" onclick="changeEditorFontSize(1)" style="padding: 3px 7px; font-size: 11px;" title="Increase Font Size">A+</button>
+      <!-- Native Desktop Style Menubar -->
+      <div class="editor-native-menubar">
+        <div class="editor-menu-item" onclick="saveEditorContent()" title="Save & Upload (Ctrl+S)">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          <span>Save & Upload</span>
         </div>
-
-        <div class="editor-tool-group">
-          <span id="editorStats" style="font-size: 11.5px; color: var(--text-dim); font-family: var(--font-mono);">Lines: 0 | Chars: 0</span>
+        <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
+        <div class="editor-menu-item" onclick="toggleFindBar(false)" title="Find Text (Ctrl+F)">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>Find</span>
         </div>
+        <div class="editor-menu-item" onclick="toggleFindBar(true)" title="Find & Replace (Ctrl+H)">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          <span>Replace</span>
+        </div>
+        <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
+        <div class="editor-menu-item" onclick="formatEditorCode()" title="Format Code (JSON, XML, HTML, JS, CSS)">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+          <span>Format</span>
+        </div>
+        <div class="editor-menu-item" onclick="convertEditorCase('upper')" title="UPPERCASE">AA</div>
+        <div class="editor-menu-item" onclick="convertEditorCase('lower')" title="lowercase">aa</div>
+        <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
+        <div class="editor-menu-item" id="btnWordWrap" onclick="toggleWordWrap()" title="Toggle Word Wrap">↩ Wrap</div>
+        <div class="editor-menu-item" onclick="changeEditorFontSize(-1)" title="Smaller Font">A-</div>
+        <div class="editor-menu-item" onclick="changeEditorFontSize(1)" title="Larger Font">A+</div>
       </div>
 
       <!-- Docked Find & Replace Bar -->
@@ -2639,22 +2800,25 @@
         <button type="button" class="btn btn-secondary" onclick="closeFindBar()" style="margin-left: auto; padding: 2px 7px; font-size: 10.5px;">✕</button>
       </div>
 
-      <!-- Editor Content Area with Line Numbers Gutter -->
-      <div class="modal-body" style="padding: 10px 14px 4px 14px;">
-        <div class="editor-container">
+      <!-- Native Edge-to-Edge Canvas Area with Flush Gutter & Textarea -->
+      <div class="editor-canvas-container">
+        <div class="editor-container" style="width: 100%; height: 100%;">
           <div id="editorGutter" class="editor-gutter">1</div>
-          <textarea id="editorTextarea" class="editor-textarea" spellcheck="false" oninput="onEditorInput()" onscroll="syncEditorScroll()"></textarea>
+          <textarea id="editorTextarea" class="editor-textarea" spellcheck="false" oninput="onEditorInput()" onscroll="syncEditorScroll()" onclick="updateEditorCursorPos()" onkeyup="updateEditorCursorPos()"></textarea>
         </div>
       </div>
 
-      <div class="modal-footer" style="padding: 8px 14px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 11px; color: var(--text-dim);">Shortcuts: Ctrl+S Save & Upload | Ctrl+F Find | Ctrl+H Replace | Tab Indent | Esc Close</span>
-        <div style="display: flex; gap: 8px;">
-          <button type="button" class="btn btn-secondary" onclick="closeEditorModal()" style="padding: 4px 16px;">Close</button>
-          <button type="button" class="btn btn-primary" onclick="saveEditorContent()" style="padding: 4px 18px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            Save & Upload
-          </button>
+      <!-- Native Window Statusbar -->
+      <div class="editor-native-statusbar">
+        <div class="ed-status-left">
+          <span id="editorStats">Lines: 0 | Words: 0 | Chars: 0</span>
+          <span class="ed-status-sep">|</span>
+          <span id="editorCursorPos">Ln 1, Col 1</span>
+        </div>
+        <div class="ed-status-right">
+          <span>UTF-8</span>
+          <span class="ed-status-sep">|</span>
+          <span>Shortcuts: Ctrl+S Save | Ctrl+F Find | Ctrl+H Replace</span>
         </div>
       </div>
     </div>
@@ -3152,46 +3316,81 @@
     </div>
   </div>
 
-  <!-- Modal: Tools & Utilities (SOON) -->
+  <!-- Native OS Window Style Dialog: Tools Suite & Diagnostics -->
   <div class="modal-overlay" id="toolsModal" style="z-index: 1060;">
-    <div class="modal-content" style="width: 480px; max-width: 95vw;">
-      <div class="modal-header">
-        <div style="display: flex; align-items: center; gap: 8px;">
+    <div class="native-window-dialog" style="width: 480px; max-width: 95vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
           <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>
-          <span style="font-weight: 600;">Tools Suite</span>
+          <span style="font-weight: 600;">Tools Suite & Diagnostics</span>
         </div>
-        <button type="button" class="btn btn-secondary" onclick="closeToolsModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+        <button type="button" class="native-win-close" onclick="closeToolsModal()" title="Close">✕</button>
       </div>
 
-      <div class="modal-body" style="padding: 32px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px;">
-        <div class="tools-badge-icon" style="display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 50%; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); box-shadow: 0 0 24px rgba(56, 189, 248, 0.2);">
-          <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-          </svg>
-        </div>
-
-        <div>
-          <div class="tools-soon-title" style="font-size: 54px; font-weight: 900; letter-spacing: 6px; background: linear-gradient(135deg, #38bdf8, #0284c7, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 30px rgba(56, 189, 248, 0.4); line-height: 1.1;">
-            SOON
+      <div class="native-dialog-body" style="padding: 12px 14px; gap: 8px;">
+        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Diagnostic & Debugging Utilities</div>
+        
+        <div class="tool-native-row" style="cursor: pointer;" onclick="viewErrorLogs()">
+          <span style="font-size: 14px;">📋</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">View Persistent Error Logs</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Inspect recent application & connection error history</div>
           </div>
-          <div style="font-size: 13.5px; font-weight: 600; color: var(--text-muted); margin-top: 6px;">
-            Coming Soon in Upcoming Releases
+          <span class="tool-tag ready">READY</span>
+        </div>
+
+        <div class="tool-native-row" style="cursor: pointer;" onclick="openStorageFolder(); closeToolsModal();">
+          <span style="font-size: 14px;">📁</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Open App Storage Folder</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Access config, vaults, cache and log files in Explorer</div>
           </div>
+          <span class="tool-tag ready">READY</span>
         </div>
 
-        <div style="font-size: 12px; color: var(--text-dim); line-height: 1.7; max-width: 380px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; text-align: left;">
-          <div style="font-weight: 700; color: var(--accent); margin-bottom: 6px; font-size: 12.5px;">Upcoming Power Tools:</div>
-          <div style="display: flex; gap: 6px; margin-bottom: 4px;"><span>⚡</span><span>Multi-threaded Directory Synchronization</span></div>
-          <div style="display: flex; gap: 6px; margin-bottom: 4px;"><span>🌐</span><span>Network Ping, Traceroute & Port Connectivity Probe</span></div>
-          <div style="display: flex; gap: 6px; margin-bottom: 4px;"><span>🛡️</span><span>SSH Keypair Generator & Vault Exporter</span></div>
-          <div style="display: flex; gap: 6px;"><span>💻</span><span>Integrated Native Terminal Console</span></div>
+        <div class="tool-native-row" style="cursor: pointer;" onclick="clearKnownHostsCache(); closeToolsModal();">
+          <span style="font-size: 14px;">🛡️</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Clear Host Key Fingerprints</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Reset trusted server fingerprint vault</div>
+          </div>
+          <span class="tool-tag ready">READY</span>
         </div>
-      </div>
 
-      <div class="modal-footer" style="display: flex; justify-content: center; padding: 10px 16px;">
-        <button type="button" class="btn btn-primary" onclick="closeToolsModal()" style="padding: 4px 28px; font-weight: 600;">OK</button>
+        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;">Upcoming Features</div>
+
+        <div class="tool-native-row" style="opacity: 0.75;">
+          <span style="font-size: 14px;">⚡</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Directory Synchronization Engine</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Fast bi-directional mirror & diff synchronization</div>
+          </div>
+          <span class="tool-tag soon">SOON</span>
+        </div>
+
+        <div class="tool-native-row" style="opacity: 0.75;">
+          <span style="font-size: 14px;">🌐</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Network Ping & Port Probe</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Active latency, MTU test & traceroute analysis</div>
+          </div>
+          <span class="tool-tag soon">SOON</span>
+        </div>
+
+        <div class="tool-native-row" style="opacity: 0.75;">
+          <span style="font-size: 14px;">🔑</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">SSH Keypair Generator & Vault</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Generate Ed25519/RSA keys & manage public keys</div>
+          </div>
+          <span class="tool-tag soon">SOON</span>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; padding-top: 6px;">
+          <button type="button" class="btn btn-secondary" onclick="closeToolsModal()" style="font-size: 11.5px; padding: 3px 18px; height: 26px;">Close</button>
+        </div>
       </div>
     </div>
   </div>
@@ -3282,19 +3481,36 @@
   <!-- Custom Elegant Right-Click Context Menu -->
   <div id="customContextMenu" class="context-menu"></div>
 
-  <!-- Elegant Connection Loading Spinner Overlay with Live Status Stream -->
+  <!-- Native OS Window Style Connection Dialog -->
   <div class="loading-overlay" id="connectionLoadingOverlay">
-    <div class="loading-card" style="width: 440px; max-width: 92vw;">
-      <div class="loading-spinner" id="loadingSpinner"></div>
-      <div class="loading-title" id="loadingTitle">Connecting to Server...</div>
-      <div class="loading-sub" id="loadingSubtitle">Establishing secure connection</div>
+    <div class="native-window-dialog" style="width: 440px; max-width: 95vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span style="font-weight: 600; font-size: 12px;">Connection in Progress</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="cancelPendingConnection()" title="Cancel Connection">✕</button>
+      </div>
 
-      <!-- Mini Live Status Stream -->
-      <div class="loading-log-box" id="loadingLogBox">
-        <div class="loading-log-line" id="loadStep1"><span>○</span> <span>🌐 Initializing socket connection...</span></div>
-        <div class="loading-log-line" id="loadStep2"><span>○</span> <span>🔐 Negotiating protocol & cipher exchange...</span></div>
-        <div class="loading-log-line" id="loadStep3"><span>○</span> <span>🔑 Verifying credentials & host fingerprint...</span></div>
-        <div class="loading-log-line" id="loadStep4"><span>○</span> <span>📁 Loading remote directory tree...</span></div>
+      <div class="native-dialog-body" style="padding: 12px 14px; gap: 9px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="loading-spinner-compact" id="loadingSpinner"></div>
+          <div style="flex: 1; min-width: 0;">
+            <div id="loadingTitle" style="font-weight: 700; font-size: 13px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Connecting to Server...</div>
+            <div id="loadingSubtitle" style="font-size: 11px; color: var(--text-muted); margin-top: 1px;">Authenticating credentials</div>
+          </div>
+        </div>
+
+        <div class="loading-log-box" id="loadingLogBox" style="margin: 0; padding: 7px 10px; border-radius: 6px;">
+          <div class="loading-log-line" id="loadStep1"><span>○</span> <span>🌐 Initializing socket connection...</span></div>
+          <div class="loading-log-line" id="loadStep2"><span>○</span> <span>🔐 Negotiating protocol & cipher exchange...</span></div>
+          <div class="loading-log-line" id="loadStep3"><span>○</span> <span>🔑 Verifying credentials & host fingerprint...</span></div>
+          <div class="loading-log-line" id="loadStep4"><span>○</span> <span>📁 Loading remote directory tree...</span></div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; padding-top: 4px;">
+          <button type="button" class="btn btn-secondary" onclick="cancelPendingConnection()" style="font-size: 11px; padding: 2px 14px; height: 24px;">Cancel</button>
+        </div>
       </div>
     </div>
   </div>
@@ -3410,7 +3626,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.24';
+    let APP_CURRENT_VERSION = '0.0.0.25';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4726,10 +4942,70 @@
     let editorFontSize = 13;
     let findMatches = [];
     let currentMatchIdx = -1;
+    let isEditorMaximized = false;
+
+    function toggleEditorMaximize() {
+      const frame = document.getElementById('editorWindowFrame');
+      if (!frame) return;
+      isEditorMaximized = !isEditorMaximized;
+      if (isEditorMaximized) {
+        frame.style.width = '100vw';
+        frame.style.maxWidth = '100vw';
+        frame.style.height = '100vh';
+        frame.style.maxHeight = '100vh';
+        frame.style.borderRadius = '0';
+      } else {
+        frame.style.width = '1060px';
+        frame.style.maxWidth = '96vw';
+        frame.style.height = '86vh';
+        frame.style.maxHeight = '96vh';
+        frame.style.borderRadius = '8px';
+      }
+    }
+
+    function updateEditorCursorPos() {
+      const ta = document.getElementById('editorTextarea');
+      const posEl = document.getElementById('editorCursorPos');
+      if (!ta || !posEl) return;
+      const selStart = ta.selectionStart;
+      const val = ta.value.substring(0, selStart);
+      const lines = val.split('\n');
+      const row = lines.length;
+      const col = lines[lines.length - 1].length + 1;
+      posEl.innerText = 'Ln ' + row + ', Col ' + col;
+    }
+
+    function cancelPendingConnection() {
+      const overlay = document.getElementById('connectionLoadingOverlay');
+      if (overlay) overlay.classList.remove('active');
+      addLog('Connection cancelled by user.', 'info');
+    }
+
+    async function viewErrorLogs() {
+      try {
+        const res = await sendRust('get_error_logs');
+        if (!res || !res.logs) {
+          alert('Error log file is currently empty or not found.\nLocation: ' + (res?.path || 'app data'));
+          return;
+        }
+        activeEditingPath = res.path || '90ftp_errors.log';
+        activeEditingIsRemote = false;
+        document.getElementById('editorTitle').innerText = 'Log: ' + activeEditingPath;
+        document.getElementById('editorTextarea').value = res.logs;
+        document.getElementById('editorStatus').innerText = 'Persistent Error Log';
+        onEditorInput();
+        closeToolsModal();
+        document.getElementById('editorModal').classList.add('active');
+      } catch (err) {
+        addLog('Failed to read error logs: ' + (err.message || err), 'error');
+        alert('Could not read error logs: ' + (err.message || err));
+      }
+    }
 
     function onEditorInput() {
       updateEditorStats();
       updateEditorLineNumbers();
+      updateEditorCursorPos();
     }
 
     function updateEditorStats() {
