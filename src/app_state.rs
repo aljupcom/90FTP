@@ -862,6 +862,8 @@ impl AppState {
                 let cwd = payload["cwd"].as_str().unwrap_or("").trim().to_string();
                 let req_mode = payload.get("mode").and_then(|v| v.as_str()).unwrap_or("auto").to_string();
                 let session_id = payload.get("session_id").and_then(|v| v.as_str()).unwrap_or("sess_1").to_string();
+                let cols = payload.get("cols").and_then(|v| v.as_u64()).unwrap_or(100) as u32;
+                let rows = payload.get("rows").and_then(|v| v.as_u64()).unwrap_or(30) as u32;
 
                 if cmd_raw.is_empty() {
                     return IpcResponse::ok(id, action, json!({
@@ -907,7 +909,7 @@ impl AppState {
                                 }
                             };
 
-                            match remote.exec_command_streaming(&wrapped_cmd, on_chunk) {
+                            match remote.exec_command_streaming(&wrapped_cmd, cols, rows, on_chunk) {
                                 Ok(all_out) => {
                                     let mut new_cwd = cwd.clone();
                                     if let Some(pos) = all_out.rfind("__90FTP_PWD__") {
@@ -1027,6 +1029,20 @@ impl AppState {
                         "mode": "local",
                     }))
                 }
+            }
+
+            "terminal_resize" => {
+                let cols = payload.get("cols").and_then(|v| v.as_u64()).unwrap_or(100) as u32;
+                let rows = payload.get("rows").and_then(|v| v.as_u64()).unwrap_or(30) as u32;
+                let lock = self.remote.lock().unwrap();
+                if let Some(ref remote) = *lock {
+                    remote.resize_terminal(cols, rows);
+                }
+                IpcResponse::ok(id, action, json!({
+                    "resized": true,
+                    "cols": cols,
+                    "rows": rows,
+                }))
             }
 
             "open_native_terminal" => {

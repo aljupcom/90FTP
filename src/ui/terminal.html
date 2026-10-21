@@ -127,12 +127,30 @@
       term.loadAddon(fitAddon);
       term.open(container);
       setTimeout(() => {
-        try { fitAddon.fit(); } catch (_) {}
+        try {
+          fitAddon.fit();
+          if (term) {
+            sendIpc('terminal_resize', {
+              session_id: sessionId,
+              cols: term.cols,
+              rows: term.rows
+            });
+          }
+        } catch (_) {}
       }, 50);
 
       window.addEventListener('resize', () => {
         if (fitAddon) {
-          try { fitAddon.fit(); } catch (_) {}
+          try {
+            fitAddon.fit();
+            if (term) {
+              sendIpc('terminal_resize', {
+                session_id: sessionId,
+                cols: term.cols,
+                rows: term.rows
+              });
+            }
+          } catch (_) {}
         }
       });
 
@@ -263,12 +281,17 @@
         printPrompt();
         return;
       }
+      if (fitAddon) {
+        try { fitAddon.fit(); } catch (_) {}
+      }
       isBusy = true;
       sendIpc('terminal_exec', {
         command: cmd,
         cwd: currentCwd,
         mode: currentMode,
-        session_id: sessionId
+        session_id: sessionId,
+        cols: term ? term.cols : 100,
+        rows: term ? term.rows : 30
       });
     }
 

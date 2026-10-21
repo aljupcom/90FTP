@@ -53,6 +53,7 @@ pub struct SftpClient {
     pub current_dir: String,
     pub host: String,
     pub username: String,
+    pub resize_tx: tokio::sync::broadcast::Sender<(u32, u32)>,
 }
 
 impl SftpClient {
@@ -79,7 +80,7 @@ impl SftpClient {
         let prompt_holder = Arc::new(Mutex::new(None));
         let prompt_holder_clone = prompt_holder.clone();
 
-        let res: Result<(SftpSession, Handle<ClientHandler>, String), String> = rt.block_on(async {
+        let res: Result<(SftpSession, Handle<ClientHandler>, String, tokio::sync::broadcast::Sender<(u32, u32)>), String> = rt.block_on(async {
             let config = Arc::new(Config::default());
             let handler = ClientHandler {
                 host: host_s.clone(),
@@ -153,17 +154,20 @@ impl SftpClient {
                 Err(_) => "/".to_string(),
             };
 
-            Ok((sftp, session, default_dir))
+            let (resize_tx, _) = tokio::sync::broadcast::channel::<(u32, u32)>(32);
+
+            Ok((sftp, session, default_dir, resize_tx))
         });
 
         match res {
-            Ok((sftp, session, default_dir)) => Ok(Self {
+            Ok((sftp, session, default_dir, resize_tx)) => Ok(Self {
                 rt,
                 sftp,
                 session,
                 current_dir: default_dir,
                 host: host.to_string(),
                 username: user.to_string(),
+                resize_tx,
             }),
             Err(e) => Err(e),
         }
@@ -307,20 +311,28 @@ impl SftpClient {
         })
     }
 
-    pub fn exec_command(&self, cmd: &str) -> Result<String, String> {
-        self.exec_command_streaming(cmd, |_| {})
+    pub fn resize_pty(&self, cols: u32, rows: u32) {
+        let _ = self.resize_tx.send((cols, rows));
     }
 
-    pub fn exec_command_streaming<F>(&self, cmd: &str, mut on_chunk: F) -> Result<String, String>
+    pub fn exec_command(&self, cmd: &str) -> Result<String, String> {
+        self.exec_command_streaming(cmd, 100, 30, |_| {})
+    }
+
+    pub fn exec_command_streaming<F>(&self, cmd: &str, cols: u32, rows: u32, mut on_chunk: F) -> Result<String, String>
     where
         F: FnMut(&str) + Send + 'static,
     {
         let cmd_s = cmd.to_string();
+        let pty_cols = if cols == 0 { 100 } else { cols.max(20).min(500) };
+        let pty_rows = if rows == 0 { 30 } else { rows.max(5).min(200) };
+        let mut resize_rx = self.resize_tx.subscribe();
+
         self.rt.block_on(async {
             let mut channel = self.session.channel_open_session().await
                 .map_err(|e| format!("Failed to open SSH channel: {}", e))?;
 
-            let _ = channel.request_pty(false, "xterm-256color", 120, 32, 0, 0, &[]).await;
+            let _ = channel.request_pty(false, "xterm-256color", pty_cols, pty_rows, 0, 0, &[]).await;
 
             channel.exec(true, cmd_s).await
                 .map_err(|e| format!("Failed to execute command: {}", e))?;
@@ -328,22 +340,38 @@ impl SftpClient {
             let mut all_output = String::new();
 
             // Stream chunks as they arrive from remote server with a generous 10-minute idle timeout
-            while let Ok(Some(msg)) = tokio::time::timeout(tokio::time::Duration::from_secs(600), channel.wait()).await {
-                match msg {
-                    russh::ChannelMsg::Data { ref data } => {
-                        let text = String::from_utf8_lossy(data).to_string();
-                        on_chunk(&text);
-                        all_output.push_str(&text);
+            loop {
+                tokio::select! {
+                    wait_res = tokio::time::timeout(tokio::time::Duration::from_secs(600), channel.wait()) => {
+                        match wait_res {
+                            Ok(Some(msg)) => {
+                                match msg {
+                                    russh::ChannelMsg::Data { ref data } => {
+                                        let text = String::from_utf8_lossy(data).to_string();
+                                        on_chunk(&text);
+                                        all_output.push_str(&text);
+                                    }
+                                    russh::ChannelMsg::ExtendedData { ref data, ext: _ } => {
+                                        let text = String::from_utf8_lossy(data).to_string();
+                                        on_chunk(&text);
+                                        all_output.push_str(&text);
+                                    }
+                                    russh::ChannelMsg::ExitStatus { .. } | russh::ChannelMsg::Eof | russh::ChannelMsg::Close => {
+                                        break;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => break,
+                        }
                     }
-                    russh::ChannelMsg::ExtendedData { ref data, ext: _ } => {
-                        let text = String::from_utf8_lossy(data).to_string();
-                        on_chunk(&text);
-                        all_output.push_str(&text);
+                    recv_res = resize_rx.recv() => {
+                        if let Ok((new_cols, new_rows)) = recv_res {
+                            let c = new_cols.max(20).min(500);
+                            let r = new_rows.max(5).min(200);
+                            let _ = channel.window_change(c, r, 0, 0).await;
+                        }
                     }
-                    russh::ChannelMsg::ExitStatus { .. } | russh::ChannelMsg::Eof | russh::ChannelMsg::Close => {
-                        break;
-                    }
-                    _ => {}
                 }
             }
 

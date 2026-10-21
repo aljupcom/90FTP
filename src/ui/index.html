@@ -2209,7 +2209,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.26</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.27</span>
         </div>
       </div>
 
@@ -3626,7 +3626,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.26';
+    let APP_CURRENT_VERSION = '0.0.0.27';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -7136,6 +7136,23 @@
       if (typeof updatePuttyHeader === 'function') updatePuttyHeader();
     }
 
+    function resolveCarriageReturns(str) {
+      if (!str || !str.includes('\r')) return str;
+      return str.split('\n').map(line => {
+        if (!line.includes('\r')) return line;
+        const parts = line.split('\r');
+        let res = '';
+        for (const p of parts) {
+          if (p.length >= res.length) {
+            res = p;
+          } else {
+            res = p + res.slice(p.length);
+          }
+        }
+        return res;
+      }).join('\n');
+    }
+
     function renderTerminalScreen() {
       const screen = document.getElementById('terminalScreen');
       if (!screen) return;
@@ -7152,7 +7169,7 @@
           const sep = session.mode === 'remote' ? '$' : '>';
           html += `<div class="terminal-cmd-entry"><span style="color:${userColor};">${escapeHtml(session.user)}</span>@<span style="color:#38bdf8;">${escapeHtml(session.host)}</span>:<span style="color:#fbbf24;">${escapeHtml(item.cwd)}</span>${sep} <span style="color:#f8fafc; font-weight:600;">${escapeHtml(item.command)}</span></div>`;
         } else if (item.type === 'output') {
-          html += `<div style="color:#cbd5e1; white-space:pre-wrap;">${ansiToHtml(item.text)}</div>`;
+          html += `<div style="color:#cbd5e1; white-space:pre-wrap;">${ansiToHtml(resolveCarriageReturns(item.text))}</div>`;
         } else if (item.type === 'error') {
           html += `<div style="color:#f87171; white-space:pre-wrap;">${ansiToHtml(item.text)}</div>`;
         } else if (item.type === 'banner') {
@@ -7359,7 +7376,9 @@
           command: cmd,
           cwd: session.cwd,
           mode: session.mode,
-          session_id: session.id
+          session_id: session.id,
+          cols: (puttyTerm ? puttyTerm.cols : (session.cols || 100)),
+          rows: (puttyTerm ? puttyTerm.rows : (session.rows || 30))
         });
 
         if (res && res.started) {
@@ -7697,7 +7716,15 @@
               document.removeEventListener('mousemove', onResizeMove);
               document.removeEventListener('mouseup', onResizeUp);
               if (puttyFitAddon) {
-                try { puttyFitAddon.fit(); } catch (_) {}
+                try {
+                  puttyFitAddon.fit();
+                  if (puttyTerm) {
+                    sendRust('terminal_resize', {
+                      cols: puttyTerm.cols,
+                      rows: puttyTerm.rows
+                    });
+                  }
+                } catch (_) {}
               }
               savePuttyWindowState();
             }
@@ -7977,7 +8004,9 @@
           command: cmd,
           cwd: session.cwd,
           mode: session.mode,
-          session_id: session.id
+          session_id: session.id,
+          cols: (puttyTerm ? puttyTerm.cols : (session.cols || 100)),
+          rows: (puttyTerm ? puttyTerm.rows : (session.rows || 30))
         });
 
         if (res && res.started) {
