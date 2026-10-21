@@ -15,11 +15,121 @@
       overflow: hidden;
       font-family: Consolas, "Lucida Console", "Courier New", monospace;
     }
+    .terminal-header-bar {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #09090b;
+      border-bottom: 1px solid #27272a;
+      padding: 0 8px;
+      user-select: none;
+      box-sizing: border-box;
+      z-index: 100;
+    }
+    .quick-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .quick-btn {
+      background: #18181b;
+      color: #94a3b8;
+      border: 1px solid #27272a;
+      border-radius: 4px;
+      font-size: 11.5px;
+      padding: 3px 8px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s ease;
+    }
+    .quick-btn:hover {
+      background: #27272a;
+      color: #f8fafc;
+      border-color: #38bdf8;
+    }
+    .quick-btn.history-btn {
+      border-color: #3b82f6;
+      color: #60a5fa;
+    }
+    .quick-btn.history-btn:hover {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+    }
+    .quick-dropdown-container {
+      position: relative;
+    }
+    .quick-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 6px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+      min-width: 210px;
+      z-index: 999;
+      padding: 4px 0;
+    }
+    .quick-menu.right-aligned {
+      left: auto;
+      right: 0;
+    }
+    .quick-menu.active {
+      display: block;
+    }
+    .quick-menu-header {
+      padding: 4px 10px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .quick-menu-item {
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #cbd5e1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.12s ease;
+    }
+    .quick-menu-item:hover {
+      background: #1e293b;
+      color: #38bdf8;
+    }
+    .quick-menu-item.danger:hover {
+      background: #450a0a;
+      color: #f87171;
+    }
+    .quick-menu-separator {
+      height: 1px;
+      background: #1f2937;
+      margin: 3px 0;
+    }
+    .recent-list {
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .icon-sm {
+      width: 13px;
+      height: 13px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+    }
     #terminalContainer {
       width: 100%;
-      height: 100%;
+      height: calc(100% - 32px);
       box-sizing: border-box;
-      padding: 6px;
+      padding: 4px 6px;
     }
     .xterm {
       height: 100%;
@@ -31,6 +141,74 @@
   </style>
 </head>
 <body>
+  <div class="terminal-header-bar">
+    <div class="quick-group">
+      <div class="quick-dropdown-container">
+        <button class="quick-btn" onclick="toggleDropdown('webDropdown')">
+          <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+          <span>Web Server</span> ▾
+        </button>
+        <div id="webDropdown" class="quick-menu">
+          <div class="quick-menu-header">Web Server Services</div>
+          <div class="quick-menu-item" onclick="executeQuick('systemctl restart lsws')">⚡ Restart LiteSpeed (lsws)</div>
+          <div class="quick-menu-item" onclick="executeQuick('systemctl restart nginx')">⚡ Restart Nginx</div>
+          <div class="quick-menu-item" onclick="executeQuick('systemctl restart apache2')">⚡ Restart Apache2</div>
+          <div class="quick-menu-item" onclick="executeQuick('systemctl restart httpd')">⚡ Restart HTTPD</div>
+        </div>
+      </div>
+
+      <div class="quick-dropdown-container">
+        <button class="quick-btn" onclick="toggleDropdown('panelDropdown')">
+          <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span>Panel & Services</span> ▾
+        </button>
+        <div id="panelDropdown" class="quick-menu">
+          <div class="quick-menu-header">Control Panels & Databases</div>
+          <div class="quick-menu-item" onclick="executeQuick('systemctl restart lscpd')">🎛️ Restart CyberPanel (lscpd)</div>
+          <div class="quick-menu-item" onclick="executeQuick('systemctl restart mariadb')">🗄️ Restart MariaDB</div>
+          <div class="quick-menu-item" onclick="executeQuick('systemctl restart mysql')">🗄️ Restart MySQL</div>
+          <div class="quick-menu-item" onclick="executeQuick('systemctl restart redis')">⚡ Restart Redis</div>
+        </div>
+      </div>
+
+      <div class="quick-dropdown-container">
+        <button class="quick-btn" onclick="toggleDropdown('sysDropdown')">
+          <svg class="icon-sm" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span>System</span> ▾
+        </button>
+        <div id="sysDropdown" class="quick-menu">
+          <div class="quick-menu-header">System Diagnostics</div>
+          <div class="quick-menu-item" onclick="executeQuick('df -h')">💾 Disk Space (df -h)</div>
+          <div class="quick-menu-item" onclick="executeQuick('free -m')">🧠 Memory Usage (free -m)</div>
+          <div class="quick-menu-item" onclick="executeQuick('uptime')">⏱️ System Uptime & Load</div>
+          <div class="quick-menu-item" onclick="executeQuick('top -b -n 1 | head -n 20')">📊 Top Processes</div>
+          <div class="quick-menu-separator"></div>
+          <div class="quick-menu-item danger" onclick="confirmReboot()">⚠️ Reboot Server</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="quick-group">
+      <div class="quick-dropdown-container">
+        <button class="quick-btn history-btn" onclick="toggleDropdown('recentDropdown')">
+          <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+          <span>Recent</span> ▾
+        </button>
+        <div id="recentDropdown" class="quick-menu right-aligned">
+          <div class="quick-menu-header">Recent Commands</div>
+          <div id="recentList" class="recent-list"></div>
+          <div class="quick-menu-separator"></div>
+          <div class="quick-menu-item" onclick="clearCommandHistory()" style="color:#f87171;">🗑️ Clear History</div>
+        </div>
+      </div>
+
+      <button class="quick-btn" title="Clear Screen" onclick="executeQuick('clear')">
+        <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m5 4v6m4-6v6"/></svg>
+        <span>Clear</span>
+      </button>
+    </div>
+  </div>
+
   <div id="terminalContainer"></div>
 
   <script>
@@ -40,6 +218,7 @@
     // __XTERM_FIT_JS__
   </script>
   <script>
+    const HISTORY_STORAGE_KEY = '90ftp_native_terminal_history';
     let term = null;
     let fitAddon = null;
     let currentCwd = '~';
@@ -48,9 +227,125 @@
     let currentUser = 'root';
     let sessionId = 'native_term_1';
     let lineBuffer = '';
-    let commandHistory = [];
+    let commandHistory = loadCommandHistory();
     let historyIdx = -1;
     let isBusy = false;
+
+    function loadCommandHistory() {
+      try {
+        const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+        if (stored) {
+          const arr = JSON.parse(stored);
+          if (Array.isArray(arr)) {
+            return arr;
+          }
+        }
+      } catch (_) {}
+      return [];
+    }
+
+    function saveCommandToHistory(cmd) {
+      if (!cmd || !cmd.trim()) return;
+      const trimmed = cmd.trim();
+      const last = commandHistory[commandHistory.length - 1];
+      if (last !== trimmed) {
+        commandHistory.push(trimmed);
+        if (commandHistory.length > 200) {
+          commandHistory = commandHistory.slice(-100);
+        }
+        try {
+          localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(commandHistory));
+        } catch (_) {}
+      }
+      renderRecentMenu();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeJsString(str) {
+      if (!str) return '';
+      return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+
+    function closeAllDropdowns() {
+      document.querySelectorAll('.quick-menu').forEach(el => el.classList.remove('active'));
+    }
+
+    function toggleDropdown(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const isOpen = el.classList.contains('active');
+      closeAllDropdowns();
+      if (!isOpen) {
+        if (id === 'recentDropdown') {
+          renderRecentMenu();
+        }
+        el.classList.add('active');
+      }
+    }
+
+    window.addEventListener('click', (e) => {
+      if (!e.target.closest('.quick-dropdown-container')) {
+        closeAllDropdowns();
+      }
+    });
+
+    function renderRecentMenu() {
+      const container = document.getElementById('recentList');
+      if (!container) return;
+      if (!commandHistory || commandHistory.length === 0) {
+        container.innerHTML = '<div style="padding:6px 10px; color:#64748b; font-size:11px;">No recent commands</div>';
+        return;
+      }
+      const reversed = [...commandHistory].reverse().slice(0, 25);
+      container.innerHTML = reversed.map((c, i) => `
+        <div class="quick-menu-item" onclick="executeQuick('${escapeJsString(c)}')">
+          <span style="color:#64748b; font-size:10px;">${i + 1}.</span>
+          <span style="font-family:monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px;">${escapeHtml(c)}</span>
+        </div>
+      `).join('');
+    }
+
+    function clearCommandHistory() {
+      closeAllDropdowns();
+      commandHistory = [];
+      try {
+        localStorage.removeItem(HISTORY_STORAGE_KEY);
+      } catch (_) {}
+      renderRecentMenu();
+    }
+
+    function executeQuick(cmd) {
+      closeAllDropdowns();
+      if (isBusy || !term) return;
+      if (lineBuffer.length > 0) {
+        while (lineBuffer.length > 0) {
+          term.write('\b \b');
+          lineBuffer = lineBuffer.slice(0, -1);
+        }
+      }
+      lineBuffer = cmd;
+      term.write(cmd + '\r\n');
+      lineBuffer = '';
+      historyIdx = -1;
+      saveCommandToHistory(cmd);
+      runCommand(cmd);
+    }
+
+    function confirmReboot() {
+      closeAllDropdowns();
+      if (confirm("Are you sure you want to reboot the remote server now?")) {
+        executeQuick('reboot');
+      }
+    }
 
     function applyParams(p) {
       if (!p) return;
@@ -73,9 +368,9 @@
         setupXterm();
       } else {
         document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Native Terminal';
-        term.writeln('\r\n\x1b[1;36m======================================================================\x1b[0m');
+        term.writeln('\x1b[1;36m======================================================================\x1b[0m');
         term.writeln('\x1b[1;32m  Connected: ' + currentUser + '@' + currentHost + ' | Directory: ' + currentCwd + '\x1b[0m');
-        term.writeln('\x1b[1;36m======================================================================\x1b[0m\r\n');
+        term.writeln('\x1b[1;36m======================================================================\x1b[0m');
         lineBuffer = '';
         printPrompt();
       }
@@ -95,7 +390,7 @@
         fontFamily: 'Consolas, "Lucida Console", "Courier New", monospace',
         fontWeight: 'normal',
         fontWeightBold: 'bold',
-        lineHeight: 1.15,
+        lineHeight: 1.05,
         theme: {
           background: '#000000',
           foreground: '#d1d5db',
@@ -157,7 +452,7 @@
       // Clean, elegant PuTTY banner without engine label
       term.writeln('\x1b[1;36m======================================================================\x1b[0m');
       term.writeln('\x1b[1;32m  Session: ' + currentUser + '@' + currentHost + ' | Directory: ' + currentCwd + '\x1b[0m');
-      term.writeln('\x1b[1;36m======================================================================\x1b[0m\r\n');
+      term.writeln('\x1b[1;36m======================================================================\x1b[0m');
       printPrompt();
 
       // Keyboard input
@@ -176,7 +471,7 @@
           lineBuffer = '';
           historyIdx = -1;
           if (cmd) {
-            commandHistory.push(cmd);
+            saveCommandToHistory(cmd);
             runCommand(cmd);
           } else {
             printPrompt();
@@ -310,7 +605,9 @@
         document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Native Terminal';
       }
       if (term) {
-        term.write('\r\n');
+        if (term.buffer && term.buffer.active && term.buffer.active.cursorX !== 0) {
+          term.write('\r\n');
+        }
         printPrompt();
       }
     };
