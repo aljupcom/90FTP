@@ -1786,7 +1786,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.19</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.20</span>
         </div>
       </div>
 
@@ -3162,7 +3162,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.19';
+    let APP_CURRENT_VERSION = '0.0.0.20';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -6953,7 +6953,22 @@
     async function openRemoteTerminal(targetPath) {
       closeAllMenus();
       const path = targetPath || (isConnected ? currentRemotePath : currentLocalPath) || '.';
-      openPuttyTerminalWindow(path);
+      const host = (currentConnectedProfile && currentConnectedProfile.host) || (selectedQuickSite && selectedQuickSite.host) || 'remote-host';
+      const user = (currentConnectedProfile && (currentConnectedProfile.username || currentConnectedProfile.user)) || (selectedQuickSite && (selectedQuickSite.username || selectedQuickSite.user)) || 'root';
+      const mode = isConnected ? 'remote' : 'local';
+
+      try {
+        await sendRust('open_native_terminal', {
+          cwd: path,
+          host: host,
+          user: user,
+          mode: mode,
+          session_id: 'native_sess_1'
+        });
+      } catch (err) {
+        console.error('Failed to open native terminal window, fallback to floating window:', err);
+        openPuttyTerminalWindow(path);
+      }
     }
 
     // ========================================================

@@ -6,18 +6,24 @@ use crate::remote::RemoteClient;
 use crate::sessions;
 
 pub type ScriptCallback = Arc<dyn Fn(String) + Send + Sync>;
+pub type TerminalWindowCallback = Arc<dyn Fn(serde_json::Value) + Send + Sync>;
 
 pub struct AppState {
     pub remote: Arc<Mutex<Option<RemoteClient>>>,
     pub exec_script: Option<ScriptCallback>,
+    pub open_terminal_window: Option<TerminalWindowCallback>,
     pub current_connection: Arc<Mutex<Option<serde_json::Value>>>,
 }
 
 impl AppState {
-    pub fn new(exec_script: Option<ScriptCallback>) -> Self {
+    pub fn new(
+        exec_script: Option<ScriptCallback>,
+        open_terminal_window: Option<TerminalWindowCallback>,
+    ) -> Self {
         Self {
             remote: Arc::new(Mutex::new(None)),
             exec_script,
+            open_terminal_window,
             current_connection: Arc::new(Mutex::new(None)),
         }
     }
@@ -1021,6 +1027,39 @@ impl AppState {
                         "mode": "local",
                     }))
                 }
+            }
+
+            "open_native_terminal" => {
+                let cwd = payload.get("cwd").and_then(|v| v.as_str()).unwrap_or("~").to_string();
+                let host = payload.get("host").and_then(|v| v.as_str()).unwrap_or("remote-host").to_string();
+                let user = payload.get("user").and_then(|v| v.as_str()).unwrap_or("root").to_string();
+                let mode = payload.get("mode").and_then(|v| v.as_str()).unwrap_or("remote").to_string();
+                let session_id = payload.get("session_id").and_then(|v| v.as_str()).unwrap_or("native_1").to_string();
+
+                let (actual_host, actual_user) = {
+                    let conn = self.current_connection.lock().unwrap();
+                    if let Some(ref c) = *conn {
+                        let h = c.get("host").and_then(|v| v.as_str()).unwrap_or(&host).to_string();
+                        let u = c.get("username").or_else(|| c.get("user")).and_then(|v| v.as_str()).unwrap_or(&user).to_string();
+                        (h, u)
+                    } else {
+                        (host, user)
+                    }
+                };
+
+                let params = json!({
+                    "cwd": cwd,
+                    "host": actual_host,
+                    "user": actual_user,
+                    "mode": mode,
+                    "session_id": session_id,
+                });
+
+                if let Some(ref cb) = self.open_terminal_window {
+                    cb(params.clone());
+                }
+
+                IpcResponse::ok(id, action, params)
             }
 
             "open_remote_terminal" => {
