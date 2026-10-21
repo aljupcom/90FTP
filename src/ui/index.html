@@ -5,9 +5,28 @@
   <title>90FTP - Modern Site Manager</title>
   <style>
     html, body {
+      background: var(--bg-app);
+      background-color: var(--bg-app);
+    }
+    [data-theme="dark"] html,
+    [data-theme="dark"] body {
       background: #18181b !important;
       background-color: #18181b !important;
     }
+    [data-theme="light"] html,
+    [data-theme="light"] body {
+      background:
+        radial-gradient(circle at 10% 12%, rgba(220, 38, 38, 0.06) 0%, transparent 40%),
+        radial-gradient(circle at 90% 16%, rgba(0, 0, 0, 0.04) 0%, transparent 38%),
+        radial-gradient(circle at 75% 85%, rgba(220, 38, 38, 0.05) 0%, transparent 48%),
+        radial-gradient(circle at 20% 88%, rgba(0, 0, 0, 0.035) 0%, transparent 42%),
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.9) 0%, transparent 70%),
+        linear-gradient(135deg, #ffffff 0%, #fbfbfc 35%, #fef2f2 70%, #f6f7f9 100%) !important;
+      background-attachment: fixed !important;
+      background-color: #fbfbfc !important;
+      color: #0f172a !important;
+    }
+
     :root, [data-theme="dark"] {
       --bg-app: #18181b;
       --bg-panel: #202024;
@@ -20,6 +39,10 @@
       --accent: #0078d4;
       --accent-glow: rgba(0, 120, 212, 0.25);
       --accent-hover: #106ebe;
+      --accent-subtle: rgba(0, 120, 212, 0.12);
+      --accent-subtle-border: rgba(0, 120, 212, 0.35);
+      --accent-badge-text: #60a5fa;
+      --selection-bg: #005a9e;
       --success: #22c55e;
       --danger: #ef4444;
       --warning: #f59e0b;
@@ -44,17 +67,21 @@
     }
 
     [data-theme="light"] {
-      --bg-app: #f1f3f6;
-      --bg-panel: #ffffff;
-      --bg-card: #ffffff;
-      --bg-card-hover: #f1f5f9;
-      --bg-header: #f8fafc;
+      --bg-app: linear-gradient(135deg, #ffffff 0%, #fbfbfc 35%, #fef2f2 70%, #f6f7f9 100%);
+      --bg-panel: rgba(255, 255, 255, 0.90);
+      --bg-card: rgba(255, 255, 255, 0.95);
+      --bg-card-hover: rgba(254, 242, 242, 0.85);
+      --bg-header: linear-gradient(180deg, #ffffff 0%, #fbfbfc 60%, #fef2f2 100%);
       --bg-input: #ffffff;
-      --border-color: #d8dde6;
-      --border-focus: #0078d4;
-      --accent: #0078d4;
-      --accent-glow: rgba(0, 120, 212, 0.15);
-      --accent-hover: #106ebe;
+      --border-color: rgba(0, 0, 0, 0.12);
+      --border-focus: #dc2626;
+      --accent: #dc2626;
+      --accent-glow: rgba(220, 38, 38, 0.2);
+      --accent-hover: #b91c1c;
+      --accent-subtle: linear-gradient(135deg, rgba(220, 38, 38, 0.1) 0%, rgba(0, 0, 0, 0.04) 100%);
+      --accent-subtle-border: rgba(220, 38, 38, 0.3);
+      --accent-badge-text: #dc2626;
+      --selection-bg: linear-gradient(90deg, #dc2626 0%, #ef4444 45%, #b91c1c 100%);
       --success: #16a34a;
       --danger: #dc2626;
       --warning: #d97706;
@@ -62,18 +89,231 @@
       --text-muted: #475569;
       --text-dim: #94a3b8;
       --folder-color: #d97706;
-      --table-th-bg: #f1f5f9;
-      --table-tr-even: #fbfcfe;
-      --table-tr-hover: #edf2f7;
-      --log-bg: #1e1e24;
-      --log-text: #e2e8f0;
-      --scrollbar-thumb: #cbd5e1;
-      --scrollbar-thumb-hover: #94a3b8;
-      --bg-glass-panel: rgba(255, 255, 255, 0.78);
-      --bg-glass-card: rgba(255, 255, 255, 0.88);
-      --bg-glass-input: rgba(255, 255, 255, 0.95);
-      --glass-border: rgba(0, 0, 0, 0.09);
-      --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+      --table-th-bg: linear-gradient(180deg, #ffffff 0%, #f1f3f5 100%);
+      --table-tr-even: rgba(0, 0, 0, 0.015);
+      --table-tr-hover: linear-gradient(90deg, rgba(220, 38, 38, 0.05) 0%, rgba(0, 0, 0, 0.015) 50%, rgba(220, 38, 38, 0.02) 100%);
+      --log-bg: #111113;
+      --log-text: #f4f4f5;
+      --scrollbar-thumb: #d1d5db;
+      --scrollbar-thumb-hover: #9ca3af;
+      --bg-glass-panel: linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(254, 242, 242, 0.6) 50%, rgba(255, 255, 255, 0.9) 100%);
+      --bg-glass-card: linear-gradient(175deg, rgba(255, 255, 255, 0.96) 0%, rgba(253, 253, 254, 0.92) 60%, rgba(254, 242, 242, 0.45) 100%);
+      --bg-glass-input: rgba(255, 255, 255, 0.96);
+      --glass-border: rgba(220, 38, 38, 0.16);
+      --glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.05), 0 0 15px rgba(220, 38, 38, 0.04);
+    }
+
+    /* Complete Red / White / Black Translucent Light Theme Overrides */
+    [data-theme="light"] .brand-text {
+      color: #0f172a !important;
+    }
+    [data-theme="light"] .brand-badge {
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.1) 0%, rgba(0, 0, 0, 0.03) 100%) !important;
+      border: 1px solid rgba(220, 38, 38, 0.3) !important;
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] header {
+      background: linear-gradient(180deg, #ffffff 0%, rgba(254, 242, 242, 0.6) 100%) !important;
+      border-bottom: 1px solid rgba(220, 38, 38, 0.14) !important;
+    }
+    [data-theme="light"] .top-menu-bar {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.07) !important;
+    }
+    [data-theme="light"] .quick-connect-bar {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(254, 242, 242, 0.55) 60%, rgba(255, 255, 255, 0.9) 100%) !important;
+      border: 1px solid rgba(220, 38, 38, 0.18) !important;
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.04), 0 0 12px rgba(220, 38, 38, 0.05) !important;
+    }
+    [data-theme="light"] .file-pane-wrapper {
+      background: linear-gradient(175deg, rgba(255, 255, 255, 0.96) 0%, rgba(253, 253, 254, 0.92) 60%, rgba(254, 242, 242, 0.45) 100%) !important;
+      border: 1px solid rgba(0, 0, 0, 0.09) !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04), 0 0 1px rgba(220, 38, 38, 0.2) !important;
+    }
+    [data-theme="light"] .pane-toolbar {
+      background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%) !important;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    }
+    [data-theme="light"] .table-container {
+      background: rgba(255, 255, 255, 0.7) !important;
+    }
+    [data-theme="light"] th {
+      background: linear-gradient(180deg, #fdfdfe 0%, #f1f3f5 100%) !important;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.09) !important;
+      border-right: 1px solid rgba(0, 0, 0, 0.06) !important;
+      color: #475569 !important;
+    }
+    [data-theme="light"] td {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+      color: #0f172a;
+    }
+    [data-theme="light"] tr:nth-child(even) {
+      background: rgba(0, 0, 0, 0.015);
+    }
+    [data-theme="light"] tr:hover td {
+      background: linear-gradient(90deg, rgba(220, 38, 38, 0.06) 0%, rgba(0, 0, 0, 0.015) 50%, rgba(220, 38, 38, 0.03) 100%) !important;
+    }
+    [data-theme="light"] tr.selected {
+      background: linear-gradient(90deg, #dc2626 0%, #ef4444 45%, #b91c1c 100%) !important;
+      color: #ffffff !important;
+      box-shadow: 0 2px 6px rgba(220, 38, 38, 0.28);
+    }
+    [data-theme="light"] tr.selected td,
+    [data-theme="light"] tr.selected .mono-cell,
+    [data-theme="light"] tr.selected .file-cell span {
+      color: #ffffff !important;
+    }
+    [data-theme="light"] .parent-dir-dots {
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] .parent-dir-row:hover td {
+      background: linear-gradient(90deg, rgba(220, 38, 38, 0.09) 0%, rgba(0, 0, 0, 0.02) 100%) !important;
+    }
+    [data-theme="light"] tr.item-loading {
+      background: rgba(220, 38, 38, 0.1) !important;
+      border-left: 3px solid #dc2626 !important;
+    }
+    [data-theme="light"] .file-opening-spinner {
+      border: 2px solid rgba(220, 38, 38, 0.25) !important;
+      border-top-color: #dc2626 !important;
+    }
+    [data-theme="light"] .file-icon.code {
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] .btn-primary {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #991b1b 100%) !important;
+      border-color: #991b1b !important;
+      color: #ffffff !important;
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3) !important;
+    }
+    [data-theme="light"] .btn-primary:hover {
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 55%, #7f1d1d 100%) !important;
+      box-shadow: 0 4px 14px rgba(220, 38, 38, 0.45) !important;
+    }
+    [data-theme="light"] .btn-secondary {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 245, 247, 0.92) 100%) !important;
+      border-color: rgba(0, 0, 0, 0.14) !important;
+      color: #111827 !important;
+    }
+    [data-theme="light"] .btn-secondary:hover {
+      background: linear-gradient(180deg, #ffffff 0%, rgba(254, 242, 242, 0.7) 100%) !important;
+      border-color: rgba(220, 38, 38, 0.3) !important;
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] .bottom-panel-header {
+      background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%) !important;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    }
+    [data-theme="light"] .bottom-tab-btn.active {
+      color: #dc2626 !important;
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.12) 0%, rgba(0, 0, 0, 0.03) 100%) !important;
+      border-color: rgba(220, 38, 38, 0.35) !important;
+    }
+    [data-theme="light"] .bottom-tab-btn.active .tab-badge {
+      background: #dc2626 !important;
+      color: #ffffff !important;
+    }
+    [data-theme="light"] .log-msg.cmd {
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] .transfer-progress-fill {
+      background: linear-gradient(90deg, #b91c1c 0%, #dc2626 50%, #ef4444 100%) !important;
+      box-shadow: 0 0 8px rgba(220, 38, 38, 0.35) !important;
+    }
+    [data-theme="light"] .badge-status.running {
+      background: rgba(220, 38, 38, 0.1) !important;
+      color: #dc2626 !important;
+      border: 1px solid rgba(220, 38, 38, 0.3) !important;
+    }
+    [data-theme="light"] .terminal-tab-pill.active {
+      color: #dc2626 !important;
+      background: rgba(220, 38, 38, 0.14) !important;
+      border-color: rgba(220, 38, 38, 0.4) !important;
+    }
+    [data-theme="light"] .terminal-cmd-header {
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] .pane.drag-target {
+      outline: 2px dashed #dc2626 !important;
+      background-color: rgba(220, 38, 38, 0.06) !important;
+    }
+    [data-theme="light"] #selectedSiteBadge {
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.08) 0%, rgba(0, 0, 0, 0.02) 100%) !important;
+      border-color: rgba(220, 38, 38, 0.28) !important;
+      color: #111827 !important;
+    }
+    [data-theme="light"] #quickSiteSelect {
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] .fut-toast {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(254, 242, 242, 0.9) 100%) !important;
+      border: 1px solid rgba(220, 38, 38, 0.3) !important;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12), 0 0 20px rgba(220, 38, 38, 0.15) !important;
+      color: #111827 !important;
+    }
+    [data-theme="light"] .fut-title {
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] .loading-card {
+      background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%) !important;
+      border: 1px solid rgba(220, 38, 38, 0.25) !important;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15), 0 0 25px rgba(220, 38, 38, 0.12) !important;
+    }
+    [data-theme="light"] .loading-spinner {
+      border: 3.5px solid rgba(220, 38, 38, 0.2) !important;
+      border-top-color: #dc2626 !important;
+      border-right-color: #991b1b !important;
+    }
+    [data-theme="light"] .loading-title {
+      color: #111827 !important;
+    }
+    [data-theme="light"] .loading-log-line.active {
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] .putty-window {
+      border: 1px solid rgba(220, 38, 38, 0.4) !important;
+      box-shadow: 0 25px 65px rgba(0, 0, 0, 0.4), 0 0 20px rgba(220, 38, 38, 0.15) !important;
+    }
+    [data-theme="light"] #aboutAppVersion {
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.1) 0%, rgba(0, 0, 0, 0.03) 100%) !important;
+      border-color: rgba(220, 38, 38, 0.28) !important;
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] .tools-soon-title {
+      background: linear-gradient(135deg, #ef4444, #dc2626, #991b1b) !important;
+      -webkit-background-clip: text !important;
+      -webkit-text-fill-color: transparent !important;
+      text-shadow: 0 0 30px rgba(220, 38, 38, 0.3) !important;
+    }
+    [data-theme="light"] #updateDownloadCard {
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.08) 0%, rgba(0, 0, 0, 0.02) 100%) !important;
+      border-color: rgba(220, 38, 38, 0.28) !important;
+    }
+    [data-theme="light"] #dlProgressBar {
+      background: linear-gradient(90deg, #b91c1c, #ef4444) !important;
+      box-shadow: 0 0 10px rgba(220, 38, 38, 0.4) !important;
+    }
+    [data-theme="light"] ::selection {
+      background: rgba(220, 38, 38, 0.25) !important;
+      color: #111827 !important;
+    }
+    /* Dynamic elimination of blue styles in light mode */
+    [data-theme="light"] [style*="color: #38bdf8"],
+    [data-theme="light"] [style*="color:#38bdf8"],
+    [data-theme="light"] [style*="color: rgb(56, 189, 248)"] {
+      color: #dc2626 !important;
+    }
+    [data-theme="light"] [style*="background: #0284c7"],
+    [data-theme="light"] [style*="background:#0284c7"],
+    [data-theme="light"] [style*="background: linear-gradient(90deg, #0284c7, #38bdf8)"] {
+      background: linear-gradient(90deg, #b91c1c, #ef4444) !important;
+    }
+    [data-theme="light"] [stroke="#38bdf8"],
+    [data-theme="light"] [stroke="#0284c7"] {
+      stroke: #dc2626 !important;
+    }
+    [data-theme="light"] [fill="#38bdf8"],
+    [data-theme="light"] [fill="#0284c7"] {
+      fill: #dc2626 !important;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
@@ -265,7 +505,7 @@
     }
     .btn-primary {
       background: var(--accent);
-      border-color: #006bbd;
+      border-color: var(--accent-hover);
       color: #fff;
     }
     .btn-primary:hover { background: var(--accent-hover); }
@@ -444,7 +684,7 @@
     }
     tr:hover { background: var(--table-tr-hover); }
     tr.selected {
-      background: #005a9e !important;
+      background: var(--selection-bg, #005a9e) !important;
       color: #ffffff !important;
     }
     tr.selected td {
@@ -1777,16 +2017,20 @@
               <stop offset="0%" stop-color="#0284c7"/>
               <stop offset="100%" stop-color="#0369a1"/>
             </linearGradient>
+            <linearGradient id="logoGradLight" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#ef4444"/>
+              <stop offset="100%" stop-color="#991b1b"/>
+            </linearGradient>
           </defs>
-          <rect x="2" y="2" width="28" height="28" rx="6" fill="url(#logoGrad)" stroke="#38bdf8" stroke-width="1.2"/>
+          <rect id="brandLogoRect" x="2" y="2" width="28" height="28" rx="6" fill="url(#logoGrad)" stroke="#38bdf8" stroke-width="1.2"/>
           <path d="M7 11.5A2.5 2.5 0 0 1 9.5 9h2a2.5 2.5 0 0 1 2.5 2.5v1.5a2.5 2.5 0 0 1-2.5 2.5h-1.5v4.5H7v-8.5zm2.5 0h2v1.5h-2v-1.5z" fill="#ffffff"/>
           <path d="M16 11.5a2.5 2.5 0 0 1 2.5-2.5h2a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-2a2.5 2.5 0 0 1-2.5-2.5v-6zm2.5 0h2v6h-2v-6z" fill="#ffffff"/>
-          <path d="M11.5 25.5l3.5-3v6l-3.5-3z" fill="#38bdf8"/>
+          <path id="brandLogoArrow" d="M11.5 25.5l3.5-3v6l-3.5-3z" fill="#38bdf8"/>
           <path d="M20.5 6.5l-3.5 3v-6l3.5 3z" fill="#facc15"/>
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.21</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.22</span>
         </div>
       </div>
 
@@ -2868,17 +3112,21 @@
         <button type="button" class="btn btn-secondary" onclick="closeAboutModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
       </div>
       <div class="modal-body" style="padding: 24px 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px;">
-        <svg viewBox="0 0 32 32" width="60" height="60" fill="none" style="filter: drop-shadow(0 4px 14px rgba(56, 189, 248, 0.4));">
+        <svg class="about-logo-svg" viewBox="0 0 32 32" width="60" height="60" fill="none" style="filter: drop-shadow(0 4px 14px rgba(56, 189, 248, 0.4));">
           <defs>
             <linearGradient id="aboutLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
               <stop offset="0%" stop-color="#0284c7"/>
               <stop offset="100%" stop-color="#0369a1"/>
             </linearGradient>
+            <linearGradient id="aboutLogoGradLight" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#ef4444"/>
+              <stop offset="100%" stop-color="#991b1b"/>
+            </linearGradient>
           </defs>
-          <rect x="2" y="2" width="28" height="28" rx="7" fill="url(#aboutLogoGrad)" stroke="#38bdf8" stroke-width="1.2"/>
+          <rect id="aboutLogoRect" x="2" y="2" width="28" height="28" rx="7" fill="url(#aboutLogoGrad)" stroke="#38bdf8" stroke-width="1.2"/>
           <path d="M7 11.5A2.5 2.5 0 0 1 9.5 9h2a2.5 2.5 0 0 1 2.5 2.5v1.5a2.5 2.5 0 0 1-2.5 2.5h-1.5v4.5H7v-8.5zm2.5 0h2v1.5h-2v-1.5z" fill="#ffffff"/>
           <path d="M16 11.5a2.5 2.5 0 0 1 2.5-2.5h2a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-2a2.5 2.5 0 0 1-2.5-2.5v-6zm2.5 0h2v6h-2v-6z" fill="#ffffff"/>
-          <path d="M11.5 25.5l3.5-3v6l-3.5-3z" fill="#38bdf8"/>
+          <path id="aboutLogoArrow" d="M11.5 25.5l3.5-3v6l-3.5-3z" fill="#38bdf8"/>
           <path d="M20.5 6.5l-3.5 3v-6l3.5 3z" fill="#facc15"/>
         </svg>
 
@@ -2918,14 +3166,14 @@
       </div>
 
       <div class="modal-body" style="padding: 32px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px;">
-        <div style="display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 50%; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); box-shadow: 0 0 24px rgba(56, 189, 248, 0.2);">
-          <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="tools-badge-icon" style="display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 50%; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); box-shadow: 0 0 24px rgba(56, 189, 248, 0.2);">
+          <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>
         </div>
 
         <div>
-          <div style="font-size: 54px; font-weight: 900; letter-spacing: 6px; background: linear-gradient(135deg, #38bdf8, #0284c7, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 30px rgba(56, 189, 248, 0.4); line-height: 1.1;">
+          <div class="tools-soon-title" style="font-size: 54px; font-weight: 900; letter-spacing: 6px; background: linear-gradient(135deg, #38bdf8, #0284c7, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 30px rgba(56, 189, 248, 0.4); line-height: 1.1;">
             SOON
           </div>
           <div style="font-size: 13.5px; font-weight: 600; color: var(--text-muted); margin-top: 6px;">
@@ -3162,7 +3410,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.21';
+    let APP_CURRENT_VERSION = '0.0.0.22';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -5997,6 +6245,33 @@
         } else {
           icon.innerHTML = `<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`;
         }
+      }
+      const brandLogoRect = document.getElementById('brandLogoRect');
+      const brandLogoArrow = document.getElementById('brandLogoArrow');
+      const aboutLogoRect = document.getElementById('aboutLogoRect');
+      const aboutLogoArrow = document.getElementById('aboutLogoArrow');
+      if (theme === 'light') {
+        if (brandLogoRect) {
+          brandLogoRect.setAttribute('fill', 'url(#logoGradLight)');
+          brandLogoRect.setAttribute('stroke', '#dc2626');
+        }
+        if (brandLogoArrow) brandLogoArrow.setAttribute('fill', '#dc2626');
+        if (aboutLogoRect) {
+          aboutLogoRect.setAttribute('fill', 'url(#aboutLogoGradLight)');
+          aboutLogoRect.setAttribute('stroke', '#dc2626');
+        }
+        if (aboutLogoArrow) aboutLogoArrow.setAttribute('fill', '#dc2626');
+      } else {
+        if (brandLogoRect) {
+          brandLogoRect.setAttribute('fill', 'url(#logoGrad)');
+          brandLogoRect.setAttribute('stroke', '#38bdf8');
+        }
+        if (brandLogoArrow) brandLogoArrow.setAttribute('fill', '#38bdf8');
+        if (aboutLogoRect) {
+          aboutLogoRect.setAttribute('fill', 'url(#aboutLogoGrad)');
+          aboutLogoRect.setAttribute('stroke', '#38bdf8');
+        }
+        if (aboutLogoArrow) aboutLogoArrow.setAttribute('fill', '#38bdf8');
       }
     }
 
