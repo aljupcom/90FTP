@@ -1063,6 +1063,17 @@ impl AppState {
                 }))
             }
 
+            "terminal_input" => {
+                let data = payload.get("data").and_then(|v| v.as_str()).unwrap_or("");
+                if !data.is_empty() {
+                    let lock = self.remote.lock().unwrap();
+                    if let Some(ref remote) = *lock {
+                        remote.send_terminal_input(data.as_bytes());
+                    }
+                }
+                IpcResponse::ok(id, action, json!({ "sent": true }))
+            }
+
             "open_native_terminal" => {
                 let req_cwd = payload.get("cwd").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
                 let req_host = payload.get("host").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();

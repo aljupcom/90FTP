@@ -2209,7 +2209,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.32</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.33</span>
         </div>
       </div>
 
@@ -2649,8 +2649,8 @@
           <button type="button" class="btn btn-secondary" onclick="clearTerminalScreen()" style="padding: 2px 8px; font-size: 11px;" title="Clear Terminal Screen (Ctrl+L)">
             Clear
           </button>
-          <button type="button" class="btn btn-secondary" onclick="openPuttyTerminalWindow()" style="padding: 2px 8px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="Detach & Pop Out PuTTY-Style Floating Terminal Window">
-            ⧉ Pop Out (PuTTY)
+          <button type="button" class="btn btn-secondary" onclick="openRemoteTerminal()" style="padding: 2px 8px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="Open Native Terminal Window">
+            ⧉ Pop Out (Terminal)
           </button>
           <button type="button" class="btn btn-secondary" id="btnTerminalMaximize" onclick="toggleTerminalMaximize()" style="padding: 2px 7px; font-size: 11px;" title="Maximize / Restore Terminal">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
@@ -3515,8 +3515,8 @@
     </div>
   </div>
 
-  <!-- PuTTY Detached Floating & Movable Terminal Window (powered by xterm.js) -->
-  <div id="puttyWindow" class="putty-window" style="display: none;">
+  <!-- PuTTY Detached Floating & Movable Terminal Window (Decommissioned in favor of Native OS Window) -->
+  <div id="puttyWindow" class="putty-window" style="display: none !important;">
     <!-- Draggable Header / Titlebar -->
     <div class="putty-titlebar" id="puttyTitlebar">
       <div class="putty-title-left">
@@ -3626,7 +3626,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.32';
+    let APP_CURRENT_VERSION = '0.0.0.33';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -7547,8 +7547,7 @@
           session_id: 'native_sess_1'
         });
       } catch (err) {
-        console.error('Failed to open native terminal window, fallback to floating window:', err);
-        openPuttyTerminalWindow(path);
+        console.error('Failed to open native terminal window:', err);
       }
     }
 
@@ -7752,44 +7751,8 @@
     }
 
     function openPuttyTerminalWindow(targetPath) {
-      closeAllMenus();
-      const win = document.getElementById('puttyWindow');
-      const dock = document.getElementById('puttyDockPill');
-      if (!win) return;
-
-      if (dock) dock.style.display = 'none';
-      win.style.display = 'flex';
-      puttyWindowVisible = true;
-
-      const savedGeom = appStorage.getItem('90ftp_putty_geom');
-      if (savedGeom) {
-        try {
-          const g = JSON.parse(savedGeom);
-          if (g.left) win.style.left = g.left;
-          if (g.top) win.style.top = g.top;
-          if (g.width) win.style.width = g.width;
-          if (g.height) win.style.height = g.height;
-        } catch (_) {}
-      }
-
-      const remoteInput = document.getElementById('remotePathInput');
-      const activeRemotePath = (remoteInput && remoteInput.value.trim()) || currentRemotePath;
-      const host = (currentConnectedProfile && currentConnectedProfile.host) || (selectedQuickSite && selectedQuickSite.host) || (isConnected ? 'connected-server' : 'LocalPC');
-      const user = (currentConnectedProfile && (currentConnectedProfile.username || currentConnectedProfile.user)) || (selectedQuickSite && (selectedQuickSite.username || selectedQuickSite.user)) || (isConnected ? 'root' : 'PowerShell');
-      const mode = isConnected ? 'remote' : 'local';
-      const path = targetPath || (isConnected ? activeRemotePath : currentLocalPath) || '.';
-      ensureTerminalActiveSession(host, user, path, mode);
-
-      initPuttyXterm();
-      updatePuttyHeader();
-      renderPuttyTabs();
-
-      setTimeout(() => {
-        if (puttyFitAddon) {
-          try { puttyFitAddon.fit(); } catch (_) {}
-        }
-        focusPuttyInput();
-      }, 50);
+      openRemoteTerminal(targetPath);
+      return;
     }
 
     function updatePuttyHeader() {

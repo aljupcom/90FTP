@@ -443,13 +443,28 @@
       term.writeln('\x1b[1;36m======================================================================\x1b[0m');
       printPrompt();
 
+      // Attach key event handler to prevent WebView2 accelerator stealing
+      term.attachCustomKeyEventHandler(e => {
+        // Allow clipboard actions: Ctrl+Shift+C / Ctrl+Shift+V
+        if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c' || e.key === 'V' || e.key === 'v')) {
+          return false;
+        }
+        // When busy (running nano, htop, etc.), block WebView browser defaults so Ctrl keys reach xterm
+        if (isBusy && e.ctrlKey) {
+          e.preventDefault();
+          return true;
+        }
+        return true;
+      });
+
       // Keyboard input
       term.onData(data => {
         if (isBusy) {
-          if (data === '\u0003') {
-            term.write('^C\r\n');
-            printPrompt();
-          }
+          // Direct interactive forwarding to remote SSH / process (nano, htop, top, vi, sudo prompts, Ctrl+C, etc.)
+          sendIpc('terminal_input', {
+            session_id: sessionId,
+            data: data
+          });
           return;
         }
 
@@ -535,14 +550,12 @@
     // Keyboard accelerators protection
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey) {
-        if (e.key === 'w' || e.key === 'W') {
+        if (['w', 'W', 'n', 'N', 't', 'T', 'q', 'Q', 'o', 'O', 'p', 'P', 'f', 'F', 'r', 'R'].includes(e.key)) {
           e.preventDefault();
           e.stopPropagation();
-          deleteWordBackwards();
-          return false;
-        } else if (e.key === 'n' || e.key === 'N' || e.key === 't' || e.key === 'T' || e.key === 'q' || e.key === 'Q') {
-          e.preventDefault();
-          e.stopPropagation();
+          if (!isBusy && (e.key === 'w' || e.key === 'W')) {
+            deleteWordBackwards();
+          }
           return false;
         }
       }
@@ -580,7 +593,8 @@
 
     window.onTerminalStream = function(sId, text) {
       if (!term || !text) return;
-      const clean = text.replace(/[\r\n]*__90FTP_PWD__[\s\S]*$/, '');
+      const pwdIdx = text.indexOf('__90FTP_PWD__');
+      const clean = pwdIdx !== -1 ? text.substring(0, pwdIdx) : text;
       if (clean) {
         term.write(clean);
       }
@@ -588,6 +602,8 @@
 
     window.onTerminalDone = function(sId, newCwd, exitCode) {
       isBusy = false;
+      lineBuffer = '';
+      historyIdx = -1;
       if (newCwd && newCwd.trim()) {
         currentCwd = newCwd.trim();
         document.title = currentUser + '@' + currentHost + ':' + currentCwd + ' - 90FTP Native Terminal';

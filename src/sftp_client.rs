@@ -54,6 +54,7 @@ pub struct SftpClient {
     pub host: String,
     pub username: String,
     pub resize_tx: tokio::sync::broadcast::Sender<(u32, u32)>,
+    pub input_tx: tokio::sync::broadcast::Sender<Vec<u8>>,
 }
 
 impl SftpClient {
@@ -80,7 +81,7 @@ impl SftpClient {
         let prompt_holder = Arc::new(Mutex::new(None));
         let prompt_holder_clone = prompt_holder.clone();
 
-        let res: Result<(SftpSession, Handle<ClientHandler>, String, tokio::sync::broadcast::Sender<(u32, u32)>), String> = rt.block_on(async {
+        let res: Result<(SftpSession, Handle<ClientHandler>, String, tokio::sync::broadcast::Sender<(u32, u32)>, tokio::sync::broadcast::Sender<Vec<u8>>), String> = rt.block_on(async {
             let config = Arc::new(Config::default());
             let handler = ClientHandler {
                 host: host_s.clone(),
@@ -155,12 +156,13 @@ impl SftpClient {
             };
 
             let (resize_tx, _) = tokio::sync::broadcast::channel::<(u32, u32)>(32);
+            let (input_tx, _) = tokio::sync::broadcast::channel::<Vec<u8>>(256);
 
-            Ok((sftp, session, default_dir, resize_tx))
+            Ok((sftp, session, default_dir, resize_tx, input_tx))
         });
 
         match res {
-            Ok((sftp, session, default_dir, resize_tx)) => Ok(Self {
+            Ok((sftp, session, default_dir, resize_tx, input_tx)) => Ok(Self {
                 rt,
                 sftp,
                 session,
@@ -168,6 +170,7 @@ impl SftpClient {
                 host: host.to_string(),
                 username: user.to_string(),
                 resize_tx,
+                input_tx,
             }),
             Err(e) => Err(e),
         }
@@ -324,6 +327,10 @@ impl SftpClient {
         let _ = self.resize_tx.send((cols, rows));
     }
 
+    pub fn send_terminal_input(&self, data: &[u8]) {
+        let _ = self.input_tx.send(data.to_vec());
+    }
+
     pub fn exec_command(&self, cmd: &str) -> Result<String, String> {
         self.exec_command_streaming(cmd, 100, 30, |_| {})
     }
@@ -336,6 +343,7 @@ impl SftpClient {
         let pty_cols = if cols == 0 { 100 } else { cols.max(20).min(500) };
         let pty_rows = if rows == 0 { 30 } else { rows.max(5).min(200) };
         let mut resize_rx = self.resize_tx.subscribe();
+        let mut input_rx = self.input_tx.subscribe();
 
         self.rt.block_on(async {
             let mut channel = self.session.channel_open_session().await
@@ -379,6 +387,11 @@ impl SftpClient {
                             let c = new_cols.max(20).min(500);
                             let r = new_rows.max(5).min(200);
                             let _ = channel.window_change(c, r, 0, 0).await;
+                        }
+                    }
+                    recv_input = input_rx.recv() => {
+                        if let Ok(bytes) = recv_input {
+                            let _ = channel.data(&bytes[..]).await;
                         }
                     }
                 }

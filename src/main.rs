@@ -23,9 +23,16 @@ use wry::WebViewBuilder;
 use crate::app_state::AppState;
 use crate::models::IpcRequest;
 
+#[derive(Debug, Clone, Copy)]
+pub enum IpcTarget {
+    Main,
+    Terminal,
+    Broadcast,
+}
+
 #[derive(Debug)]
 enum AppEvent {
-    ExecScript(String),
+    ExecScript(IpcTarget, String),
     OpenNativeTerminal(serde_json::Value),
 }
 
@@ -61,7 +68,7 @@ fn main() {
     let proxy_cb = {
         let proxy = proxy.clone();
         Arc::new(move |script: String| {
-            let _ = proxy.send_event(AppEvent::ExecScript(script));
+            let _ = proxy.send_event(AppEvent::ExecScript(IpcTarget::Broadcast, script));
         })
     };
     let proxy_term = proxy.clone();
@@ -103,7 +110,7 @@ fn main() {
                     match serde_json::to_string(&resp) {
                         Ok(resp_json) => {
                             let script = format!("window.onRustResponse({});", resp_json);
-                            let _ = proxy.send_event(AppEvent::ExecScript(script));
+                            let _ = proxy.send_event(AppEvent::ExecScript(IpcTarget::Main, script));
                         }
                         Err(e) => {
                             eprintln!("Failed to serialize IPC response: {:?}", e);
@@ -137,23 +144,29 @@ fn main() {
             Event::NewEvents(StartCause::Init) => {
                 println!("90FTP Desktop Client Started.");
             }
-            Event::UserEvent(AppEvent::ExecScript(script)) => {
-                let is_native = script.contains("native_");
-                let is_stream = script.contains("onTerminalStream") || script.contains("onTerminalDone") || script.contains("initTerminal");
-
-                // If native terminal window is open, send all native & terminal-targeted events to it
-                if let Some((_, ref term_wv)) = terminal_instance {
-                    if is_native || is_stream {
-                        if let Err(e) = term_wv.evaluate_script(&script) {
-                            logger::log_error(&format!("Terminal WebView evaluate_script error: {:?}", e));
+            Event::UserEvent(AppEvent::ExecScript(target, script)) => {
+                match target {
+                    IpcTarget::Main => {
+                        if let Err(e) = webview.evaluate_script(&script) {
+                            logger::log_error(&format!("Main WebView evaluate_script error: {:?}", e));
                         }
                     }
-                }
-
-                // Main window only gets non-native events
-                if !is_native {
-                    if let Err(e) = webview.evaluate_script(&script) {
-                        logger::log_error(&format!("Main WebView evaluate_script error: {:?}", e));
+                    IpcTarget::Terminal => {
+                        if let Some((_, ref term_wv)) = terminal_instance {
+                            if let Err(e) = term_wv.evaluate_script(&script) {
+                                logger::log_error(&format!("Terminal WebView evaluate_script error: {:?}", e));
+                            }
+                        }
+                    }
+                    IpcTarget::Broadcast => {
+                        if let Err(e) = webview.evaluate_script(&script) {
+                            logger::log_error(&format!("Main WebView evaluate_script error: {:?}", e));
+                        }
+                        if let Some((_, ref term_wv)) = terminal_instance {
+                            if let Err(e) = term_wv.evaluate_script(&script) {
+                                logger::log_error(&format!("Terminal WebView evaluate_script error: {:?}", e));
+                            }
+                        }
                     }
                 }
             }
@@ -199,7 +212,7 @@ fn main() {
                                         let resp = app_state.handle_request(ipc_req);
                                         if let Ok(resp_json) = serde_json::to_string(&resp) {
                                             let script = format!("if(window.onRustResponse)window.onRustResponse({});", resp_json);
-                                            let _ = proxy.send_event(AppEvent::ExecScript(script));
+                                            let _ = proxy.send_event(AppEvent::ExecScript(IpcTarget::Terminal, script));
                                         }
                                     }
                                     Err(e) => {
@@ -249,7 +262,7 @@ fn main() {
                     *control_flow = ControlFlow::Exit;
                 } else if let Some((ref term_win, _)) = terminal_instance {
                     if window_id == term_win.id() {
-                        terminal_instance = None;
+                        term_win.set_visible(false);
                     }
                 }
             }

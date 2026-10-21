@@ -134,4 +134,10 @@ impl RemoteClient {
             c.resize_pty(cols, rows);
         }
     }
+
+    pub fn send_terminal_input(&self, data: &[u8]) {
+        if let RemoteClient::Sftp(c) = self {
+            c.send_terminal_input(data);
+        }
+    }
 }
