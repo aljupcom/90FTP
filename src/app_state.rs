@@ -692,15 +692,10 @@ impl AppState {
                 let remote_path = payload["remote_path"].as_str().unwrap_or("");
                 let skip_list = payload["skip_list"].as_bool().unwrap_or(false);
 
-                let data = match std::fs::read(local_path) {
-                    Ok(d) => d,
-                    Err(e) => return IpcResponse::err(id, action, &format!("Failed to read local file: {}", e)),
-                };
-
                 let mut lock = self.remote.lock().unwrap();
                 if let Some(client) = lock.as_mut() {
-                    match client.upload_file(remote_path, &data) {
-                        Ok(_) => {
+                    match client.upload_from_local_file(local_path, remote_path) {
+                        Ok(bytes) => {
                             let files = if skip_list {
                                 Vec::new()
                             } else {
@@ -711,7 +706,7 @@ impl AppState {
                                 action,
                                 json!({
                                     "status": "uploaded",
-                                    "bytes": data.len(),
+                                    "bytes": bytes,
                                     "files": files,
                                 }),
                             )
@@ -850,24 +845,65 @@ impl AppState {
 
                 let mut lock = self.remote.lock().unwrap();
                 if let Some(client) = lock.as_mut() {
-                    match client.download_file(remote_path) {
-                        Ok(data) => {
-                            if let Some(parent) = std::path::Path::new(local_path).parent() {
-                                let _ = std::fs::create_dir_all(parent);
-                            }
-                            if let Err(e) = std::fs::write(local_path, &data) {
-                                return IpcResponse::err(id, action, &format!("Failed to write local file: {}", e));
-                            }
+                    match client.download_to_local_file(remote_path, local_path) {
+                        Ok(bytes) => {
                             IpcResponse::ok(
                                 id,
                                 action,
                                 json!({
                                     "status": "downloaded",
-                                    "bytes": data.len(),
+                                    "bytes": bytes,
                                     "local_path": local_path,
                                 }),
                             )
                         }
+                        Err(e) => {
+                            crate::logger::log_error(&format!("Download error for '{}' -> '{}': {}", remote_path, local_path, e));
+                            IpcResponse::err(id, action, &e)
+                        }
+                    }
+                } else {
+                    IpcResponse::err(id, action, "Not connected")
+                }
+            }
+
+            "local_stat" => {
+                let path = payload["path"].as_str().unwrap_or("");
+                let p = std::path::Path::new(path);
+                if !p.exists() {
+                    IpcResponse::ok(id, action, json!({ "exists": false }))
+                } else {
+                    let is_dir = p.is_dir();
+                    let size = if is_dir { 0 } else { p.metadata().map(|m| m.len()).unwrap_or(0) };
+                    let modified = p.metadata()
+                        .and_then(|m| m.modified())
+                        .map(|t| {
+                            let dt: chrono::DateTime<chrono::Utc> = t.into();
+                            dt.format("%Y-%m-%d %H:%M").to_string()
+                        })
+                        .unwrap_or_else(|_| "-".to_string());
+                    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                    IpcResponse::ok(id, action, json!({
+                        "exists": true,
+                        "name": name,
+                        "path": path,
+                        "is_dir": is_dir,
+                        "size": size,
+                        "modified": modified
+                    }))
+                }
+            }
+
+            "remote_stat" => {
+                let path = payload["path"].as_str().unwrap_or("");
+                let mut lock = self.remote.lock().unwrap();
+                if let Some(client) = lock.as_mut() {
+                    match client.stat(path) {
+                        Ok(Some(item)) => IpcResponse::ok(id, action, json!({
+                            "exists": true,
+                            "item": item
+                        })),
+                        Ok(None) => IpcResponse::ok(id, action, json!({ "exists": false })),
                         Err(e) => IpcResponse::err(id, action, &e),
                     }
                 } else {

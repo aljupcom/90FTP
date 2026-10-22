@@ -2358,7 +2358,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.38</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.39</span>
         </div>
       </div>
 
@@ -3531,7 +3531,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.38 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.39 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -3751,6 +3751,91 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" onclick="saveExclusionMaskFromModal()">Save & Apply</button>
         <button type="button" class="btn btn-secondary" onclick="closeExclusionMaskModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Interactive File Overwrite / Collision Dialog -->
+  <div class="modal-overlay" id="collisionModal" style="z-index: 1080;">
+    <div class="modal-content" style="width: 580px; max-width: 95vw;">
+      <div class="modal-header" style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.15) 0%, rgba(0, 0, 0, 0.2) 100%); border-bottom: 1px solid rgba(234, 179, 8, 0.3);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px; color: #f59e0b;">⚠️</span>
+          <div>
+            <div style="font-weight: 700; font-size: 13.5px; color: var(--text-main);" id="collisionModalTitle">Target File Already Exists</div>
+            <div style="font-size: 11px; color: var(--text-dim);" id="collisionModalSubtitle">Choose how to resolve the conflicting item</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="resolveCollisionModal('cancel')" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+        
+        <!-- Comparison Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <!-- Source Card -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase;">Source (New)</span>
+            </div>
+            <div style="font-weight: 700; font-size: 12.5px; color: var(--text-main); word-break: break-all;" id="colSourceName">filename.ext</div>
+            <div style="font-size: 10.5px; color: var(--text-dim); word-break: break-all;" id="colSourcePath">/source/path</div>
+            <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px; font-size: 11px; font-family: var(--font-mono, monospace);">
+              <div style="color: var(--text-muted);">Size: <strong style="color: var(--text-main);" id="colSourceSize">0 B</strong></div>
+              <div style="color: var(--text-muted);">Date: <span id="colSourceDate">-</span></div>
+            </div>
+          </div>
+
+          <!-- Destination Card -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 11px; font-weight: 700; color: #f59e0b; text-transform: uppercase;">Destination (Existing)</span>
+            </div>
+            <div style="font-weight: 700; font-size: 12.5px; color: var(--text-main); word-break: break-all;" id="colDestName">filename.ext</div>
+            <div style="font-size: 10.5px; color: var(--text-dim); word-break: break-all;" id="colDestPath">/dest/path</div>
+            <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px; font-size: 11px; font-family: var(--font-mono, monospace);">
+              <div style="color: var(--text-muted);">Size: <strong style="color: var(--text-main);" id="colDestSize">0 B</strong></div>
+              <div style="color: var(--text-muted);">Date: <span id="colDestDate">-</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Difference banner -->
+        <div id="colDiffBanner" style="font-size: 11.5px; color: var(--text-muted); background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 7px 12px; display: flex; align-items: center; gap: 8px;">
+          <span>ℹ️</span>
+          <span id="colDiffText">Comparing source and destination file...</span>
+        </div>
+
+        <!-- Apply to all checkbox -->
+        <label class="options-checkbox-row" style="margin-top: 2px; font-size: 12px; font-weight: 600;">
+          <input type="checkbox" id="colApplyAllCheckbox">
+          <span>Apply this action to all remaining conflicts in this transfer</span>
+        </label>
+
+        <!-- Primary Action Buttons -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px;">
+          <button type="button" class="btn btn-primary" onclick="resolveCollisionModal('overwrite')" style="padding: 7px 12px; font-size: 12px; gap: 6px; justify-content: center; background: #0284c7; border-color: #38bdf8;">
+            <span>🔄 Overwrite</span>
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="resolveCollisionModal('overwrite_newer')" style="padding: 7px 12px; font-size: 12px; gap: 6px; justify-content: center;" title="Only overwrite if the source file is newer or has a different size">
+            <span>⚡ Overwrite if Newer</span>
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="resolveCollisionModal('rename')" style="padding: 7px 12px; font-size: 12px; gap: 6px; justify-content: center;" title="Save as a new file with (1) appended to avoid replacing">
+            <span>✏️ Rename / Keep Both</span>
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="resolveCollisionModal('skip')" style="padding: 7px 12px; font-size: 12px; gap: 6px; justify-content: center;">
+            <span>⏭️ Skip File</span>
+          </button>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 18px;">
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="resolveCollisionModal('overwrite_all')">Overwrite All</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="resolveCollisionModal('skip_all')">Skip All</button>
+        </div>
+        <button type="button" class="btn btn-danger btn-sm" onclick="resolveCollisionModal('cancel')">Cancel Transfer</button>
       </div>
     </div>
   </div>
@@ -4064,7 +4149,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.38';
+    let APP_CURRENT_VERSION = '0.0.0.39';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -5368,6 +5453,129 @@
       handleDisconnect();
     }
 
+    // Interactive File Collision Resolution System
+    let pendingCollisionResolver = null;
+    let transferCollisionScope = {
+      applyAllAction: null,
+      cancelled: false
+    };
+
+    function resetCollisionScope() {
+      transferCollisionScope = {
+        applyAllAction: null,
+        cancelled: false
+      };
+    }
+
+    function resolveCollisionModal(action) {
+      const modal = document.getElementById('collisionModal');
+      if (modal) modal.classList.remove('active');
+      const applyAll = document.getElementById('colApplyAllCheckbox')?.checked || false;
+
+      if (action === 'overwrite_all') {
+        action = 'overwrite';
+        transferCollisionScope.applyAllAction = 'overwrite';
+      } else if (action === 'skip_all') {
+        action = 'skip';
+        transferCollisionScope.applyAllAction = 'skip';
+      } else if (applyAll) {
+        transferCollisionScope.applyAllAction = action;
+      }
+
+      if (action === 'cancel') {
+        transferCollisionScope.cancelled = true;
+      }
+
+      if (pendingCollisionResolver) {
+        const resolver = pendingCollisionResolver;
+        pendingCollisionResolver = null;
+        resolver({ action, applyAll });
+      }
+    }
+
+    async function promptCollision(srcInfo, destInfo, direction) {
+      if (transferCollisionScope.cancelled) {
+        return { action: 'cancel' };
+      }
+      if (transferCollisionScope.applyAllAction) {
+        return { action: transferCollisionScope.applyAllAction };
+      }
+
+      const modalTitle = document.getElementById('collisionModalTitle');
+      const modalSubtitle = document.getElementById('collisionModalSubtitle');
+      if (modalTitle) {
+        modalTitle.textContent = direction === 'upload' 
+          ? 'Remote File Collision: Target Already Exists' 
+          : 'Local File Collision: Target Already Exists';
+      }
+      if (modalSubtitle) {
+        modalSubtitle.textContent = direction === 'upload'
+          ? 'The destination server already contains a file with this name.'
+          : 'Your local destination folder already contains a file with this name.';
+      }
+
+      document.getElementById('colSourceName').textContent = srcInfo.name || '-';
+      document.getElementById('colSourcePath').textContent = srcInfo.path || '-';
+      document.getElementById('colSourceSize').textContent = formatBytes(srcInfo.size || 0);
+      document.getElementById('colSourceDate').textContent = srcInfo.modified || '-';
+
+      document.getElementById('colDestName').textContent = destInfo.name || '-';
+      document.getElementById('colDestPath').textContent = destInfo.path || '-';
+      document.getElementById('colDestSize').textContent = formatBytes(destInfo.size || 0);
+      document.getElementById('colDestDate').textContent = destInfo.modified || '-';
+
+      const chk = document.getElementById('colApplyAllCheckbox');
+      if (chk) chk.checked = false;
+
+      const diffEl = document.getElementById('colDiffText');
+      const sSize = Number(srcInfo.size || 0);
+      const dSize = Number(destInfo.size || 0);
+
+      let dateComparison = '';
+      if (srcInfo.modified && destInfo.modified && srcInfo.modified !== '-' && destInfo.modified !== '-') {
+        const sDate = new Date(srcInfo.modified).getTime();
+        const dDate = new Date(destInfo.modified).getTime();
+        if (!isNaN(sDate) && !isNaN(dDate)) {
+          if (sDate > dDate) {
+            dateComparison = 'Source is newer.';
+          } else if (sDate < dDate) {
+            dateComparison = 'Destination is newer.';
+          } else {
+            dateComparison = 'Same modification timestamp.';
+          }
+        }
+      }
+
+      let sizeComparison = '';
+      if (sSize > dSize) {
+        sizeComparison = `Source is larger (+${formatBytes(sSize - dSize)}).`;
+      } else if (sSize < dSize) {
+        sizeComparison = `Source is smaller (-${formatBytes(dSize - sSize)}).`;
+      } else {
+        sizeComparison = 'Identical size.';
+      }
+
+      const diffMsg = [dateComparison, sizeComparison].filter(Boolean).join(' ') || 'File already exists at destination.';
+      if (diffEl) diffEl.textContent = diffMsg;
+
+      const modal = document.getElementById('collisionModal');
+      if (modal) modal.classList.add('active');
+
+      return new Promise((resolve) => {
+        pendingCollisionResolver = resolve;
+      });
+    }
+
+    function generateAlternativeFilename(originalName) {
+      const lastDot = originalName.lastIndexOf('.');
+      if (lastDot > 0) {
+        const base = originalName.substring(0, lastDot);
+        const ext = originalName.substring(lastDot);
+        return `${base} (1)${ext}`;
+      }
+      return `${originalName} (1)`;
+    }
+
     async function uploadFolderDirect(localFolderPath, folderName) {
       if (!isConnected) {
         alert('Please connect to a server first');
@@ -5407,9 +5615,14 @@
         addLog(`Starting recursive upload of folder '${folderName}' (${items.length} items)...`, 'info');
         let uploadedFiles = 0;
         let createdDirs = 0;
+        resetCollisionScope();
 
         for (const item of items) {
-          const itemDest = baseRemote + '/' + item.rel_path;
+          if (transferCollisionScope.cancelled) {
+            addLog('Folder upload cancelled by user.', 'warning');
+            break;
+          }
+          let itemDest = baseRemote + '/' + item.rel_path;
           if (item.is_dir) {
             const dirTx = addTransferItem('dir_upload', item.rel_path, item.abs_path, itemDest, 'Directory');
             try {
@@ -5420,7 +5633,43 @@
               updateTransferItem(dirTx.id, { status: 'failed', error: dirErr.message || dirErr });
             }
           } else {
-            const fileName = item.rel_path.split('/').pop();
+            let fileName = item.rel_path.split('/').pop();
+
+            // Collision check on remote
+            let remoteExists = false;
+            let destMeta = null;
+            try {
+              const chk = await sendRust('remote_stat', { path: itemDest });
+              if (chk && chk.exists && chk.item) {
+                remoteExists = true;
+                destMeta = chk.item;
+              }
+            } catch (_) {}
+
+            if (remoteExists && destMeta) {
+              const srcMeta = { name: fileName, path: item.abs_path, size: item.size, modified: '-' };
+              const decision = await promptCollision(srcMeta, destMeta, 'upload');
+              if (decision.action === 'cancel') {
+                addLog('Folder upload cancelled by user.', 'warning');
+                break;
+              }
+              if (decision.action === 'skip') {
+                addLog(`[Skip] ${item.rel_path} skipped (already exists on remote)`, 'info');
+                continue;
+              }
+              if (decision.action === 'overwrite_newer') {
+                if (destMeta.size === item.size) {
+                  addLog(`[Skip] ${item.rel_path} skipped (identical size on remote)`, 'info');
+                  continue;
+                }
+              }
+              if (decision.action === 'rename') {
+                const alt = generateAlternativeFilename(fileName);
+                itemDest = itemDest.substring(0, itemDest.lastIndexOf('/') + 1) + alt;
+                fileName = alt;
+              }
+            }
+
             const tx = addTransferItem('upload', fileName, item.abs_path, itemDest, formatBytes(item.size));
             try {
               const res = await sendRust('upload', {
@@ -5487,10 +5736,15 @@
         addLog(`Starting recursive download of folder '${folderName}' (${items.length} items)...`, 'info');
         let downloadedFiles = 0;
         let createdDirs = 0;
+        resetCollisionScope();
 
         for (const item of items) {
+          if (transferCollisionScope.cancelled) {
+            addLog('Folder download cancelled by user.', 'warning');
+            break;
+          }
           const localRel = item.rel_path.replace(/\//g, '\\');
-          const itemDest = baseLocal + '\\' + localRel;
+          let itemDest = baseLocal + '\\' + localRel;
 
           if (item.is_dir) {
             const dirTx = addTransferItem('dir_download', item.rel_path, item.remote_path, itemDest, 'Directory');
@@ -5508,7 +5762,43 @@
               await sendRust('local_create_dir', { path: parentDir });
             } catch (_) {}
 
-            const fileName = item.rel_path.split('/').pop();
+            let fileName = item.rel_path.split('/').pop();
+
+            // Collision check locally
+            let localExists = false;
+            let destMeta = null;
+            try {
+              const chk = await sendRust('local_stat', { path: itemDest });
+              if (chk && chk.exists) {
+                localExists = true;
+                destMeta = chk;
+              }
+            } catch (_) {}
+
+            if (localExists && destMeta) {
+              const srcMeta = { name: fileName, path: item.remote_path, size: item.size, modified: '-' };
+              const decision = await promptCollision(srcMeta, destMeta, 'download');
+              if (decision.action === 'cancel') {
+                addLog('Folder download cancelled by user.', 'warning');
+                break;
+              }
+              if (decision.action === 'skip') {
+                addLog(`[Skip] ${item.rel_path} skipped (already exists locally)`, 'info');
+                continue;
+              }
+              if (decision.action === 'overwrite_newer') {
+                if (destMeta.size === item.size) {
+                  addLog(`[Skip] ${item.rel_path} skipped (identical size locally)`, 'info');
+                  continue;
+                }
+              }
+              if (decision.action === 'rename') {
+                const alt = generateAlternativeFilename(fileName);
+                itemDest = itemDest.substring(0, itemDest.lastIndexOf('\\') + 1) + alt;
+                fileName = alt;
+              }
+            }
+
             const tx = addTransferItem('download', fileName, item.remote_path, itemDest, formatBytes(item.size));
             try {
               const res = await sendRust('download', {
@@ -5552,24 +5842,55 @@
         }
       }
 
-      // File collision check
-      if (appOptions && appOptions.fileCollision === 'prompt') {
-        const existing = remoteFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
-        if (existing && !confirm("File '" + fileName + "' already exists on remote server. Overwrite it?")) {
+      let remoteDest = currentRemotePath.endsWith('/') 
+        ? currentRemotePath + fileName 
+        : currentRemotePath + '/' + fileName;
+
+      // Check remote collision
+      let existingRemote = remoteFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
+      if (!existingRemote) {
+        try {
+          const statRes = await sendRust('remote_stat', { path: remoteDest });
+          if (statRes && statRes.exists && statRes.item) {
+            existingRemote = statRes.item;
+          }
+        } catch (_) {}
+      }
+
+      if (existingRemote) {
+        let srcStat = { name: fileName, path: localPath, size: selectedLocalFile?.size || 0, modified: selectedLocalFile?.modified || '-' };
+        if (!srcStat.size) {
+          try {
+            const ls = await sendRust('local_stat', { path: localPath });
+            if (ls && ls.exists) srcStat = ls;
+          } catch (_) {}
+        }
+
+        const decision = await promptCollision(srcStat, existingRemote, 'upload');
+        if (decision.action === 'cancel') {
           addLog("Upload cancelled by user: " + fileName, 'info');
           return;
         }
-      } else if (appOptions && appOptions.fileCollision === 'skip') {
-        const existing = remoteFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
-        if (existing && existing.size === selectedLocalFile?.size) {
-          addLog("Skipped upload (file already exists with matching size): " + fileName, 'info');
+        if (decision.action === 'skip') {
+          addLog("Skipped upload for existing file: " + fileName, 'info');
           return;
         }
+        if (decision.action === 'overwrite_newer') {
+          const sTime = new Date(srcStat.modified).getTime();
+          const dTime = new Date(existingRemote.modified).getTime();
+          if (!isNaN(sTime) && !isNaN(dTime) && sTime <= dTime && srcStat.size === existingRemote.size) {
+            addLog("Skipped upload (destination is already up to date): " + fileName, 'info');
+            return;
+          }
+        }
+        if (decision.action === 'rename') {
+          const altName = generateAlternativeFilename(fileName);
+          remoteDest = currentRemotePath.endsWith('/') 
+            ? currentRemotePath + altName 
+            : currentRemotePath + '/' + altName;
+          fileName = altName;
+        }
       }
-
-      const remoteDest = currentRemotePath.endsWith('/') 
-        ? currentRemotePath + fileName 
-        : currentRemotePath + '/' + fileName;
 
       addLog("Uploading '" + fileName + "' to " + remoteDest + "...", 'cmd');
       const tx = addTransferItem('upload', fileName, localPath, remoteDest, 'Processing...');
@@ -5608,24 +5929,55 @@
     }
 
     async function downloadFileDirect(remotePath, fileName) {
-      // File collision check
-      if (appOptions && appOptions.fileCollision === 'prompt') {
-        const existing = localFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
-        if (existing && !confirm("File '" + fileName + "' already exists locally. Overwrite it?")) {
+      let localDest = currentLocalPath.endsWith('\\') 
+        ? currentLocalPath + fileName 
+        : currentLocalPath + '\\' + fileName;
+
+      // Check local collision
+      let existingLocal = localFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
+      if (!existingLocal) {
+        try {
+          const statRes = await sendRust('local_stat', { path: localDest });
+          if (statRes && statRes.exists) {
+            existingLocal = statRes;
+          }
+        } catch (_) {}
+      }
+
+      if (existingLocal) {
+        let srcStat = { name: fileName, path: remotePath, size: selectedRemoteFile?.size || 0, modified: selectedRemoteFile?.modified || '-' };
+        if (!srcStat.size) {
+          try {
+            const rs = await sendRust('remote_stat', { path: remotePath });
+            if (rs && rs.exists && rs.item) srcStat = rs.item;
+          } catch (_) {}
+        }
+
+        const decision = await promptCollision(srcStat, existingLocal, 'download');
+        if (decision.action === 'cancel') {
           addLog("Download cancelled by user: " + fileName, 'info');
           return;
         }
-      } else if (appOptions && appOptions.fileCollision === 'skip') {
-        const existing = localFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
-        if (existing && existing.size === selectedRemoteFile?.size) {
-          addLog("Skipped download (file already exists with matching size): " + fileName, 'info');
+        if (decision.action === 'skip') {
+          addLog("Skipped download for existing file: " + fileName, 'info');
           return;
         }
+        if (decision.action === 'overwrite_newer') {
+          const sTime = new Date(srcStat.modified).getTime();
+          const dTime = new Date(existingLocal.modified).getTime();
+          if (!isNaN(sTime) && !isNaN(dTime) && sTime <= dTime && srcStat.size === existingLocal.size) {
+            addLog("Skipped download (local file is already up to date): " + fileName, 'info');
+            return;
+          }
+        }
+        if (decision.action === 'rename') {
+          const altName = generateAlternativeFilename(fileName);
+          localDest = currentLocalPath.endsWith('\\') 
+            ? currentLocalPath + altName 
+            : currentLocalPath + '\\' + altName;
+          fileName = altName;
+        }
       }
-
-      const localDest = currentLocalPath.endsWith('\\') 
-        ? currentLocalPath + fileName 
-        : currentLocalPath + '\\' + fileName;
 
       addLog("Downloading '" + fileName + "' to " + localDest + "...", 'cmd');
       const tx = addTransferItem('download', fileName, remotePath, localDest, 'Processing...');

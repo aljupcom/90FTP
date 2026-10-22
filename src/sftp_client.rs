@@ -344,10 +344,124 @@ impl SftpClient {
             let mut file = self.sftp.open(&file_s).await
                 .map_err(|e| format!("Failed to open remote file {}: {}", file_s, e))?;
             let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer).await
-                .map_err(|e| format!("Failed to read remote file {}: {}", file_s, e))?;
+            const BUF_SIZE: usize = 128 * 1024;
+            let mut chunk = vec![0u8; BUF_SIZE];
+            loop {
+                let n = file.read(&mut chunk).await
+                    .map_err(|e| format!("Failed to read remote file {}: {}", file_s, e))?;
+                if n == 0 {
+                    break;
+                }
+                buffer.extend_from_slice(&chunk[..n]);
+            }
             let _ = file.close().await;
             Ok(buffer)
+        })
+    }
+
+    pub fn download_to_local_file(&self, remote_file: &str, local_path: &str) -> Result<u64, String> {
+        let file_s = remote_file.to_string();
+        let local_s = local_path.to_string();
+        self.rt.block_on(async {
+            use tokio::io::AsyncReadExt;
+            use tokio::io::AsyncWriteExt;
+
+            if let Some(parent) = std::path::Path::new(&local_s).parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+
+            let mut remote_f = self.sftp.open(&file_s).await
+                .map_err(|e| format!("Failed to open remote file {}: {}", file_s, e))?;
+
+            let mut local_f = tokio::fs::File::create(&local_s).await
+                .map_err(|e| format!("Failed to create local destination file {}: {}", local_s, e))?;
+
+            const BUF_SIZE: usize = 128 * 1024;
+            let mut chunk = vec![0u8; BUF_SIZE];
+            let mut total_bytes = 0u64;
+
+            loop {
+                let n = remote_f.read(&mut chunk).await
+                    .map_err(|e| format!("Failed reading remote file {}: {}", file_s, e))?;
+                if n == 0 {
+                    break;
+                }
+                local_f.write_all(&chunk[..n]).await
+                    .map_err(|e| format!("Failed writing to local file {}: {}", local_s, e))?;
+                total_bytes += n as u64;
+            }
+
+            local_f.flush().await
+                .map_err(|e| format!("Failed to flush local file: {}", e))?;
+            let _ = remote_f.close().await;
+
+            Ok(total_bytes)
+        })
+    }
+
+    pub fn upload_from_local_file(&self, local_path: &str, remote_file: &str) -> Result<u64, String> {
+        let local_s = local_path.to_string();
+        let remote_s = remote_file.to_string();
+        self.rt.block_on(async {
+            use tokio::io::AsyncReadExt;
+            use tokio::io::AsyncWriteExt;
+
+            let mut local_f = tokio::fs::File::open(&local_s).await
+                .map_err(|e| format!("Failed to open local file {}: {}", local_s, e))?;
+
+            let mut remote_f = self.sftp.create(&remote_s).await
+                .map_err(|e| format!("Failed to create remote file {}: {}", remote_s, e))?;
+
+            const BUF_SIZE: usize = 128 * 1024;
+            let mut chunk = vec![0u8; BUF_SIZE];
+            let mut total_bytes = 0u64;
+
+            loop {
+                let n = local_f.read(&mut chunk).await
+                    .map_err(|e| format!("Failed reading local file {}: {}", local_s, e))?;
+                if n == 0 {
+                    break;
+                }
+                remote_f.write_all(&chunk[..n]).await
+                    .map_err(|e| format!("Failed writing to remote file {}: {}", remote_s, e))?;
+                total_bytes += n as u64;
+            }
+
+            remote_f.flush().await
+                .map_err(|e| format!("Failed to flush remote file: {}", e))?;
+            remote_f.close().await
+                .map_err(|e| format!("Failed to close remote file: {}", e))?;
+
+            Ok(total_bytes)
+        })
+    }
+
+    pub fn stat(&self, path: &str) -> Result<Option<FileItem>, String> {
+        let path_s = path.to_string();
+        self.rt.block_on(async {
+            match self.sftp.metadata(&path_s).await {
+                Ok(meta) => {
+                    let is_dir = meta.is_dir();
+                    let size = meta.len();
+                    let is_symlink = meta.is_symlink();
+                    let mtime = meta.mtime.unwrap_or(0) as i64;
+                    let dt = DateTime::<Utc>::from_timestamp(mtime, 0).unwrap_or_default();
+                    let modified = dt.format("%Y-%m-%d %H:%M").to_string();
+                    let perms_octal = meta.permissions.unwrap_or(0) & 0o777;
+                    let permissions = format_octal_permissions(perms_octal, is_dir);
+                    let name = path_s.rsplit('/').next().unwrap_or(&path_s).to_string();
+                    Ok(Some(FileItem {
+                        name,
+                        path: path_s,
+                        is_dir,
+                        size,
+                        modified,
+                        permissions,
+                        is_symlink,
+                    }))
+                }
+                Err(_) => Ok(None),
+            }
         })
     }
 

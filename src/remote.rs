@@ -66,10 +66,31 @@ impl RemoteClient {
         }
     }
 
+    pub fn download_to_local_file(&mut self, remote_file: &str, local_path: &str) -> Result<u64, String> {
+        match self {
+            RemoteClient::Ftp(c) => c.download_to_local_file(remote_file, local_path),
+            RemoteClient::Sftp(c) => c.download_to_local_file(remote_file, local_path),
+        }
+    }
+
     pub fn upload_file(&mut self, remote_file: &str, data: &[u8]) -> Result<(), String> {
         match self {
             RemoteClient::Ftp(c) => c.upload_file(remote_file, data),
             RemoteClient::Sftp(c) => c.upload_file(remote_file, data),
+        }
+    }
+
+    pub fn upload_from_local_file(&mut self, local_path: &str, remote_file: &str) -> Result<u64, String> {
+        match self {
+            RemoteClient::Ftp(c) => c.upload_from_local_file(local_path, remote_file),
+            RemoteClient::Sftp(c) => c.upload_from_local_file(local_path, remote_file),
+        }
+    }
+
+    pub fn stat(&mut self, path: &str) -> Result<Option<FileItem>, String> {
+        match self {
+            RemoteClient::Ftp(c) => c.stat(path),
+            RemoteClient::Sftp(c) => c.stat(path),
         }
     }
 

@@ -93,12 +93,54 @@ impl FtpClient {
         Ok(cursor.into_inner())
     }
 
+    pub fn download_to_local_file(&mut self, remote_file: &str, local_path: &str) -> Result<u64, String> {
+        if let Some(parent) = std::path::Path::new(local_path).parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let mut cursor = self
+            .stream
+            .retr_as_buffer(remote_file)
+            .map_err(|e| format!("Failed to download {}: {}", remote_file, e))?;
+        let bytes = cursor.into_inner();
+        let len = bytes.len() as u64;
+        std::fs::write(local_path, &bytes)
+            .map_err(|e| format!("Failed to write local file {}: {}", local_path, e))?;
+        Ok(len)
+    }
+
     pub fn upload_file(&mut self, remote_file: &str, data: &[u8]) -> Result<(), String> {
         let mut cursor = Cursor::new(data);
         self.stream
             .put_file(remote_file, &mut cursor)
             .map_err(|e| format!("Failed to upload {}: {}", remote_file, e))?;
         Ok(())
+    }
+
+    pub fn upload_from_local_file(&mut self, local_path: &str, remote_file: &str) -> Result<u64, String> {
+        let bytes = std::fs::read(local_path)
+            .map_err(|e| format!("Failed to read local file {}: {}", local_path, e))?;
+        let len = bytes.len() as u64;
+        let mut cursor = Cursor::new(&bytes);
+        self.stream
+            .put_file(remote_file, &mut cursor)
+            .map_err(|e| format!("Failed to upload {}: {}", remote_file, e))?;
+        Ok(len)
+    }
+
+    pub fn stat(&mut self, remote_path: &str) -> Result<Option<FileItem>, String> {
+        let parent = if let Some(idx) = remote_path.rfind('/') {
+            if idx == 0 { "/" } else { &remote_path[..idx] }
+        } else {
+            &self.current_dir
+        };
+        let target_name = remote_path.rsplit('/').next().unwrap_or(remote_path);
+        let items = self.list(Some(parent))?;
+        for item in items {
+            if item.name.eq_ignore_ascii_case(target_name) {
+                return Ok(Some(item));
+            }
+        }
+        Ok(None)
     }
 
     pub fn make_dir(&mut self, dir_name: &str) -> Result<(), String> {
