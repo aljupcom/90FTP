@@ -120,6 +120,61 @@ impl AppState {
                 }
             }
 
+            "local_compress" => {
+                let sources: Vec<String> = payload.get("sources")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|x| x.as_str()).map(|s| s.to_string()).collect())
+                    .unwrap_or_default();
+                let dest_zip = payload.get("dest_zip").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+
+                if sources.is_empty() {
+                    return IpcResponse::err(id, action, "No source files or folders selected to compress");
+                }
+                if dest_zip.is_empty() {
+                    return IpcResponse::err(id, action, "Destination zip path cannot be empty");
+                }
+
+                match crate::archive::compress_to_zip(&sources, &dest_zip) {
+                    Ok(count) => {
+                        crate::logger::log_info(&format!("Successfully compressed {} items to {:?}", count, dest_zip));
+                        IpcResponse::ok(id, action, json!({
+                            "count": count,
+                            "dest_zip": dest_zip,
+                        }))
+                    }
+                    Err(e) => {
+                        crate::logger::log_error(&format!("Failed to compress to {:?}: {}", dest_zip, e));
+                        IpcResponse::err(id, action, &e)
+                    }
+                }
+            }
+
+            "local_extract" => {
+                let archive_path = payload.get("archive_path").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let dest_dir = payload.get("dest_dir").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+
+                if archive_path.is_empty() {
+                    return IpcResponse::err(id, action, "Archive path cannot be empty");
+                }
+                if dest_dir.is_empty() {
+                    return IpcResponse::err(id, action, "Destination folder cannot be empty");
+                }
+
+                match crate::archive::extract_zip(&archive_path, &dest_dir) {
+                    Ok(count) => {
+                        crate::logger::log_info(&format!("Successfully extracted {} items from {:?} to {:?}", count, archive_path, dest_dir));
+                        IpcResponse::ok(id, action, json!({
+                            "count": count,
+                            "dest_dir": dest_dir,
+                        }))
+                    }
+                    Err(e) => {
+                        crate::logger::log_error(&format!("Failed to extract {:?}: {}", archive_path, e));
+                        IpcResponse::err(id, action, &e)
+                    }
+                }
+            }
+
             "get_local_shell_verbs" => {
                 let path = payload["path"].as_str().unwrap_or("");
                 if path.is_empty() || !std::path::Path::new(path).exists() {

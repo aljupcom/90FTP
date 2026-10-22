@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod app_state;
+mod archive;
 mod ftp_client;
 mod local_fs;
 mod logger;

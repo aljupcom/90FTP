@@ -2209,7 +2209,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.33</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.34</span>
         </div>
       </div>
 
@@ -2476,6 +2476,12 @@
             </button>
             <button class="btn-tool" title="New File" onclick="promptNewLocalFile()">
               <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            </button>
+            <button class="btn-tool" title="Compress Selected to ZIP (.zip)" onclick="compressSelectedLocalToolbar()" style="color: #38bdf8;">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            </button>
+            <button class="btn-tool" title="Extract Selected ZIP Archive" onclick="extractSelectedLocalToolbar()" style="color: #f59e0b;">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
             </button>
           </div>
         </div>
@@ -3626,7 +3632,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.33';
+    let APP_CURRENT_VERSION = '0.0.0.34';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -3666,7 +3672,7 @@
       await ensureIpcReady();
       return new Promise((resolve, reject) => {
         const id = 'req_' + (++reqCounter);
-        const timeoutMs = ['connect', 'upload', 'download', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'terminal_exec'].includes(action) 
+        const timeoutMs = ['connect', 'upload', 'download', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'terminal_exec', 'local_compress', 'local_extract'].includes(action) 
           ? 60000 
           : 15000;
 
@@ -4255,12 +4261,22 @@
           tr.ondragend = () => {
             tr.classList.remove('dragging');
           };
-          tr.onclick = () => selectLocalRow(idx);
+          tr.setAttribute('data-idx', idx);
+          tr.onclick = (e) => {
+            if (e.ctrlKey || e.metaKey) {
+              tr.classList.toggle('selected');
+              selectedLocalFile = f;
+            } else {
+              selectLocalRow(idx);
+            }
+          };
           tr.ondblclick = () => openLocalItem(f, tr);
           tr.oncontextmenu = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            selectLocalRow(idx);
+            if (!tr.classList.contains('selected')) {
+              selectLocalRow(idx);
+            }
             openContextMenu(e, 'local', f, idx);
           };
 
@@ -5583,7 +5599,12 @@
             <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
             <span>Open Terminal Here</span>
           </div>
-          ` : ''}
+          ` : `
+          <div class="context-menu-item" onclick="compressCurrentLocalDirectory()">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            <span>Compress Current Directory to ZIP...</span>
+          </div>
+          `}
           <div class="context-menu-item" onclick="${isRemote ? 'refreshRemote()' : 'refreshLocal()'}">
             <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             <span>Refresh</span>
@@ -5630,6 +5651,32 @@
             <div class="context-menu-item" onclick="${item.is_dir ? `uploadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `uploadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`}">
               <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               <span>Upload to Server</span>
+            </div>
+          `;
+        }
+
+        if (!isRemote) {
+          const isArchive = !item.is_dir && item.name.toLowerCase().endsWith('.zip');
+          if (isArchive) {
+            html += `
+              <div class="context-menu-item" onclick="extractLocalHere('${escapeJsString(item.path)}')">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+                <span style="font-weight: 600;">Extract Here</span>
+              </div>
+              <div class="context-menu-item" onclick="extractLocalToSubfolder('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                <span>Extract to ${escapeHtml(item.name.replace(/\.[^/.]+$/, ''))}/</span>
+              </div>
+              <div class="context-menu-item" onclick="promptExtractLocalFolder('${escapeJsString(item.path)}')">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Extract to Custom Folder...</span>
+              </div>
+            `;
+          }
+          html += `
+            <div class="context-menu-item" onclick="promptCompressLocalSelected('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              <span>Compress to ZIP (.zip)...</span>
             </div>
           `;
         }
@@ -5826,6 +5873,194 @@
 
     function closePropertiesModal() {
       document.getElementById('propertiesModal').classList.remove('active');
+    }
+
+    // ========================================================
+    // Local Compression & Extraction (ZIP Engine)
+    // ========================================================
+    function joinLocalPath(parent, child) {
+      if (!parent) return child || '';
+      const p = parent.replace(/[\\/]+$/, '');
+      const sep = p.includes('/') ? '/' : '\\';
+      return p + sep + (child || '').replace(/^[\\/]+/, '');
+    }
+
+    function getSelectedLocalItems() {
+      const selectedRows = document.querySelectorAll('#localFileList tr.selected:not(.parent-dir-row)');
+      const items = [];
+      selectedRows.forEach(r => {
+        const idx = parseInt(r.getAttribute('data-idx'));
+        if (!isNaN(idx) && localFiles[idx]) {
+          items.push(localFiles[idx]);
+        }
+      });
+      if (items.length === 0 && selectedLocalFile) {
+        items.push(selectedLocalFile);
+      }
+      return items;
+    }
+
+    async function promptCompressLocalSelected(targetPath, targetName) {
+      closeContextMenu();
+      let sources = [];
+      let defaultZipName = 'archive.zip';
+
+      const selected = getSelectedLocalItems();
+      if (selected.length > 1 && selected.some(s => s.path === targetPath)) {
+        sources = selected.map(s => s.path);
+        defaultZipName = selected[0].name.replace(/\.[^/.]+$/, '') + '_compressed.zip';
+      } else if (targetPath && targetName) {
+        sources = [targetPath];
+        defaultZipName = targetName.replace(/\.[^/.]+$/, '') + '.zip';
+      } else if (selected.length > 0) {
+        sources = selected.map(s => s.path);
+        defaultZipName = (selected.length === 1 ? selected[0].name.replace(/\.[^/.]+$/, '') : 'archive') + '.zip';
+      }
+
+      if (sources.length === 0) {
+        alert('Please select one or more files or folders to compress.');
+        return;
+      }
+
+      const inputName = prompt('Enter destination ZIP archive name:', defaultZipName);
+      if (!inputName || !inputName.trim()) return;
+
+      let cleanName = inputName.trim();
+      if (!cleanName.toLowerCase().endsWith('.zip')) {
+        cleanName += '.zip';
+      }
+
+      const destZipPath = joinLocalPath(currentLocalPath, cleanName);
+
+      try {
+        addLog(`Compressing ${sources.length} item(s) to ${cleanName}...`, 'info');
+        const res = await sendRust('local_compress', {
+          sources: sources,
+          dest_zip: destZipPath
+        });
+        addLog(`Successfully compressed ${res.count || sources.length} item(s) to ${cleanName}`, 'success');
+        await refreshLocal();
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Compression failed: ' + msg);
+        addLog('Compression error: ' + msg, 'error');
+      }
+    }
+
+    async function compressSelectedLocalToolbar() {
+      const selected = getSelectedLocalItems();
+      if (selected.length === 0) {
+        alert('Please select one or more local files or folders from the list to compress.');
+        return;
+      }
+      await promptCompressLocalSelected(selected[0].path, selected[0].name);
+    }
+
+    async function compressCurrentLocalDirectory() {
+      closeContextMenu();
+      if (!localFiles || localFiles.length === 0) {
+        alert('Current directory is empty.');
+        return;
+      }
+      const dirName = currentLocalPath.split(/[\\/]/).filter(Boolean).pop() || 'folder';
+      const defaultZip = dirName + '.zip';
+      const inputName = prompt('Compress all items in current folder to ZIP archive:', defaultZip);
+      if (!inputName || !inputName.trim()) return;
+
+      let cleanName = inputName.trim();
+      if (!cleanName.toLowerCase().endsWith('.zip')) {
+        cleanName += '.zip';
+      }
+      const destZipPath = joinLocalPath(currentLocalPath, cleanName);
+      const sources = localFiles.map(f => f.path);
+
+      try {
+        addLog(`Compressing current directory (${sources.length} items) to ${cleanName}...`, 'info');
+        const res = await sendRust('local_compress', {
+          sources: sources,
+          dest_zip: destZipPath
+        });
+        addLog(`Successfully created ${cleanName} with ${res.count || sources.length} item(s)`, 'success');
+        await refreshLocal();
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Compression failed: ' + msg);
+        addLog('Compression error: ' + msg, 'error');
+      }
+    }
+
+    async function extractLocalHere(archivePath) {
+      closeContextMenu();
+      if (!archivePath) return;
+      const fileName = archivePath.split(/[\\/]/).pop() || 'archive.zip';
+      try {
+        addLog(`Extracting ${fileName} to current directory...`, 'info');
+        const res = await sendRust('local_extract', {
+          archive_path: archivePath,
+          dest_dir: currentLocalPath
+        });
+        addLog(`Successfully extracted ${res.count || 0} item(s) from ${fileName}`, 'success');
+        await refreshLocal();
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Extraction failed: ' + msg);
+        addLog('Extraction error: ' + msg, 'error');
+      }
+    }
+
+    async function extractLocalToSubfolder(archivePath, archiveName) {
+      closeContextMenu();
+      if (!archivePath) return;
+      const subName = (archiveName || archivePath.split(/[\\/]/).pop() || 'extracted').replace(/\.[^/.]+$/, '');
+      const destDir = joinLocalPath(currentLocalPath, subName);
+
+      try {
+        addLog(`Extracting ${archiveName || 'archive'} to subfolder /${subName}...`, 'info');
+        const res = await sendRust('local_extract', {
+          archive_path: archivePath,
+          dest_dir: destDir
+        });
+        addLog(`Successfully extracted ${res.count || 0} item(s) into /${subName}`, 'success');
+        await refreshLocal();
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Extraction failed: ' + msg);
+        addLog('Extraction error: ' + msg, 'error');
+      }
+    }
+
+    async function promptExtractLocalFolder(archivePath) {
+      closeContextMenu();
+      if (!archivePath) return;
+      const defaultDest = currentLocalPath;
+      const targetDir = prompt('Extract archive to destination folder path:', defaultDest);
+      if (!targetDir || !targetDir.trim()) return;
+
+      try {
+        addLog(`Extracting to ${targetDir.trim()}...`, 'info');
+        const res = await sendRust('local_extract', {
+          archive_path: archivePath,
+          dest_dir: targetDir.trim()
+        });
+        addLog(`Successfully extracted ${res.count || 0} item(s) into ${targetDir.trim()}`, 'success');
+        await refreshLocal();
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Extraction failed: ' + msg);
+        addLog('Extraction error: ' + msg, 'error');
+      }
+    }
+
+    async function extractSelectedLocalToolbar() {
+      const selected = getSelectedLocalItems();
+      const archive = selected.find(s => !s.is_dir && s.name.toLowerCase().endsWith('.zip')) || (selectedLocalFile && !selectedLocalFile.is_dir && selectedLocalFile.name.toLowerCase().endsWith('.zip') ? selectedLocalFile : null);
+
+      if (!archive) {
+        alert('Please select a .zip archive file in the local file list to extract.');
+        return;
+      }
+
+      await extractLocalToSubfolder(archive.path, archive.name);
     }
 
     // CHMOD Modal
@@ -6731,6 +6966,23 @@
             svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
               <rect x="2.5" y="3.5" width="15" height="13" rx="1.5" fill="#334155"/>
               <path d="M5 8l3 2.5-3 2.5M9.5 13h4" stroke="#4ade80" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>`
+          };
+        case 'zip':
+        case 'tar':
+        case 'gz':
+        case 'tgz':
+        case 'rar':
+        case '7z':
+        case 'bz2':
+          return {
+            iconClass: 'archive',
+            svg: `<svg viewBox="0 0 20 20" width="16" height="16" style="vertical-align:middle; flex-shrink:0;">
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" fill="#f59e0b" opacity="0.18"/>
+              <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h6l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 17.5v-15z" stroke="#d97706" stroke-width="1.2" fill="none"/>
+              <rect x="5.5" y="8" width="9" height="7.5" rx="1" fill="#d97706"/>
+              <path d="M8 8v7M12 8v7M5.5 11h9" stroke="#fff" stroke-width="0.8" opacity="0.85"/>
+              <text x="10" y="6" font-size="2.9" font-weight="900" fill="#d97706" text-anchor="middle" font-family="system-ui, sans-serif">ZIP</text>
             </svg>`
           };
         default:
