@@ -3,7 +3,7 @@
 
 #define MyAppName "90FTP"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.0.0.39"
+  #define MyAppVersion "0.0.0.40"
 #endif
 #define MyAppPublisher "aljailane"
 #define MyAppURL "https://github.com/aljupcom/90FTP"
@@ -22,7 +22,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={code:GetAppDir}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=dist
@@ -101,6 +101,14 @@ begin
       PrevVersion := VerVal;
     end;
   end;
+end;
+
+function GetAppDir(Param: String): String;
+begin
+  if CheckForExistingInstallation and (PrevAppPath <> '') then
+    Result := PrevAppPath
+  else
+    Result := ExpandConstant('{autopf}\{#MyAppName}');
 end;
 
 procedure InitializeWizard;
@@ -199,5 +207,17 @@ begin
     if MemoGroupInfo <> '' then S := S + MemoGroupInfo + NewLine + NewLine;
     if MemoTasksInfo <> '' then S := S + MemoTasksInfo + NewLine + NewLine;
     Result := S;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssInstall then
+  begin
+    Exec('taskkill.exe', '/F /IM 90FTP.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('taskkill.exe', '/F /IM ninety_ftp.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(600);
   end;
 end;

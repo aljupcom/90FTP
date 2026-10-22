@@ -97,7 +97,7 @@ impl FtpClient {
         if let Some(parent) = std::path::Path::new(local_path).parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let mut cursor = self
+        let cursor = self
             .stream
             .retr_as_buffer(remote_file)
             .map_err(|e| format!("Failed to download {}: {}", remote_file, e))?;
@@ -128,13 +128,13 @@ impl FtpClient {
     }
 
     pub fn stat(&mut self, remote_path: &str) -> Result<Option<FileItem>, String> {
-        let parent = if let Some(idx) = remote_path.rfind('/') {
-            if idx == 0 { "/" } else { &remote_path[..idx] }
+        let parent: String = if let Some(idx) = remote_path.rfind('/') {
+            if idx == 0 { "/".to_string() } else { remote_path[..idx].to_string() }
         } else {
-            &self.current_dir
+            self.current_dir.clone()
         };
         let target_name = remote_path.rsplit('/').next().unwrap_or(remote_path);
-        let items = self.list(Some(parent))?;
+        let items = self.list(Some(&parent))?;
         for item in items {
             if item.name.eq_ignore_ascii_case(target_name) {
                 return Ok(Some(item));

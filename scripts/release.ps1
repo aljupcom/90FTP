@@ -67,7 +67,7 @@ Write-Host ">>> [3/8] Building release binary..." -ForegroundColor Cyan
 cargo build --release
 
 Write-Host ">>> [4/8] Signing binaries (target\release\ninety_ftp.exe and 90FTP.exe)..." -ForegroundColor Cyan
-Stop-Process -Name "90FTP" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "90FTP", "ninety_ftp" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 600
 
 $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
@@ -137,6 +137,14 @@ $payloadJson = $payloadObj | ConvertTo-Json
 $payloadBytes = [System.Text.Encoding]::UTF8.GetBytes($payloadJson)
 
 try {
+    try {
+        $legacy = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/tags/v2.6.0" -Headers $headers -ErrorAction SilentlyContinue
+        if ($legacy -and $legacy.id) {
+            Write-Host "Found legacy v2.6.0 release (ID $($legacy.id)). Cleaning up..." -ForegroundColor Yellow
+            Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/$($legacy.id)" -Method Delete -Headers $headers
+        }
+    } catch {}
+
     try {
         $existing = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/tags/v$Version" -Headers $headers -ErrorAction SilentlyContinue
         if ($existing -and $existing.id) {
