@@ -71,21 +71,41 @@ Stop-Process -Name "90FTP" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 600
 
 $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
-& $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "target\release\ninety_ftp.exe"
-Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
-& $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "90FTP.exe"
+if (Test-Path $signtool) {
+    try {
+        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "target\release\ninety_ftp.exe"
+    } catch {
+        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /d "90FTP Client" "target\release\ninety_ftp.exe"
+    }
+    Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
+    try {
+        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "90FTP.exe"
+    } catch {
+        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /d "90FTP Client" "90FTP.exe"
+    }
+} else {
+    Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
+}
 
 Write-Host ">>> [5/8] Compiling Inno Setup installer dynamically (Version: $Version)..." -ForegroundColor Cyan
 & "C:\Program Files\Inno Setup 7\ISCC.exe" "/DMyAppVersion=$Version" installer.iss
 
 $setupExe = Join-Path $Root "dist\90FTP-Setup-v$Version.exe"
 Write-Host ">>> [6/8] Signing installer: $setupExe..." -ForegroundColor Cyan
-& $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Setup" $setupExe
+if (Test-Path $signtool) {
+    try {
+        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Setup" $setupExe
+    } catch {
+        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /d "90FTP Setup" $setupExe
+    }
+}
 Copy-Item $setupExe (Join-Path $Root "90FTP-Setup-v$Version.exe") -Force
 
 Write-Host ">>> [7/8] Committing and pushing branch & tag to Git..." -ForegroundColor Cyan
 git add .
-git commit -m "release: v$Version - $Message"
+try {
+    git commit -m "release: v$Version - $Message"
+} catch {}
 git push origin main
 git tag -a "v$Version" -m "Release v${Version} - $Message" -f
 git push origin "v$Version" -f
@@ -110,6 +130,7 @@ $payloadObj = @{
     body = $releaseNotes
     draft = $false
     prerelease = $false
+    make_latest = "true"
 }
 
 $payloadJson = $payloadObj | ConvertTo-Json
@@ -137,7 +158,12 @@ try {
         "Content-Type" = "application/octet-stream"
     }
 
-    $assetResp = Invoke-RestMethod -Uri $uploadUri -Method Post -Headers $uploadHeaders -InFile $setupExe
+    try {
+        $assetResp = Invoke-RestMethod -Uri $uploadUri -Method Post -Headers $uploadHeaders -InFile $setupExe
+    } catch {
+        $fileBytes = [System.IO.File]::ReadAllBytes($setupExe)
+        $assetResp = Invoke-RestMethod -Uri $uploadUri -Method Post -Headers $uploadHeaders -Body $fileBytes
+    }
     Write-Host "Asset uploaded: $($assetResp.browser_download_url)" -ForegroundColor Green
 } catch {
     Write-Warning "GitHub Release API call: $_"
