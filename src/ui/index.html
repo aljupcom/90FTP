@@ -2358,7 +2358,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.36</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.37</span>
         </div>
       </div>
 
@@ -4064,7 +4064,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.36';
+    let APP_CURRENT_VERSION = '0.0.0.37';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4991,7 +4991,7 @@
     }
 
     // Remote Directory Listing
-    function renderRemoteFiles(files) {
+    function renderRemoteFiles(files, listError = null) {
       remoteFiles = files || [];
       const tbody = document.getElementById('remoteFileList');
       if (!tbody) return;
@@ -5026,6 +5026,29 @@
           <td class="mono-cell">Parent Directory</td>
         `;
         tbody.appendChild(trUp);
+      }
+
+      if (listError) {
+        const errTr = document.createElement('tr');
+        errTr.innerHTML = `
+          <td colspan="4" style="text-align: center; color: #ef4444; padding: ${canGoUp ? '20px' : '35px'} 15px;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#ef4444" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span>Directory Access Notice</span>
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-muted); font-family: monospace; max-width: 90%; word-break: break-all;">
+                ${escapeHtml(listError)}
+              </div>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(errTr);
+        return;
       }
 
       if (remoteFiles.length === 0) {
@@ -5138,9 +5161,13 @@
         currentRemotePath = data.pwd;
         document.getElementById('remotePathInput').value = currentRemotePath;
         if (data.remote_history) updateRemoteHistory(data.remote_history);
-        renderRemoteFiles(data.files);
+        if (data.list_error) {
+          addLog('Remote directory notice: ' + data.list_error, 'error');
+        }
+        renderRemoteFiles(data.files, data.list_error);
       } catch (err) {
         addLog('Remote navigation error: ' + err.message, 'error');
+        renderRemoteFiles([], err.message);
       }
     }
 
@@ -5202,7 +5229,10 @@
         currentRemotePath = res.pwd;
         document.getElementById('remotePathInput').value = currentRemotePath;
         if (res.remote_history) updateRemoteHistory(res.remote_history);
-        renderRemoteFiles(res.files || []);
+        if (res.list_error) {
+          addLog('Remote directory notice: ' + res.list_error, 'error');
+        }
+        renderRemoteFiles(res.files || [], res.list_error);
 
         const label = params.site_name ? `${params.site_name} (${params.host})` : `${params.protocol.toUpperCase()}://${params.host}`;
         setConnectedState(true, label);

@@ -133,7 +133,7 @@ impl FtpClient {
 }
 
 // Parses both Unix-style and DOS/Windows-style FTP LIST output
-fn parse_ftp_list_line(line: &str, base_path: &str) -> Option<FileItem> {
+pub(crate) fn parse_ftp_list_line(line: &str, base_path: &str) -> Option<FileItem> {
     // Unix: -rw-r--r-- 1 owner group 12345 May 22 12:00 index.html
     let parts: Vec<&str> = line.split_whitespace().collect();
     if parts.len() >= 9 {

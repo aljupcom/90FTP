@@ -178,11 +178,26 @@ impl SftpClient {
 
     pub fn list(&self, dir_path: Option<&str>) -> Result<Vec<FileItem>, String> {
         let target = dir_path.unwrap_or(&self.current_dir);
-        let target_s = target.to_string();
+        let mut target_s = target.trim().replace('\\', "/");
+        if target_s.is_empty() {
+            target_s = "/".to_string();
+        }
+        while target_s.len() > 1 && target_s.ends_with('/') {
+            target_s.pop();
+        }
 
-        self.rt.block_on(async {
-            let mut read_dir = self.sftp.read_dir(&target_s).await
-                .map_err(|e| format!("Failed to read SFTP directory {}: {}", target_s, e))?;
+        let sftp_res = self.rt.block_on(async {
+            let read_dir_res = self.sftp.read_dir(&target_s).await;
+            let mut read_dir = match read_dir_res {
+                Ok(rd) => rd,
+                Err(e) => {
+                    let fallback_path = format!("{}/", target_s);
+                    match self.sftp.read_dir(&fallback_path).await {
+                        Ok(rd) => rd,
+                        Err(_) => return Err(format!("Failed to read SFTP directory {}: {}", target_s, e)),
+                    }
+                }
+            };
 
             let mut items = Vec::new();
 
@@ -230,7 +245,80 @@ impl SftpClient {
             });
 
             Ok(items)
-        })
+        });
+
+        match sftp_res {
+            Ok(items) => {
+                if !items.is_empty() {
+                    return Ok(items);
+                }
+                // If SFTP returned empty, verify if SSH ls sees files (e.g. permission/chroot edge case)
+                if let Ok(ssh_items) = self.list_via_ssh_exec(&target_s) {
+                    if !ssh_items.is_empty() {
+                        return Ok(ssh_items);
+                    }
+                }
+                Ok(items)
+            }
+            Err(sftp_err) => {
+                crate::logger::log_warn(&format!("{}. Attempting SSH ls fallback...", sftp_err));
+                match self.list_via_ssh_exec(&target_s) {
+                    Ok(ssh_items) if !ssh_items.is_empty() => {
+                        crate::logger::log_info(&format!("Successfully listed directory '{}' via SSH fallback ({} items)", target_s, ssh_items.len()));
+                        Ok(ssh_items)
+                    }
+                    _ => {
+                        crate::logger::log_error(&sftp_err);
+                        Err(sftp_err)
+                    }
+                }
+            }
+        }
+    }
+
+    fn list_via_ssh_exec(&self, target_dir: &str) -> Result<Vec<FileItem>, String> {
+        let cmd = format!("ls -la --time-style=+%Y-%m-%d\\ %H:%M \"{}\" 2>/dev/null", target_dir);
+        let output = self.exec_command(&cmd)?;
+        let mut items = Vec::new();
+
+        for line in output.lines() {
+            let line_trimmed = line.trim();
+            if line_trimmed.is_empty() || line_trimmed.starts_with("total ") {
+                continue;
+            }
+            if let Some(item) = crate::ftp_client::parse_ftp_list_line(line_trimmed, target_dir) {
+                if item.name != "." && item.name != ".." {
+                    items.push(item);
+                }
+            }
+        }
+
+        if items.is_empty() {
+            let simple_cmd = format!("ls -la \"{}\" 2>/dev/null", target_dir);
+            if let Ok(simple_out) = self.exec_command(&simple_cmd) {
+                for line in simple_out.lines() {
+                    let line_trimmed = line.trim();
+                    if line_trimmed.is_empty() || line_trimmed.starts_with("total ") {
+                        continue;
+                    }
+                    if let Some(item) = crate::ftp_client::parse_ftp_list_line(line_trimmed, target_dir) {
+                        if item.name != "." && item.name != ".." {
+                            items.push(item);
+                        }
+                    }
+                }
+            }
+        }
+
+        items.sort_by(|a, b| {
+            if a.is_dir != b.is_dir {
+                b.is_dir.cmp(&a.is_dir)
+            } else {
+                a.name.to_lowercase().cmp(&b.name.to_lowercase())
+            }
+        });
+
+        Ok(items)
     }
 
     pub fn change_dir(&mut self, path: &str) -> Result<String, String> {

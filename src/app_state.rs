@@ -418,7 +418,13 @@ impl AppState {
                         };
 
                         let history = sessions::add_remote_history(&pwd);
-                        let files = client.list(None).unwrap_or_default();
+                        let (files, list_err) = match client.list(None) {
+                            Ok(f) => (f, None),
+                            Err(e) => {
+                                crate::logger::log_error(&format!("Listing remote directory '{}' failed on connect: {}", pwd, e));
+                                (Vec::new(), Some(e))
+                            }
+                        };
                         let mut lock = self.remote.lock().unwrap();
                         *lock = Some(client);
 
@@ -443,6 +449,7 @@ impl AppState {
                                 "host": host,
                                 "pwd": pwd,
                                 "files": files,
+                                "list_error": list_err,
                                 "remote_history": history,
                             }),
                         )
@@ -508,10 +515,19 @@ impl AppState {
                     match client.change_dir(path) {
                         Ok(new_pwd) => {
                             let history = sessions::add_remote_history(&new_pwd);
-                            let files = client.list(None).unwrap_or_default();
-                            IpcResponse::ok(id, action, json!({ "pwd": new_pwd, "files": files, "remote_history": history }))
+                            let (files, list_err) = match client.list(None) {
+                                Ok(f) => (f, None),
+                                Err(e) => {
+                                    crate::logger::log_error(&format!("remote_cd: listing directory '{}' failed: {}", new_pwd, e));
+                                    (Vec::new(), Some(e))
+                                }
+                            };
+                            IpcResponse::ok(id, action, json!({ "pwd": new_pwd, "files": files, "list_error": list_err, "remote_history": history }))
                         }
-                        Err(e) => IpcResponse::err(id, action, &e),
+                        Err(e) => {
+                            crate::logger::log_error(&format!("remote_cd to '{}' failed: {}", path, e));
+                            IpcResponse::err(id, action, &e)
+                        }
                     }
                 } else {
                     IpcResponse::err(id, action, "Not connected to any remote server")
@@ -574,7 +590,10 @@ impl AppState {
                 if let Some(client) = lock.as_mut() {
                     match client.make_dir(dir_path) {
                         Ok(_) => {
-                            let files = client.list(None).unwrap_or_default();
+                            let files = client.list(None).unwrap_or_else(|e| {
+                                crate::logger::log_error(&format!("Listing remote directory failed after create_dir: {}", e));
+                                Vec::new()
+                            });
                             IpcResponse::ok(id, action, json!({ "status": "created", "files": files }))
                         }
                         Err(e) => IpcResponse::err(id, action, &e),
@@ -590,7 +609,10 @@ impl AppState {
                 if let Some(client) = lock.as_mut() {
                     match client.upload_file(path, b"") {
                         Ok(_) => {
-                            let files = client.list(None).unwrap_or_default();
+                            let files = client.list(None).unwrap_or_else(|e| {
+                                crate::logger::log_error(&format!("Listing remote directory failed after create_file: {}", e));
+                                Vec::new()
+                            });
                             IpcResponse::ok(id, action, json!({ "status": "created", "files": files }))
                         }
                         Err(e) => IpcResponse::err(id, action, &e),
@@ -607,7 +629,10 @@ impl AppState {
                 if let Some(client) = lock.as_mut() {
                     match client.rename(old_p, new_p) {
                         Ok(_) => {
-                            let files = client.list(None).unwrap_or_default();
+                            let files = client.list(None).unwrap_or_else(|e| {
+                                crate::logger::log_error(&format!("Listing remote directory failed after rename: {}", e));
+                                Vec::new()
+                            });
                             IpcResponse::ok(id, action, json!({ "status": "renamed", "files": files }))
                         }
                         Err(e) => IpcResponse::err(id, action, &e),
@@ -629,7 +654,10 @@ impl AppState {
                     };
                     match res {
                         Ok(_) => {
-                            let files = client.list(None).unwrap_or_default();
+                            let files = client.list(None).unwrap_or_else(|e| {
+                                crate::logger::log_error(&format!("Listing remote directory failed after delete: {}", e));
+                                Vec::new()
+                            });
                             IpcResponse::ok(id, action, json!({ "status": "deleted", "files": files }))
                         }
                         Err(e) => IpcResponse::err(id, action, &e),
@@ -646,7 +674,10 @@ impl AppState {
                 if let Some(client) = lock.as_mut() {
                     match client.chmod(mode, path) {
                         Ok(_) => {
-                            let files = client.list(None).unwrap_or_default();
+                            let files = client.list(None).unwrap_or_else(|e| {
+                                crate::logger::log_error(&format!("Listing remote directory failed after chmod: {}", e));
+                                Vec::new()
+                            });
                             IpcResponse::ok(id, action, json!({ "status": "chmod_applied", "files": files }))
                         }
                         Err(e) => IpcResponse::err(id, action, &e),
