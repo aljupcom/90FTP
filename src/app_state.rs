@@ -236,6 +236,7 @@ impl AppState {
                     .map(|arr| arr.iter().filter_map(|x| x.as_str()).map(|s| s.to_string()).collect())
                     .unwrap_or_default();
                 let dest_zip = payload.get("dest_zip").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let level = payload.get("level").and_then(|v| v.as_str());
 
                 if sources.is_empty() {
                     return IpcResponse::err(id, action, "No source files or folders selected to compress");
@@ -244,7 +245,7 @@ impl AppState {
                     return IpcResponse::err(id, action, "Destination zip path cannot be empty");
                 }
 
-                match crate::archive::compress_to_zip(&sources, &dest_zip) {
+                match crate::archive::compress_to_zip(&sources, &dest_zip, level) {
                     Ok(count) => {
                         crate::logger::log_info(&format!("Successfully compressed {} items to {:?}", count, dest_zip));
                         IpcResponse::ok(id, action, json!({
@@ -291,6 +292,7 @@ impl AppState {
                     .map(|arr| arr.iter().filter_map(|x| x.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
                     .unwrap_or_default();
                 let dest_zip = payload.get("dest_zip").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let level = payload.get("level").and_then(|v| v.as_str());
 
                 if sources.is_empty() {
                     return IpcResponse::err(id, action, "No remote files or folders selected to compress");
@@ -305,7 +307,7 @@ impl AppState {
 
                 let mut lock = self.remote.lock().unwrap();
                 if let Some(client) = lock.as_mut() {
-                    match crate::archive::remote_compress(client, &sources, &dest_zip, &cancelled, &exec_script) {
+                    match crate::archive::remote_compress(client, &sources, &dest_zip, level, &cancelled, &exec_script) {
                         Ok(val) => {
                             crate::logger::log_info(&format!("remote_compress succeeded for {:?}", dest_zip));
                             IpcResponse::ok(id, action, val)

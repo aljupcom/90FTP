@@ -6,7 +6,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 use crate::remote::RemoteClient;
 use crate::app_state::ScriptCallback;
 
-pub fn compress_to_zip(source_paths: &[String], dest_zip_path: &str) -> Result<usize, String> {
+pub fn compress_to_zip(source_paths: &[String], dest_zip_path: &str, level: Option<&str>) -> Result<usize, String> {
     if source_paths.is_empty() {
         return Err("No source files or folders selected to compress".to_string());
     }
@@ -19,8 +19,16 @@ pub fn compress_to_zip(source_paths: &[String], dest_zip_path: &str) -> Result<u
     let file = File::create(dest_path)
         .map_err(|e| format!("Failed to create destination zip file {:?}: {}", dest_path, e))?;
     let mut zip = ZipWriter::new(file);
+
+    let comp_level: i64 = match level {
+        Some("fast") => 1,
+        Some("maximum") => 9,
+        _ => 6,
+    };
+
     let options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
+        .compression_level(Some(comp_level))
         .unix_permissions(0o644);
 
     let mut count = 0;
@@ -178,6 +186,7 @@ pub fn remote_compress(
     client: &mut RemoteClient,
     sources: &[String],
     dest_zip: &str,
+    level: Option<&str>,
     cancelled: &std::sync::atomic::AtomicBool,
     exec_script: &Option<ScriptCallback>,
 ) -> Result<serde_json::Value, String> {
@@ -192,7 +201,11 @@ pub fn remote_compress(
     };
     let archive_filename = dest_zip.rsplit('/').next().unwrap_or(dest_zip);
     let dest_lower = dest_zip.to_lowercase();
-    let is_tar = dest_lower.ends_with(".tar.gz") || dest_lower.ends_with(".tgz") || dest_lower.ends_with(".tar");
+    let is_tar_gz = dest_lower.ends_with(".tar.gz") || dest_lower.ends_with(".tgz");
+    let is_tar_bz2 = dest_lower.ends_with(".tar.bz2") || dest_lower.ends_with(".tbz2");
+    let is_tar_xz = dest_lower.ends_with(".tar.xz") || dest_lower.ends_with(".txz");
+    let is_tar_plain = dest_lower.ends_with(".tar");
+    let is_tar = is_tar_gz || is_tar_bz2 || is_tar_xz || is_tar_plain;
 
     // 1. Try Native SSH server-side execution if SFTP
     let mut native_succeeded = false;
@@ -214,10 +227,27 @@ pub fn remote_compress(
                     shell_quote(rel)
                 }).collect();
 
-                let cmd = if is_tar {
-                    format!("cd {} && tar -czvf {} {}", safe_parent, safe_archive_name, rel_sources.join(" "))
+                let zip_opt = match level {
+                    Some("fast") => "-1",
+                    Some("maximum") => "-9",
+                    _ => "-6",
+                };
+
+                let cmd = if is_tar_gz {
+                    let gz_opt = match level {
+                        Some("fast") => "1",
+                        Some("maximum") => "9",
+                        _ => "6",
+                    };
+                    format!("cd {} && GZIP=\"-{}\" tar -czvf {} {}", safe_parent, gz_opt, safe_archive_name, rel_sources.join(" "))
+                } else if is_tar_bz2 {
+                    format!("cd {} && tar -cjvf {} {}", safe_parent, safe_archive_name, rel_sources.join(" "))
+                } else if is_tar_xz {
+                    format!("cd {} && tar -cJvf {} {}", safe_parent, safe_archive_name, rel_sources.join(" "))
+                } else if is_tar_plain {
+                    format!("cd {} && tar -cvf {} {}", safe_parent, safe_archive_name, rel_sources.join(" "))
                 } else {
-                    format!("cd {} && zip -r {} {}", safe_parent, safe_archive_name, rel_sources.join(" "))
+                    format!("cd {} && zip {} -r {} {}", safe_parent, zip_opt, safe_archive_name, rel_sources.join(" "))
                 };
 
                 if let Some(cb) = exec_script {
@@ -251,8 +281,16 @@ pub fn remote_compress(
     let file = File::create(&temp_path)
         .map_err(|e| format!("Failed to create local temp archive: {}", e))?;
     let mut zip = ZipWriter::new(file);
+
+    let comp_level: i64 = match level {
+        Some("fast") => 1,
+        Some("maximum") => 9,
+        _ => 6,
+    };
+
     let zip_options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
+        .compression_level(Some(comp_level))
         .unix_permissions(0o644);
 
     let mut count = 0usize;
@@ -555,7 +593,7 @@ mod tests {
             sub_dir.to_string_lossy().to_string(),
         ];
 
-        let count = compress_to_zip(&sources, &zip_file.to_string_lossy()).unwrap();
+        let count = compress_to_zip(&sources, &zip_file.to_string_lossy(), None).unwrap();
         assert!(count >= 2);
         assert!(zip_file.exists());
 

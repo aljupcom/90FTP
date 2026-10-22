@@ -2358,7 +2358,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.42</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.43</span>
         </div>
       </div>
 
@@ -2676,7 +2676,7 @@
             <button class="btn-tool" title="New File" onclick="promptNewLocalFile()">
               <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
             </button>
-            <button class="btn-tool" title="Compress Selected to ZIP (.zip)" onclick="compressSelectedLocalToolbar()" style="color: #38bdf8;">
+            <button class="btn-tool" title="Compress Selected Items (ZIP, TAR, GZ)" onclick="compressSelectedLocalToolbar()" style="color: #38bdf8;">
               <svg class="icon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
             </button>
             <button class="btn-tool" title="Extract Selected ZIP Archive" onclick="extractSelectedLocalToolbar()" style="color: #f59e0b;">
@@ -2761,7 +2761,7 @@
             <button class="btn-tool" title="CHMOD Permissions" onclick="openChmodModal()">
               <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </button>
-            <button class="btn-tool" title="Compress Selected to Archive (Remote)" onclick="remoteCompressToolbar()" style="color: #38bdf8;">
+            <button class="btn-tool" title="Compress Selected Remote Items (ZIP, TAR, GZ)" onclick="remoteCompressToolbar()" style="color: #38bdf8;">
               <svg class="icon" viewBox="0 0 24 24"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/><rect x="2" y="8" width="20" height="8" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
             </button>
             <button class="btn-tool" title="Extract Selected Archive (Remote)" onclick="remoteExtractSelectedToolbar()" style="color: #f59e0b;">
@@ -3537,7 +3537,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.42 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.43 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -3842,6 +3842,94 @@
           <button type="button" class="btn btn-secondary btn-sm" onclick="resolveCollisionModal('skip_all')">Skip All</button>
         </div>
         <button type="button" class="btn btn-danger btn-sm" onclick="resolveCollisionModal('cancel')">Cancel Transfer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Advanced Archive Compression Settings (Format, Extension, Level, Name) -->
+  <div class="modal-overlay" id="compressDialogModal" style="z-index: 1084;">
+    <div class="modal-content" style="width: 530px; max-width: 95vw;">
+      <div class="modal-header" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(0, 0, 0, 0.2) 100%); border-bottom: 1px solid rgba(14, 165, 233, 0.3);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">🗜️</span>
+          <div>
+            <div style="font-weight: 700; font-size: 13.5px; color: var(--text-main);" id="compressModalTitle">Compress Files & Folders</div>
+            <div style="font-size: 11px; color: var(--text-dim);" id="compressModalSubtitle">Select archive format, filename, and compression level</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeCompressDialogModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+        
+        <!-- Source items info -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">📂</span>
+            <div style="font-size: 11.5px; color: var(--text-main); font-weight: 600;" id="compressSourceSummary">1 item selected</div>
+          </div>
+          <span class="badge" id="compressScopeBadge" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3); font-size: 10.5px; padding: 2px 8px; border-radius: 4px;">Remote Site</span>
+        </div>
+
+        <!-- Archive Name and Extension Selection -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-dim);">Archive Name & Format:</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="compressArchiveBaseName" class="input-text" style="flex: 1; font-family: var(--font-mono, monospace); font-size: 12.5px; padding: 7px 10px;" placeholder="archive_name" oninput="updateCompressPreview()">
+            <select id="compressArchiveFormat" class="input-select" style="width: 150px; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--bg-card); border: 1px solid var(--border-color); padding: 7px 8px; border-radius: 6px;" onchange="onCompressFormatChanged()">
+              <option value=".zip">.zip (Standard)</option>
+              <option value=".tar.gz">.tar.gz (Gzip)</option>
+              <option value=".tar.bz2">.tar.bz2 (Bzip2)</option>
+              <option value=".tar.xz">.tar.xz (XZ)</option>
+              <option value=".tar">.tar (Tarball)</option>
+              <option value="custom">Custom...</option>
+            </select>
+          </div>
+          <div id="compressCustomExtBox" style="display: none; margin-top: 4px;">
+            <input type="text" id="compressCustomExtInput" class="input-text" style="width: 100%; font-family: var(--font-mono, monospace); font-size: 11.5px; padding: 5px 8px;" placeholder="e.g. .tgz or .tbz2" oninput="updateCompressPreview()">
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+            <span>Resulting File:</span>
+            <span id="compressFullFilenamePreview" style="font-family: var(--font-mono, monospace); color: var(--accent); font-weight: 600;">archive.zip</span>
+          </div>
+        </div>
+
+        <!-- Compression Level / Type -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-dim);">Compression Level / Type:</label>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+            <label style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border-color); cursor: pointer; text-align: center;" class="compress-level-pill" onclick="selectCompressLevel('fast')">
+              <input type="radio" name="compressLevel" value="fast" style="margin: 0;">
+              <span style="font-size: 11.5px; font-weight: 600; color: var(--text-main);">Fast</span>
+              <span style="font-size: 9.5px; color: var(--text-dim);">Low CPU / Quick</span>
+            </label>
+            <label style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--accent); cursor: pointer; text-align: center;" class="compress-level-pill active" onclick="selectCompressLevel('standard')">
+              <input type="radio" name="compressLevel" value="standard" checked style="margin: 0;">
+              <span style="font-size: 11.5px; font-weight: 600; color: var(--accent);">Standard</span>
+              <span style="font-size: 9.5px; color: var(--text-dim);">Balanced</span>
+            </label>
+            <label style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border-color); cursor: pointer; text-align: center;" class="compress-level-pill" onclick="selectCompressLevel('maximum')">
+              <input type="radio" name="compressLevel" value="maximum" style="margin: 0;">
+              <span style="font-size: 11.5px; font-weight: 600; color: var(--text-main);">Maximum</span>
+              <span style="font-size: 9.5px; color: var(--text-dim);">Best compression</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Destination Directory Path -->
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-dim);">Destination Directory:</label>
+          <input type="text" id="compressDestinationDir" class="input-text" style="font-family: var(--font-mono, monospace); font-size: 11.5px; padding: 6px 10px;" readonly>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border-color);">
+        <button type="button" class="btn btn-secondary" onclick="closeCompressDialogModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnStartCompressAction" onclick="submitCompressDialogModal()" style="display: flex; align-items: center; gap: 6px;">
+          <span>📦</span>
+          <span>Start Compression</span>
+        </button>
       </div>
     </div>
   </div>
@@ -4255,7 +4343,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.42';
+    let APP_CURRENT_VERSION = '0.0.0.43';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -6759,7 +6847,7 @@
           ` : `
           <div class="context-menu-item" onclick="compressCurrentLocalDirectory()">
             <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-            <span>Compress Current Directory to ZIP...</span>
+            <span>Compress Current Directory...</span>
           </div>
           `}
           <div class="context-menu-item" onclick="${isRemote ? 'refreshRemote()' : 'refreshLocal()'}">
@@ -6833,7 +6921,7 @@
           html += `
             <div class="context-menu-item" onclick="promptCompressLocalSelected('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
               <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-              <span>Compress to ZIP (.zip)...</span>
+              <span>Compress Archive (ZIP, TAR, GZ)...</span>
             </div>
           `;
         } else {
@@ -6857,7 +6945,7 @@
           html += `
             <div class="context-menu-item" onclick="remoteCompressSelected('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
               <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-              <span>Compress to Archive (.zip)...</span>
+              <span>Compress Archive (ZIP, TAR, GZ)...</span>
             </div>
           `;
         }
@@ -7104,21 +7192,190 @@
       return items;
     }
 
-    async function promptCompressLocalSelected(targetPath, targetName) {
+    // Advanced Compression Settings Dialog state & handlers
+    let currentCompressConfig = null;
+
+    function openCompressDialog(config) {
+      currentCompressConfig = config;
+      const modal = document.getElementById('compressDialogModal');
+      const title = document.getElementById('compressModalTitle');
+      const subtitle = document.getElementById('compressModalSubtitle');
+      const summary = document.getElementById('compressSourceSummary');
+      const scopeBadge = document.getElementById('compressScopeBadge');
+      const baseNameInput = document.getElementById('compressArchiveBaseName');
+      const formatSelect = document.getElementById('compressArchiveFormat');
+      const customBox = document.getElementById('compressCustomExtBox');
+      const customInput = document.getElementById('compressCustomExtInput');
+      const destDirInput = document.getElementById('compressDestinationDir');
+
+      if (config.scope === 'local') {
+        title.textContent = 'Compress Local Files & Folders';
+        subtitle.textContent = 'Select archive format, filename, and compression level';
+        scopeBadge.textContent = 'Local Computer';
+        scopeBadge.style.color = '#38bdf8';
+        scopeBadge.style.borderColor = 'rgba(56, 189, 248, 0.3)';
+        scopeBadge.style.background = 'rgba(56, 189, 248, 0.15)';
+      } else {
+        title.textContent = 'Compress Remote Files & Folders';
+        subtitle.textContent = 'Select archive format, filename, and compression level on server';
+        scopeBadge.textContent = 'Remote Site';
+        scopeBadge.style.color = '#22c55e';
+        scopeBadge.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+        scopeBadge.style.background = 'rgba(34, 197, 94, 0.15)';
+      }
+
+      summary.textContent = config.summaryText || `${config.sources.length} item(s) selected`;
+      baseNameInput.value = config.defaultBaseName || 'archive';
+      formatSelect.value = '.zip';
+      customBox.style.display = 'none';
+      customInput.value = '';
+      destDirInput.value = config.destDir || '/';
+
+      selectCompressLevel('standard');
+      updateCompressPreview();
+
+      modal.classList.add('active');
+      setTimeout(() => {
+        baseNameInput.focus();
+        baseNameInput.select();
+      }, 60);
+    }
+
+    function closeCompressDialogModal() {
+      const modal = document.getElementById('compressDialogModal');
+      if (modal) modal.classList.remove('active');
+      currentCompressConfig = null;
+    }
+
+    function onCompressFormatChanged() {
+      const select = document.getElementById('compressArchiveFormat');
+      const customBox = document.getElementById('compressCustomExtBox');
+      if (select.value === 'custom') {
+        customBox.style.display = 'block';
+        document.getElementById('compressCustomExtInput').focus();
+      } else {
+        customBox.style.display = 'none';
+      }
+      updateCompressPreview();
+    }
+
+    function getChosenCompressExtension() {
+      const select = document.getElementById('compressArchiveFormat');
+      if (select.value === 'custom') {
+        let custom = (document.getElementById('compressCustomExtInput').value || '').trim();
+        if (!custom) return '.zip';
+        if (!custom.startsWith('.')) custom = '.' + custom;
+        return custom;
+      }
+      return select.value;
+    }
+
+    function updateCompressPreview() {
+      const baseNameInput = document.getElementById('compressArchiveBaseName');
+      const preview = document.getElementById('compressFullFilenamePreview');
+      let base = (baseNameInput.value || '').trim();
+      if (!base) base = 'archive';
+      base = base.replace(/\.(zip|tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar|gz)$/i, '');
+      const ext = getChosenCompressExtension();
+      preview.textContent = base + ext;
+    }
+
+    function selectCompressLevel(level) {
+      const radios = document.getElementsByName('compressLevel');
+      for (const r of radios) {
+        r.checked = (r.value === level);
+        const pill = r.closest('.compress-level-pill');
+        if (pill) {
+          if (r.value === level) {
+            pill.classList.add('active');
+            pill.style.borderColor = 'var(--accent)';
+          } else {
+            pill.classList.remove('active');
+            pill.style.borderColor = 'var(--border-color)';
+          }
+        }
+      }
+    }
+
+    async function submitCompressDialogModal() {
+      if (!currentCompressConfig) return;
+      const baseNameInput = document.getElementById('compressArchiveBaseName');
+      let base = (baseNameInput.value || '').trim();
+      if (!base) {
+        alert('Please enter an archive name.');
+        baseNameInput.focus();
+        return;
+      }
+      base = base.replace(/\.(zip|tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar|gz)$/i, '');
+      const ext = getChosenCompressExtension();
+      const archiveFilename = base + ext;
+
+      let chosenLevel = 'standard';
+      const levelRadios = document.getElementsByName('compressLevel');
+      for (const r of levelRadios) {
+        if (r.checked) { chosenLevel = r.value; break; }
+      }
+
+      const config = currentCompressConfig;
+      closeCompressDialogModal();
+
+      if (config.scope === 'local') {
+        const destZipPath = joinLocalPath(config.destDir, archiveFilename);
+        openArchiveModal('compress', config.summaryText, destZipPath, false);
+        try {
+          addLog(`Compressing ${config.sources.length} local item(s) to '${archiveFilename}' (${chosenLevel})...`, 'info');
+          const res = await sendRust('local_compress', {
+            sources: config.sources,
+            dest_zip: destZipPath,
+            level: chosenLevel
+          });
+          addLog(`Successfully compressed ${res.count || config.sources.length} item(s) to ${archiveFilename}`, 'success');
+          await refreshLocal();
+          setTimeout(() => closeArchiveModal(), 1200);
+        } catch (err) {
+          const msg = err.message || String(err);
+          alert('Local compression failed: ' + msg);
+          addLog('Local compression error: ' + msg, 'error');
+          closeArchiveModal();
+        }
+      } else {
+        // Remote compression
+        const destZipPath = config.destDir === '/' ? '/' + archiveFilename : config.destDir + '/' + archiveFilename;
+        openArchiveModal('compress', config.summaryText, destZipPath, false);
+        try {
+          addLog(`Compressing ${config.sources.length} remote item(s) to '${archiveFilename}' (${chosenLevel})...`, 'info');
+          const res = await sendRust('remote_compress', {
+            sources: config.sources,
+            dest_zip: destZipPath,
+            level: chosenLevel
+          });
+          addLog(`Successfully created ${archiveFilename} with ${res.count || config.sources.length} item(s) (${res.method || 'remote'})`, 'success');
+          await refreshRemote();
+          setTimeout(() => closeArchiveModal(), 1200);
+        } catch (err) {
+          const msg = err.message || String(err);
+          alert('Remote compression failed: ' + msg);
+          addLog('Remote compression error: ' + msg, 'error');
+          closeArchiveModal();
+        }
+      }
+    }
+
+    function promptCompressLocalSelected(targetPath, targetName) {
       closeContextMenu();
       let sources = [];
-      let defaultZipName = 'archive.zip';
+      let defaultBaseName = 'archive';
 
       const selected = getSelectedLocalItems();
       if (selected.length > 1 && selected.some(s => s.path === targetPath)) {
         sources = selected.map(s => s.path);
-        defaultZipName = selected[0].name.replace(/\.[^/.]+$/, '') + '_compressed.zip';
+        defaultBaseName = selected[0].name.replace(/\.[^/.]+$/, '') + '_compressed';
       } else if (targetPath && targetName) {
         sources = [targetPath];
-        defaultZipName = targetName.replace(/\.[^/.]+$/, '') + '.zip';
+        defaultBaseName = targetName.replace(/\.[^/.]+$/, '');
       } else if (selected.length > 0) {
         sources = selected.map(s => s.path);
-        defaultZipName = (selected.length === 1 ? selected[0].name.replace(/\.[^/.]+$/, '') : 'archive') + '.zip';
+        defaultBaseName = selected[0].name.replace(/\.[^/.]+$/, '');
       }
 
       if (sources.length === 0) {
@@ -7126,71 +7383,45 @@
         return;
       }
 
-      const inputName = prompt('Enter destination ZIP archive name:', defaultZipName);
-      if (!inputName || !inputName.trim()) return;
-
-      let cleanName = inputName.trim();
-      if (!cleanName.toLowerCase().endsWith('.zip')) {
-        cleanName += '.zip';
-      }
-
-      const destZipPath = joinLocalPath(currentLocalPath, cleanName);
-
-      try {
-        addLog(`Compressing ${sources.length} item(s) to ${cleanName}...`, 'info');
-        const res = await sendRust('local_compress', {
-          sources: sources,
-          dest_zip: destZipPath
-        });
-        addLog(`Successfully compressed ${res.count || sources.length} item(s) to ${cleanName}`, 'success');
-        await refreshLocal();
-      } catch (err) {
-        const msg = err.message || String(err);
-        alert('Compression failed: ' + msg);
-        addLog('Compression error: ' + msg, 'error');
-      }
+      openCompressDialog({
+        scope: 'local',
+        sources: sources,
+        defaultBaseName: defaultBaseName,
+        destDir: currentLocalPath,
+        summaryText: sources.length === 1 ? (targetName || defaultBaseName) : `${sources.length} selected local items`
+      });
     }
 
-    async function compressSelectedLocalToolbar() {
+    function compressSelectedLocalToolbar() {
       const selected = getSelectedLocalItems();
       if (selected.length === 0) {
         alert('Please select one or more local files or folders from the list to compress.');
         return;
       }
-      await promptCompressLocalSelected(selected[0].path, selected[0].name);
+      const defaultBase = selected.length === 1 ? selected[0].name.replace(/\.[^/.]+$/, '') : (selected[0].name.replace(/\.[^/.]+$/, '') + '_archive');
+      openCompressDialog({
+        scope: 'local',
+        sources: selected.map(s => s.path),
+        defaultBaseName: defaultBase,
+        destDir: currentLocalPath,
+        summaryText: selected.length === 1 ? selected[0].name : `${selected.length} selected local items`
+      });
     }
 
-    async function compressCurrentLocalDirectory() {
+    function compressCurrentLocalDirectory() {
       closeContextMenu();
       if (!localFiles || localFiles.length === 0) {
         alert('Current directory is empty.');
         return;
       }
       const dirName = currentLocalPath.split(/[\\/]/).filter(Boolean).pop() || 'folder';
-      const defaultZip = dirName + '.zip';
-      const inputName = prompt('Compress all items in current folder to ZIP archive:', defaultZip);
-      if (!inputName || !inputName.trim()) return;
-
-      let cleanName = inputName.trim();
-      if (!cleanName.toLowerCase().endsWith('.zip')) {
-        cleanName += '.zip';
-      }
-      const destZipPath = joinLocalPath(currentLocalPath, cleanName);
-      const sources = localFiles.map(f => f.path);
-
-      try {
-        addLog(`Compressing current directory (${sources.length} items) to ${cleanName}...`, 'info');
-        const res = await sendRust('local_compress', {
-          sources: sources,
-          dest_zip: destZipPath
-        });
-        addLog(`Successfully created ${cleanName} with ${res.count || sources.length} item(s)`, 'success');
-        await refreshLocal();
-      } catch (err) {
-        const msg = err.message || String(err);
-        alert('Compression failed: ' + msg);
-        addLog('Compression error: ' + msg, 'error');
-      }
+      openCompressDialog({
+        scope: 'local',
+        sources: localFiles.map(f => f.path),
+        defaultBaseName: dirName,
+        destDir: currentLocalPath,
+        summaryText: `All items in current folder (${localFiles.length} items)`
+      });
     }
 
     async function extractLocalHere(archivePath) {
@@ -7410,44 +7641,23 @@
       return 'overwrite';
     }
 
-    async function remoteCompressSelected(path, name) {
+    function remoteCompressSelected(path, name) {
       closeContextMenu();
       if (!isConnected) {
         alert('Please connect to a remote server first.');
         return;
       }
-      const defaultZip = (name ? name.replace(/[\\/]/g, '') : 'archive') + '.zip';
-      const inputName = prompt('Enter destination archive name (.zip or .tar.gz):', defaultZip);
-      if (!inputName || !inputName.trim()) return;
-
-      let cleanName = inputName.trim();
-      if (!cleanName.toLowerCase().endsWith('.zip') && !cleanName.toLowerCase().endsWith('.tar.gz') && !cleanName.toLowerCase().endsWith('.tgz')) {
-        cleanName += '.zip';
-      }
-
-      const destZipPath = currentRemotePath === '/' ? '/' + cleanName : currentRemotePath + '/' + cleanName;
-      const sources = [path];
-
-      openArchiveModal('compress', name || path, destZipPath, false);
-
-      try {
-        addLog(`Compressing remote item '${name || path}' to '${destZipPath}'...`, 'info');
-        const res = await sendRust('remote_compress', {
-          sources: sources,
-          dest_zip: destZipPath
-        });
-        addLog(`Successfully compressed ${res.count || 1} item(s) to ${cleanName} (${res.method || 'remote'})`, 'success');
-        await refreshRemote();
-        setTimeout(() => closeArchiveModal(), 1200);
-      } catch (err) {
-        const msg = err.message || String(err);
-        alert('Remote compression failed: ' + msg);
-        addLog('Remote compression error: ' + msg, 'error');
-        closeArchiveModal();
-      }
+      const defaultBase = (name ? name.replace(/[\\/]/g, '').replace(/\.[^/.]+$/, '') : 'archive');
+      openCompressDialog({
+        scope: 'remote',
+        sources: [path],
+        defaultBaseName: defaultBase,
+        destDir: currentRemotePath,
+        summaryText: name || path
+      });
     }
 
-    async function remoteCompressToolbar() {
+    function remoteCompressToolbar() {
       if (!isConnected) {
         alert('Please connect to a remote server first.');
         return;
@@ -7455,43 +7665,23 @@
       const selected = getSelectedRemoteItems();
       if (selected.length === 0) {
         if (selectedRemoteFile) {
-          await remoteCompressSelected(selectedRemoteFile.path, selectedRemoteFile.name);
+          remoteCompressSelected(selectedRemoteFile.path, selectedRemoteFile.name);
           return;
         }
         alert('Please select one or more remote files or folders to compress.');
         return;
       }
-      const defaultZip = (selected[0].name ? selected[0].name.replace(/[\\/]/g, '') : 'archive') + '.zip';
-      const inputName = prompt(`Compress ${selected.length} remote item(s) to archive (.zip or .tar.gz):`, defaultZip);
-      if (!inputName || !inputName.trim()) return;
-
-      let cleanName = inputName.trim();
-      if (!cleanName.toLowerCase().endsWith('.zip') && !cleanName.toLowerCase().endsWith('.tar.gz') && !cleanName.toLowerCase().endsWith('.tgz')) {
-        cleanName += '.zip';
-      }
-      const destZipPath = currentRemotePath === '/' ? '/' + cleanName : currentRemotePath + '/' + cleanName;
-      const sources = selected.map(s => s.path);
-
-      openArchiveModal('compress', `${selected.length} selected item(s)`, destZipPath, false);
-
-      try {
-        addLog(`Compressing ${sources.length} remote items to '${destZipPath}'...`, 'info');
-        const res = await sendRust('remote_compress', {
-          sources: sources,
-          dest_zip: destZipPath
-        });
-        addLog(`Successfully created ${cleanName} with ${res.count || sources.length} item(s) (${res.method || 'remote'})`, 'success');
-        await refreshRemote();
-        setTimeout(() => closeArchiveModal(), 1200);
-      } catch (err) {
-        const msg = err.message || String(err);
-        alert('Remote compression failed: ' + msg);
-        addLog('Remote compression error: ' + msg, 'error');
-        closeArchiveModal();
-      }
+      const defaultBase = (selected[0].name ? selected[0].name.replace(/[\\/]/g, '').replace(/\.[^/.]+$/, '') : 'archive');
+      openCompressDialog({
+        scope: 'remote',
+        sources: selected.map(s => s.path),
+        defaultBaseName: defaultBase,
+        destDir: currentRemotePath,
+        summaryText: selected.length === 1 ? selected[0].name : `${selected.length} selected remote items`
+      });
     }
 
-    async function remoteCompressCurrentDirectory() {
+    function remoteCompressCurrentDirectory() {
       closeContextMenu();
       if (!isConnected) {
         alert('Please connect to a remote server first.');
@@ -7502,34 +7692,13 @@
         return;
       }
       const dirName = currentRemotePath.split('/').filter(Boolean).pop() || 'remote_files';
-      const defaultZip = dirName + '.zip';
-      const inputName = prompt('Compress all items in current remote folder to archive (.zip or .tar.gz):', defaultZip);
-      if (!inputName || !inputName.trim()) return;
-
-      let cleanName = inputName.trim();
-      if (!cleanName.toLowerCase().endsWith('.zip') && !cleanName.toLowerCase().endsWith('.tar.gz') && !cleanName.toLowerCase().endsWith('.tgz')) {
-        cleanName += '.zip';
-      }
-      const destZipPath = currentRemotePath === '/' ? '/' + cleanName : currentRemotePath + '/' + cleanName;
-      const sources = remoteFiles.map(f => f.path);
-
-      openArchiveModal('compress', `Entire folder /${dirName} (${sources.length} items)`, destZipPath, false);
-
-      try {
-        addLog(`Compressing current remote directory (${sources.length} items) to '${cleanName}'...`, 'info');
-        const res = await sendRust('remote_compress', {
-          sources: sources,
-          dest_zip: destZipPath
-        });
-        addLog(`Successfully created ${cleanName} with ${res.count || sources.length} item(s) (${res.method || 'remote'})`, 'success');
-        await refreshRemote();
-        setTimeout(() => closeArchiveModal(), 1200);
-      } catch (err) {
-        const msg = err.message || String(err);
-        alert('Remote compression failed: ' + msg);
-        addLog('Remote compression error: ' + msg, 'error');
-        closeArchiveModal();
-      }
+      openCompressDialog({
+        scope: 'remote',
+        sources: remoteFiles.map(f => f.path),
+        defaultBaseName: dirName,
+        destDir: currentRemotePath,
+        summaryText: `All items in current remote folder (${remoteFiles.length} items)`
+      });
     }
 
     async function remoteExtractHere(archivePath) {
@@ -10787,36 +10956,53 @@
         if (!trimmed) {
           out += '<div style="height: 6px;"></div>';
         } else if (trimmed.startsWith('### ') || trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
-          const heading = trimmed.replace(/^#+\s*/, '');
-          const lower = heading.toLowerCase();
+          const rawHeading = trimmed.replace(/^#+\s*/, '');
+          
+          // Sanitize any mojibake characters and strip existing emojis
+          const cleanHeading = rawHeading
+            .replace(/ðŸš€|âš¡|ðŸ›¡ï¸?|ðŸ›¡/g, '')
+            .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+            .trim();
+
+          const lower = rawHeading.toLowerCase();
           let badgeColor = 'var(--accent)';
           let badgeBg = 'rgba(14, 165, 233, 0.12)';
           let badgeBorder = 'rgba(14, 165, 233, 0.25)';
           let badgeIcon = '✦';
+          let displayTitle = cleanHeading || rawHeading;
 
-          if (lower.includes('added') || lower.includes('feature') || lower.includes('🚀')) {
+          if (lower.includes('added') || lower.includes('feature') || lower.includes('🚀') || lower.includes('ðÿš€')) {
             badgeColor = '#22c55e';
             badgeBg = 'rgba(34, 197, 94, 0.12)';
             badgeBorder = 'rgba(34, 197, 94, 0.25)';
             badgeIcon = '🚀';
-          } else if (lower.includes('changed') || lower.includes('improv') || lower.includes('⚡')) {
+            displayTitle = 'Added';
+          } else if (lower.includes('changed') || lower.includes('improv') || lower.includes('⚡') || lower.includes('âš¡')) {
             badgeColor = '#38bdf8';
             badgeBg = 'rgba(56, 189, 248, 0.12)';
             badgeBorder = 'rgba(56, 189, 248, 0.25)';
             badgeIcon = '⚡';
-          } else if (lower.includes('fixed') || lower.includes('fix') || lower.includes('bug') || lower.includes('🛡️')) {
+            displayTitle = 'Changed';
+          } else if (lower.includes('fixed') || lower.includes('fix') || lower.includes('bug') || lower.includes('🛡') || lower.includes('ðÿ›¡')) {
             badgeColor = '#f59e0b';
             badgeBg = 'rgba(245, 158, 11, 0.12)';
             badgeBorder = 'rgba(245, 158, 11, 0.25)';
             badgeIcon = '🛡️';
+            displayTitle = 'Fixed';
           } else if (lower.includes('security')) {
             badgeColor = '#ec4899';
             badgeBg = 'rgba(236, 72, 153, 0.12)';
             badgeBorder = 'rgba(236, 72, 153, 0.25)';
             badgeIcon = '🔒';
+            displayTitle = 'Security';
+          } else if (lower.includes("what's new") || lower.includes("whats new")) {
+            badgeColor = 'var(--text-main)';
+            badgeBg = 'rgba(255, 255, 255, 0.06)';
+            badgeBorder = 'rgba(255, 255, 255, 0.15)';
+            badgeIcon = '✨';
           }
 
-          out += `<div style="font-weight: 700; color: ${badgeColor}; margin-top: 12px; margin-bottom: 6px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 6px; background: ${badgeBg}; border: 1px solid ${badgeBorder};"><span style="font-size: 13px;">${badgeIcon}</span><span>${escapeHtml(heading)}</span></div>`;
+          out += `<div style="font-weight: 700; color: ${badgeColor}; margin-top: 12px; margin-bottom: 6px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 6px; background: ${badgeBg}; border: 1px solid ${badgeBorder};"><span style="font-size: 13px;">${badgeIcon}</span><span>${escapeHtml(displayTitle)}</span></div>`;
         } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('+ ')) {
           let bullet = trimmed.substring(2).trim();
           let tagBadge = '';

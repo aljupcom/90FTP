@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     90FTP Automated Versioning, Building, Signing, GitHub Tag & Release Pipeline
 .EXAMPLE
@@ -28,14 +28,17 @@ if (-not $Token) {
     try {
         $originUrl = git remote get-url origin
         if ($originUrl -match 'https://([^:]+):?([^@]*)@github\.com') {
-            $tokenCandidate = $matches[1]
-            if ($tokenCandidate.StartsWith("ghp_")) {
-                $Token = $tokenCandidate
+            if ($matches[1].StartsWith("ghp_")) {
+                $Token = $matches[1]
+            } elseif ($matches[2].StartsWith("ghp_")) {
+                $Token = $matches[2]
             }
         }
     } catch {}
 }
 
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
@@ -128,6 +131,10 @@ $headers = @{
 
 # Construct rich, categorized release changelog
 $releaseNotes = ""
+$emojiRocket = [char]::ConvertFromUtf32(0x1F680)
+$emojiBolt = [char]::ConvertFromUtf32(0x26A1)
+$emojiShield = [char]::ConvertFromUtf32(0x1F6E1)
+
 if ($Changelog -and $Changelog.Trim().Length -gt 0) {
     $releaseNotes = $Changelog.Trim()
 } elseif ($Added.Count -gt 0 -or $Changed.Count -gt 0 -or $Fixed.Count -gt 0) {
@@ -137,21 +144,21 @@ if ($Changelog -and $Changelog.Trim().Length -gt 0) {
         [void]$sb.AppendLine("$Message`n")
     }
     if ($Added.Count -gt 0) {
-        [void]$sb.AppendLine("### 🚀 Added")
+        [void]$sb.AppendLine("### $emojiRocket Added")
         foreach ($item in $Added) {
             [void]$sb.AppendLine("- $item")
         }
         [void]$sb.AppendLine()
     }
     if ($Changed.Count -gt 0) {
-        [void]$sb.AppendLine("### ⚡ Changed")
+        [void]$sb.AppendLine("### $emojiBolt Changed")
         foreach ($item in $Changed) {
             [void]$sb.AppendLine("- $item")
         }
         [void]$sb.AppendLine()
     }
     if ($Fixed.Count -gt 0) {
-        [void]$sb.AppendLine("### 🛡️ Fixed")
+        [void]$sb.AppendLine("### $emojiShield Fixed")
         foreach ($item in $Fixed) {
             [void]$sb.AppendLine("- $item")
         }
@@ -185,21 +192,21 @@ if ($Changelog -and $Changelog.Trim().Length -gt 0) {
     [void]$sb.AppendLine("## What's New in v$Version")
     [void]$sb.AppendLine("$Message`n")
     if ($addedList.Count -gt 0) {
-        [void]$sb.AppendLine("### 🚀 Added")
+        [void]$sb.AppendLine("### $emojiRocket Added")
         foreach ($it in $addedList) { [void]$sb.AppendLine("- $it") }
         [void]$sb.AppendLine()
     } else {
-        [void]$sb.AppendLine("### 🚀 Added")
+        [void]$sb.AppendLine("### $emojiRocket Added")
         [void]$sb.AppendLine("- $Message")
         [void]$sb.AppendLine()
     }
     if ($changedList.Count -gt 0) {
-        [void]$sb.AppendLine("### ⚡ Changed")
+        [void]$sb.AppendLine("### $emojiBolt Changed")
         foreach ($it in $changedList) { [void]$sb.AppendLine("- $it") }
         [void]$sb.AppendLine()
     }
     if ($fixedList.Count -gt 0) {
-        [void]$sb.AppendLine("### 🛡️ Fixed")
+        [void]$sb.AppendLine("### $emojiShield Fixed")
         foreach ($it in $fixedList) { [void]$sb.AppendLine("- $it") }
         [void]$sb.AppendLine()
     }
