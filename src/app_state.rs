@@ -13,6 +13,7 @@ pub struct AppState {
     pub exec_script: Option<ScriptCallback>,
     pub open_terminal_window: Option<TerminalWindowCallback>,
     pub current_connection: Arc<Mutex<Option<serde_json::Value>>>,
+    pub archive_cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl AppState {
@@ -25,6 +26,7 @@ impl AppState {
             exec_script,
             open_terminal_window,
             current_connection: Arc::new(Mutex::new(None)),
+            archive_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 }
@@ -281,6 +283,79 @@ impl AppState {
                         IpcResponse::err(id, action, &e)
                     }
                 }
+            }
+
+            "remote_compress" => {
+                let sources: Vec<String> = payload.get("sources")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|x| x.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+                    .unwrap_or_default();
+                let dest_zip = payload.get("dest_zip").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+
+                if sources.is_empty() {
+                    return IpcResponse::err(id, action, "No remote files or folders selected to compress");
+                }
+                if dest_zip.is_empty() {
+                    return IpcResponse::err(id, action, "Destination archive path cannot be empty");
+                }
+
+                self.archive_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+                let exec_script = self.exec_script.clone();
+                let cancelled = self.archive_cancelled.clone();
+
+                let mut lock = self.remote.lock().unwrap();
+                if let Some(client) = lock.as_mut() {
+                    match crate::archive::remote_compress(client, &sources, &dest_zip, &cancelled, &exec_script) {
+                        Ok(val) => {
+                            crate::logger::log_info(&format!("remote_compress succeeded for {:?}", dest_zip));
+                            IpcResponse::ok(id, action, val)
+                        }
+                        Err(e) => {
+                            crate::logger::log_error(&format!("remote_compress failed for {:?}: {}", dest_zip, e));
+                            IpcResponse::err(id, action, &e)
+                        }
+                    }
+                } else {
+                    IpcResponse::err(id, action, "Not connected to any remote server")
+                }
+            }
+
+            "remote_extract" => {
+                let archive_path = payload.get("archive_path").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let dest_dir = payload.get("dest_dir").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let overwrite_mode = payload.get("overwrite_mode").and_then(|v| v.as_str()).unwrap_or("overwrite").trim().to_lowercase();
+
+                if archive_path.is_empty() {
+                    return IpcResponse::err(id, action, "Archive path cannot be empty");
+                }
+                if dest_dir.is_empty() {
+                    return IpcResponse::err(id, action, "Destination folder cannot be empty");
+                }
+
+                self.archive_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+                let exec_script = self.exec_script.clone();
+                let cancelled = self.archive_cancelled.clone();
+
+                let mut lock = self.remote.lock().unwrap();
+                if let Some(client) = lock.as_mut() {
+                    match crate::archive::remote_extract(client, &archive_path, &dest_dir, &overwrite_mode, &cancelled, &exec_script) {
+                        Ok(val) => {
+                            crate::logger::log_info(&format!("remote_extract succeeded from {:?} to {:?}", archive_path, dest_dir));
+                            IpcResponse::ok(id, action, val)
+                        }
+                        Err(e) => {
+                            crate::logger::log_error(&format!("remote_extract failed for {:?}: {}", archive_path, e));
+                            IpcResponse::err(id, action, &e)
+                        }
+                    }
+                } else {
+                    IpcResponse::err(id, action, "Not connected to any remote server")
+                }
+            }
+
+            "cancel_archive" => {
+                self.archive_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+                IpcResponse::ok(id, action, json!({ "cancelled": true }))
             }
 
             "get_local_shell_verbs" => {

@@ -2358,7 +2358,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.40</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.41</span>
         </div>
       </div>
 
@@ -2760,6 +2760,12 @@
             </button>
             <button class="btn-tool" title="CHMOD Permissions" onclick="openChmodModal()">
               <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </button>
+            <button class="btn-tool" title="Compress Selected to Archive (Remote)" onclick="remoteCompressToolbar()" style="color: #38bdf8;">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/><rect x="2" y="8" width="20" height="8" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            </button>
+            <button class="btn-tool" title="Extract Selected Archive (Remote)" onclick="remoteExtractSelectedToolbar()" style="color: #f59e0b;">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/><line x1="12" y1="10" x2="12" y2="16"/></svg>
             </button>
             <button class="btn-tool" style="color: #f87171;" title="Delete" onclick="deleteSelectedRemote()">
               <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -3531,7 +3537,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.40 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.41 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -3836,6 +3842,106 @@
           <button type="button" class="btn btn-secondary btn-sm" onclick="resolveCollisionModal('skip_all')">Skip All</button>
         </div>
         <button type="button" class="btn btn-danger btn-sm" onclick="resolveCollisionModal('cancel')">Cancel Transfer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Remote Compression & Extraction Manager (with Progress, Overwrite & Skip) -->
+  <div class="modal-overlay" id="archiveProgressModal" style="z-index: 1085;">
+    <div class="modal-content" style="width: 560px; max-width: 95vw;">
+      <div class="modal-header" id="archiveModalHeader" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(0, 0, 0, 0.2) 100%); border-bottom: 1px solid rgba(14, 165, 233, 0.3);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;" id="archiveModalIcon">📦</span>
+          <div>
+            <div style="font-weight: 700; font-size: 13.5px; color: var(--text-main);" id="archiveModalTitle">Remote Archive Operation</div>
+            <div style="font-size: 11px; color: var(--text-dim);" id="archiveModalSubtitle">Processing remote site archive...</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" id="archiveModalCloseBtn" onclick="closeArchiveModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+        
+        <!-- Target / Destination Info Box -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); word-break: break-all;">
+            <span id="archiveInfoLabel1">Archive File:</span>
+            <span style="font-family: var(--font-mono, monospace); color: var(--accent); font-weight: 600;" id="archiveSourceDisplay">/path/to/archive.zip</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); word-break: break-all;">
+            <span id="archiveInfoLabel2">Target Directory:</span>
+            <span style="font-family: var(--font-mono, monospace); color: var(--text-main);" id="archiveTargetDisplay">/path/to/dest</span>
+          </div>
+        </div>
+
+        <!-- Overwrite Policy Selector (Visible prior to/during extraction) -->
+        <div id="archiveExtractionPolicyBox" style="background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.25); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 11.5px; font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 6px;">
+            <span>⚠️</span>
+            <span>Collision & Overwrite Strategy:</span>
+          </div>
+          <div style="display: flex; gap: 14px; font-size: 12px; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+              <input type="radio" name="archiveOverwriteMode" value="overwrite" checked>
+              <span>Overwrite existing</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+              <input type="radio" name="archiveOverwriteMode" value="skip">
+              <span>Skip existing</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+              <input type="radio" name="archiveOverwriteMode" value="newer">
+              <span>Overwrite if newer</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Live Status / Current File Box -->
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11.5px;">
+            <span style="color: var(--text-muted);">Current Item:</span>
+            <span style="font-weight: 600; color: #38bdf8;" id="archiveStatusBadge">Ready</span>
+          </div>
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; font-size: 11.5px; font-family: var(--font-mono, monospace); color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="archiveCurrentItemText">
+            Preparing archive operation...
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 600;">
+            <span style="color: var(--text-dim);" id="archiveProgressSubtitle">Processing items...</span>
+            <span style="color: var(--accent);" id="archivePercentText">0%</span>
+          </div>
+          <div style="height: 10px; background: rgba(255, 255, 255, 0.08); border-radius: 5px; overflow: hidden; position: relative;">
+            <div id="archiveProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #0284c7 0%, #38bdf8 100%); transition: width 0.15s ease-out; border-radius: 5px;"></div>
+          </div>
+        </div>
+
+        <!-- Statistics counters -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; text-align: center;">
+            <div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Processed</div>
+            <div style="font-size: 14px; font-weight: 700; color: var(--text-main);" id="archiveCountProcessed">0</div>
+          </div>
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; text-align: center;">
+            <div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Skipped</div>
+            <div style="font-size: 14px; font-weight: 700; color: #f59e0b;" id="archiveCountSkipped">0</div>
+          </div>
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; text-align: center;">
+            <div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Status</div>
+            <div style="font-size: 12px; font-weight: 700; color: #22c55e;" id="archiveCountStatus">Active</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 18px;">
+        <span style="font-size: 11px; color: var(--text-dim);" id="archiveFooterNote">Using optimized high-speed archive engine</span>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary btn-sm" id="archiveCancelBtn" onclick="cancelArchiveOperation()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" id="archiveDoneBtn" style="display: none;" onclick="closeArchiveModal()">Done</button>
+        </div>
       </div>
     </div>
   </div>
@@ -4149,7 +4255,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.40';
+    let APP_CURRENT_VERSION = '0.0.0.41';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4189,7 +4295,7 @@
       await ensureIpcReady();
       return new Promise((resolve, reject) => {
         const id = 'req_' + (++reqCounter);
-        const timeoutMs = ['upload', 'download'].includes(action)
+        const timeoutMs = ['upload', 'download', 'remote_compress', 'remote_extract'].includes(action)
           ? 600000 
           : (['connect', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'terminal_exec', 'local_compress', 'local_extract'].includes(action) 
               ? 60000 
@@ -6646,6 +6752,10 @@
             <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
             <span>Open Terminal Here</span>
           </div>
+          <div class="context-menu-item" onclick="remoteCompressCurrentDirectory()">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            <span>Compress Current Remote Directory...</span>
+          </div>
           ` : `
           <div class="context-menu-item" onclick="compressCurrentLocalDirectory()">
             <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
@@ -6724,6 +6834,30 @@
             <div class="context-menu-item" onclick="promptCompressLocalSelected('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
               <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
               <span>Compress to ZIP (.zip)...</span>
+            </div>
+          `;
+        } else {
+          const isArchive = !item.is_dir && isArchiveFilenameJs(item.name);
+          if (isArchive) {
+            html += `
+              <div class="context-menu-item" onclick="remoteExtractHere('${escapeJsString(item.path)}')">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+                <span style="font-weight: 600;">Extract Archive Here (Remote)</span>
+              </div>
+              <div class="context-menu-item" onclick="remoteExtractToSubfolder('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                <span>Extract to /${escapeHtml(item.name.replace(/\.[^/.]+$/, ''))}/</span>
+              </div>
+              <div class="context-menu-item" onclick="remoteExtractCustomPath('${escapeJsString(item.path)}')">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Extract to Custom Path...</span>
+              </div>
+            `;
+          }
+          html += `
+            <div class="context-menu-item" onclick="remoteCompressSelected('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              <span>Compress to Archive (.zip)...</span>
             </div>
           `;
         }
@@ -7131,6 +7265,374 @@
       }
 
       await extractLocalToSubfolder(archive.path, archive.name);
+    }
+
+    function getSelectedRemoteItems() {
+      const selectedRows = document.querySelectorAll('#remoteFileList tr.selected:not(.parent-dir-row)');
+      const items = [];
+      selectedRows.forEach(r => {
+        const idx = parseInt(r.getAttribute('data-idx'));
+        if (!isNaN(idx) && remoteFiles[idx]) {
+          items.push(remoteFiles[idx]);
+        }
+      });
+      if (items.length === 0 && selectedRemoteFile) {
+        items.push(selectedRemoteFile);
+      }
+      return items;
+    }
+
+    function isArchiveFilenameJs(name) {
+      if (!name) return false;
+      const l = name.toLowerCase();
+      return l.endsWith('.zip') || l.endsWith('.tar.gz') || l.endsWith('.tgz') || l.endsWith('.tar.bz2') || l.endsWith('.tbz2') || l.endsWith('.tar.xz') || l.endsWith('.txz') || l.endsWith('.tar') || l.endsWith('.gz');
+    }
+
+    let currentArchiveOperationActive = false;
+
+    window.onArchiveProgress = function(data) {
+      if (!data) return;
+      const statusBadge = document.getElementById('archiveStatusBadge');
+      const itemText = document.getElementById('archiveCurrentItemText');
+      const progressBar = document.getElementById('archiveProgressBar');
+      const percentText = document.getElementById('archivePercentText');
+      const countProcessed = document.getElementById('archiveCountProcessed');
+      const countSkipped = document.getElementById('archiveCountSkipped');
+      const countStatus = document.getElementById('archiveCountStatus');
+
+      if (data.status && statusBadge) statusBadge.textContent = data.status;
+      if (data.currentItem && itemText) itemText.textContent = data.currentItem;
+
+      if (typeof data.count === 'number' && countProcessed) {
+        countProcessed.textContent = data.count;
+      }
+      if (typeof data.skipped === 'number' && countSkipped) {
+        countSkipped.textContent = data.skipped;
+      }
+
+      if (typeof data.percent === 'number' && data.percent >= 0) {
+        const p = Math.min(100, Math.max(0, data.percent));
+        if (progressBar) progressBar.style.width = p + '%';
+        if (percentText) percentText.textContent = Math.round(p) + '%';
+      } else {
+        if (progressBar) progressBar.style.width = '100%';
+        if (percentText) percentText.textContent = 'Active...';
+      }
+
+      if (data.percent === 100) {
+        if (countStatus) {
+          countStatus.textContent = 'Completed';
+          countStatus.style.color = '#22c55e';
+        }
+        const doneBtn = document.getElementById('archiveDoneBtn');
+        const cancelBtn = document.getElementById('archiveCancelBtn');
+        if (doneBtn) doneBtn.style.display = 'inline-flex';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+      }
+    };
+
+    function openArchiveModal(mode, sourceDisplay, targetDisplay, isExtract = false) {
+      const modal = document.getElementById('archiveProgressModal');
+      if (!modal) return;
+      currentArchiveOperationActive = true;
+
+      const icon = document.getElementById('archiveModalIcon');
+      const title = document.getElementById('archiveModalTitle');
+      const subtitle = document.getElementById('archiveModalSubtitle');
+      const srcDisp = document.getElementById('archiveSourceDisplay');
+      const tgtDisp = document.getElementById('archiveTargetDisplay');
+      const policyBox = document.getElementById('archiveExtractionPolicyBox');
+      const statusBadge = document.getElementById('archiveStatusBadge');
+      const itemText = document.getElementById('archiveCurrentItemText');
+      const progressBar = document.getElementById('archiveProgressBar');
+      const percentText = document.getElementById('archivePercentText');
+      const countProcessed = document.getElementById('archiveCountProcessed');
+      const countSkipped = document.getElementById('archiveCountSkipped');
+      const countStatus = document.getElementById('archiveCountStatus');
+      const doneBtn = document.getElementById('archiveDoneBtn');
+      const cancelBtn = document.getElementById('archiveCancelBtn');
+
+      if (isExtract) {
+        if (icon) icon.textContent = '📦';
+        if (title) title.textContent = 'Remote Archive Extraction';
+        if (subtitle) subtitle.textContent = 'Extracting archive directly on remote server';
+        if (policyBox) policyBox.style.display = 'flex';
+      } else {
+        if (icon) icon.textContent = '🗜️';
+        if (title) title.textContent = 'Remote Archive Compression';
+        if (subtitle) subtitle.textContent = 'Compressing remote files into archive';
+        if (policyBox) policyBox.style.display = 'none';
+      }
+
+      if (srcDisp) srcDisp.textContent = sourceDisplay || '-';
+      if (tgtDisp) tgtDisp.textContent = targetDisplay || '-';
+      if (statusBadge) statusBadge.textContent = 'Starting...';
+      if (itemText) itemText.textContent = 'Preparing archive operation...';
+      if (progressBar) progressBar.style.width = '0%';
+      if (percentText) percentText.textContent = '0%';
+      if (countProcessed) countProcessed.textContent = '0';
+      if (countSkipped) countSkipped.textContent = '0';
+      if (countStatus) {
+        countStatus.textContent = 'Active';
+        countStatus.style.color = '#22c55e';
+      }
+      if (doneBtn) doneBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+
+      modal.classList.add('active');
+    }
+
+    function closeArchiveModal() {
+      const modal = document.getElementById('archiveProgressModal');
+      if (modal) modal.classList.remove('active');
+      currentArchiveOperationActive = false;
+    }
+
+    async function cancelArchiveOperation() {
+      if (!currentArchiveOperationActive) {
+        closeArchiveModal();
+        return;
+      }
+      try {
+        await sendRust('cancel_archive', {});
+        addLog('Cancelling archive operation...', 'warning');
+      } catch (err) {
+        console.warn('cancel_archive error:', err);
+      }
+      closeArchiveModal();
+    }
+
+    function getSelectedOverwriteMode() {
+      const radios = document.getElementsByName('archiveOverwriteMode');
+      for (const r of radios) {
+        if (r.checked) return r.value;
+      }
+      return 'overwrite';
+    }
+
+    async function remoteCompressSelected(path, name) {
+      closeContextMenu();
+      if (!currentConnection) {
+        alert('Please connect to a remote server first.');
+        return;
+      }
+      const defaultZip = (name ? name.replace(/[\\/]/g, '') : 'archive') + '.zip';
+      const inputName = prompt('Enter destination archive name (.zip or .tar.gz):', defaultZip);
+      if (!inputName || !inputName.trim()) return;
+
+      let cleanName = inputName.trim();
+      if (!cleanName.toLowerCase().endsWith('.zip') && !cleanName.toLowerCase().endsWith('.tar.gz') && !cleanName.toLowerCase().endsWith('.tgz')) {
+        cleanName += '.zip';
+      }
+
+      const destZipPath = currentRemotePath === '/' ? '/' + cleanName : currentRemotePath + '/' + cleanName;
+      const sources = [path];
+
+      openArchiveModal('compress', name || path, destZipPath, false);
+
+      try {
+        addLog(`Compressing remote item '${name || path}' to '${destZipPath}'...`, 'info');
+        const res = await sendRust('remote_compress', {
+          sources: sources,
+          dest_zip: destZipPath
+        });
+        addLog(`Successfully compressed ${res.count || 1} item(s) to ${cleanName} (${res.method || 'remote'})`, 'success');
+        await refreshRemote();
+        setTimeout(() => closeArchiveModal(), 1200);
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Remote compression failed: ' + msg);
+        addLog('Remote compression error: ' + msg, 'error');
+        closeArchiveModal();
+      }
+    }
+
+    async function remoteCompressToolbar() {
+      if (!currentConnection) {
+        alert('Please connect to a remote server first.');
+        return;
+      }
+      const selected = getSelectedRemoteItems();
+      if (selected.length === 0) {
+        if (selectedRemoteFile) {
+          await remoteCompressSelected(selectedRemoteFile.path, selectedRemoteFile.name);
+          return;
+        }
+        alert('Please select one or more remote files or folders to compress.');
+        return;
+      }
+      const defaultZip = (selected[0].name ? selected[0].name.replace(/[\\/]/g, '') : 'archive') + '.zip';
+      const inputName = prompt(`Compress ${selected.length} remote item(s) to archive (.zip or .tar.gz):`, defaultZip);
+      if (!inputName || !inputName.trim()) return;
+
+      let cleanName = inputName.trim();
+      if (!cleanName.toLowerCase().endsWith('.zip') && !cleanName.toLowerCase().endsWith('.tar.gz') && !cleanName.toLowerCase().endsWith('.tgz')) {
+        cleanName += '.zip';
+      }
+      const destZipPath = currentRemotePath === '/' ? '/' + cleanName : currentRemotePath + '/' + cleanName;
+      const sources = selected.map(s => s.path);
+
+      openArchiveModal('compress', `${selected.length} selected item(s)`, destZipPath, false);
+
+      try {
+        addLog(`Compressing ${sources.length} remote items to '${destZipPath}'...`, 'info');
+        const res = await sendRust('remote_compress', {
+          sources: sources,
+          dest_zip: destZipPath
+        });
+        addLog(`Successfully created ${cleanName} with ${res.count || sources.length} item(s) (${res.method || 'remote'})`, 'success');
+        await refreshRemote();
+        setTimeout(() => closeArchiveModal(), 1200);
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Remote compression failed: ' + msg);
+        addLog('Remote compression error: ' + msg, 'error');
+        closeArchiveModal();
+      }
+    }
+
+    async function remoteCompressCurrentDirectory() {
+      closeContextMenu();
+      if (!currentConnection) {
+        alert('Please connect to a remote server first.');
+        return;
+      }
+      if (!remoteFiles || remoteFiles.length === 0) {
+        alert('Current remote directory is empty.');
+        return;
+      }
+      const dirName = currentRemotePath.split('/').filter(Boolean).pop() || 'remote_files';
+      const defaultZip = dirName + '.zip';
+      const inputName = prompt('Compress all items in current remote folder to archive (.zip or .tar.gz):', defaultZip);
+      if (!inputName || !inputName.trim()) return;
+
+      let cleanName = inputName.trim();
+      if (!cleanName.toLowerCase().endsWith('.zip') && !cleanName.toLowerCase().endsWith('.tar.gz') && !cleanName.toLowerCase().endsWith('.tgz')) {
+        cleanName += '.zip';
+      }
+      const destZipPath = currentRemotePath === '/' ? '/' + cleanName : currentRemotePath + '/' + cleanName;
+      const sources = remoteFiles.map(f => f.path);
+
+      openArchiveModal('compress', `Entire folder /${dirName} (${sources.length} items)`, destZipPath, false);
+
+      try {
+        addLog(`Compressing current remote directory (${sources.length} items) to '${cleanName}'...`, 'info');
+        const res = await sendRust('remote_compress', {
+          sources: sources,
+          dest_zip: destZipPath
+        });
+        addLog(`Successfully created ${cleanName} with ${res.count || sources.length} item(s) (${res.method || 'remote'})`, 'success');
+        await refreshRemote();
+        setTimeout(() => closeArchiveModal(), 1200);
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Remote compression failed: ' + msg);
+        addLog('Remote compression error: ' + msg, 'error');
+        closeArchiveModal();
+      }
+    }
+
+    async function remoteExtractHere(archivePath) {
+      closeContextMenu();
+      if (!archivePath) return;
+      const fileName = archivePath.split('/').pop() || 'archive.zip';
+      const targetDir = currentRemotePath;
+      const overwriteMode = getSelectedOverwriteMode();
+
+      openArchiveModal('extract', fileName, targetDir, true);
+
+      try {
+        addLog(`Extracting remote archive '${fileName}' to '${targetDir}' (${overwriteMode})...`, 'info');
+        const res = await sendRust('remote_extract', {
+          archive_path: archivePath,
+          dest_dir: targetDir,
+          overwrite_mode: overwriteMode
+        });
+        addLog(`Successfully extracted ${res.count || 0} item(s) (Skipped: ${res.skipped || 0}) from ${fileName} (${res.method || 'remote'})`, 'success');
+        await refreshRemote();
+        setTimeout(() => closeArchiveModal(), 1500);
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Remote extraction failed: ' + msg);
+        addLog('Remote extraction error: ' + msg, 'error');
+        closeArchiveModal();
+      }
+    }
+
+    async function remoteExtractToSubfolder(archivePath, archiveName) {
+      closeContextMenu();
+      if (!archivePath) return;
+      const base = archiveName || archivePath.split('/').pop() || 'archive';
+      const subName = base.replace(/\.(zip|tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar|gz)$/i, '');
+      const targetDir = currentRemotePath === '/' ? '/' + subName : currentRemotePath + '/' + subName;
+      const overwriteMode = getSelectedOverwriteMode();
+
+      openArchiveModal('extract', base, targetDir, true);
+
+      try {
+        addLog(`Extracting remote archive '${base}' to subfolder '/${subName}' (${overwriteMode})...`, 'info');
+        const res = await sendRust('remote_extract', {
+          archive_path: archivePath,
+          dest_dir: targetDir,
+          overwrite_mode: overwriteMode
+        });
+        addLog(`Successfully extracted ${res.count || 0} item(s) (Skipped: ${res.skipped || 0}) into /${subName}`, 'success');
+        await refreshRemote();
+        setTimeout(() => closeArchiveModal(), 1500);
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Remote extraction failed: ' + msg);
+        addLog('Remote extraction error: ' + msg, 'error');
+        closeArchiveModal();
+      }
+    }
+
+    async function remoteExtractCustomPath(archivePath) {
+      closeContextMenu();
+      if (!archivePath) return;
+      const fileName = archivePath.split('/').pop() || 'archive.zip';
+      const defaultDest = currentRemotePath;
+      const targetDir = prompt('Extract remote archive to destination path on server:', defaultDest);
+      if (!targetDir || !targetDir.trim()) return;
+
+      const cleanDest = targetDir.trim();
+      const overwriteMode = getSelectedOverwriteMode();
+
+      openArchiveModal('extract', fileName, cleanDest, true);
+
+      try {
+        addLog(`Extracting remote archive '${fileName}' to '${cleanDest}' (${overwriteMode})...`, 'info');
+        const res = await sendRust('remote_extract', {
+          archive_path: archivePath,
+          dest_dir: cleanDest,
+          overwrite_mode: overwriteMode
+        });
+        addLog(`Successfully extracted ${res.count || 0} item(s) (Skipped: ${res.skipped || 0}) into ${cleanDest}`, 'success');
+        await refreshRemote();
+        setTimeout(() => closeArchiveModal(), 1500);
+      } catch (err) {
+        const msg = err.message || String(err);
+        alert('Remote extraction failed: ' + msg);
+        addLog('Remote extraction error: ' + msg, 'error');
+        closeArchiveModal();
+      }
+    }
+
+    async function remoteExtractSelectedToolbar() {
+      if (!currentConnection) {
+        alert('Please connect to a remote server first.');
+        return;
+      }
+      const selected = getSelectedRemoteItems();
+      const archive = selected.find(s => !s.is_dir && isArchiveFilenameJs(s.name))
+        || (selectedRemoteFile && !selectedRemoteFile.is_dir && isArchiveFilenameJs(selectedRemoteFile.name) ? selectedRemoteFile : null);
+
+      if (!archive) {
+        alert('Please select an archive file (.zip, .tar.gz, .tgz, .tar) in the remote list to extract.');
+        return;
+      }
+
+      await remoteExtractToSubfolder(archive.path, archive.name);
     }
 
     // CHMOD Modal
