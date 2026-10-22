@@ -10,6 +10,14 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$Message = "Release update",
     [Parameter(Mandatory=$false)]
+    [string[]]$Added = @(),
+    [Parameter(Mandatory=$false)]
+    [string[]]$Changed = @(),
+    [Parameter(Mandatory=$false)]
+    [string[]]$Fixed = @(),
+    [Parameter(Mandatory=$false)]
+    [string]$Changelog = "",
+    [Parameter(Mandatory=$false)]
     [string]$Token = $env:GITHUB_TOKEN
 )
 
@@ -118,10 +126,89 @@ $headers = @{
     "User-Agent" = "90FTP-Release-Agent"
 }
 
-$releaseNotes = @"
-## What's New in v$Version
-- $Message
-"@
+# Construct rich, categorized release changelog
+$releaseNotes = ""
+if ($Changelog -and $Changelog.Trim().Length -gt 0) {
+    $releaseNotes = $Changelog.Trim()
+} elseif ($Added.Count -gt 0 -or $Changed.Count -gt 0 -or $Fixed.Count -gt 0) {
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine("## What's New in v$Version")
+    if ($Message -and $Message -ne "Release update") {
+        [void]$sb.AppendLine("$Message`n")
+    }
+    if ($Added.Count -gt 0) {
+        [void]$sb.AppendLine("### 🚀 Added")
+        foreach ($item in $Added) {
+            [void]$sb.AppendLine("- $item")
+        }
+        [void]$sb.AppendLine()
+    }
+    if ($Changed.Count -gt 0) {
+        [void]$sb.AppendLine("### ⚡ Changed")
+        foreach ($item in $Changed) {
+            [void]$sb.AppendLine("- $item")
+        }
+        [void]$sb.AppendLine()
+    }
+    if ($Fixed.Count -gt 0) {
+        [void]$sb.AppendLine("### 🛡️ Fixed")
+        foreach ($item in $Fixed) {
+            [void]$sb.AppendLine("- $item")
+        }
+        [void]$sb.AppendLine()
+    }
+    $releaseNotes = $sb.ToString().Trim()
+} elseif ($Message -match '(?m)^(###|\*|-|Added|Changed|Fixed)') {
+    $releaseNotes = "## What's New in v$Version`n`n$Message"
+} else {
+    # Auto-extract commits since previous tag to build structured changelog
+    $prevTag = git describe --tags --abbrev=0 HEAD^ 2>$null
+    $commits = @()
+    if ($prevTag) {
+        $commits = git log "$prevTag..HEAD" --pretty=format:"%s" 2>$null
+    }
+    $addedList = @()
+    $changedList = @()
+    $fixedList = @()
+
+    foreach ($c in $commits) {
+        if ($c -match '^(add|feat|new)[:\s]' -or $c -like '*add*' -or $c -like '*compress*' -or $c -like '*extract*') {
+            $addedList += $c
+        } elseif ($c -match '^(fix|bug|patch)[:\s]' -or $c -like '*fix*' -or $c -like '*resolve*') {
+            $fixedList += $c
+        } elseif ($c -notmatch '^release:') {
+            $changedList += $c
+        }
+    }
+
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine("## What's New in v$Version")
+    [void]$sb.AppendLine("$Message`n")
+    if ($addedList.Count -gt 0) {
+        [void]$sb.AppendLine("### 🚀 Added")
+        foreach ($it in $addedList) { [void]$sb.AppendLine("- $it") }
+        [void]$sb.AppendLine()
+    } else {
+        [void]$sb.AppendLine("### 🚀 Added")
+        [void]$sb.AppendLine("- $Message")
+        [void]$sb.AppendLine()
+    }
+    if ($changedList.Count -gt 0) {
+        [void]$sb.AppendLine("### ⚡ Changed")
+        foreach ($it in $changedList) { [void]$sb.AppendLine("- $it") }
+        [void]$sb.AppendLine()
+    }
+    if ($fixedList.Count -gt 0) {
+        [void]$sb.AppendLine("### 🛡️ Fixed")
+        foreach ($it in $fixedList) { [void]$sb.AppendLine("- $it") }
+        [void]$sb.AppendLine()
+    }
+    $releaseNotes = $sb.ToString().Trim()
+}
+
+Write-Host "`n--- Generated Release Changelog ---" -ForegroundColor Yellow
+Write-Host $releaseNotes -ForegroundColor Gray
+Write-Host "-----------------------------------`n" -ForegroundColor Yellow
 
 $payloadObj = @{
     tag_name = "v$Version"

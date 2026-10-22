@@ -35,3 +35,18 @@
 - If the background runner fails with `STATUS_DLL_INIT_FAILED (0xC0000142 / -1073741502)` due to Windows Desktop Heap constraints in non-interactive sessions:
   - Do NOT assume the release failed; give the user the exact single PowerShell line to trigger `release.ps1`.
   - Maintain ownership of the workflow: ensure all files, scripts, and configurations are 100% ready and validated.
+
+## 6. Mandatory Structured Changelog Rules (Strictly Enforced)
+- **Never publish a single-line or vague changelog**: Every release MUST feature a rich, structured, categorized changelog explicitly distinguishing:
+  1. `### 🚀 Added`: New features, tools, modals, or user capabilities.
+  2. `### ⚡ Changed`: Enhancements, UI refinements, speedups, and optimizations.
+  3. `### 🛡️ Fixed`: Bug fixes, security hardenings, stability improvements, and collision fixes.
+- When executing `.\scripts\release.ps1`, you MUST provide structured items using:
+  ```powershell
+  .\scripts\release.ps1 -Version "<version>" -Message "<summary>" `
+    -Added @("Feature 1", "Feature 2") `
+    -Changed @("Improvement 1") `
+    -Fixed @("Bug fix 1", "Bug fix 2")
+  ```
+  or pass a complete Markdown changelog via `-Changelog @"..."@`.
+- In `src/ui/index.html`, `formatChangelogHtml` renders structured category badges (`[ADDED]`, `[CHANGED]`, `[FIXED]`) with distinctive color coding and icons.

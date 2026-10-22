@@ -10788,12 +10788,54 @@
           out += '<div style="height: 6px;"></div>';
         } else if (trimmed.startsWith('### ') || trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
           const heading = trimmed.replace(/^#+\s*/, '');
-          out += '<div style="font-weight: 700; color: var(--accent); margin-top: 10px; margin-bottom: 5px; font-size: 13px; display: flex; align-items: center; gap: 5px;"><span>✦</span><span>' + escapeHtml(heading) + '</span></div>';
+          const lower = heading.toLowerCase();
+          let badgeColor = 'var(--accent)';
+          let badgeBg = 'rgba(14, 165, 233, 0.12)';
+          let badgeBorder = 'rgba(14, 165, 233, 0.25)';
+          let badgeIcon = '✦';
+
+          if (lower.includes('added') || lower.includes('feature') || lower.includes('🚀')) {
+            badgeColor = '#22c55e';
+            badgeBg = 'rgba(34, 197, 94, 0.12)';
+            badgeBorder = 'rgba(34, 197, 94, 0.25)';
+            badgeIcon = '🚀';
+          } else if (lower.includes('changed') || lower.includes('improv') || lower.includes('⚡')) {
+            badgeColor = '#38bdf8';
+            badgeBg = 'rgba(56, 189, 248, 0.12)';
+            badgeBorder = 'rgba(56, 189, 248, 0.25)';
+            badgeIcon = '⚡';
+          } else if (lower.includes('fixed') || lower.includes('fix') || lower.includes('bug') || lower.includes('🛡️')) {
+            badgeColor = '#f59e0b';
+            badgeBg = 'rgba(245, 158, 11, 0.12)';
+            badgeBorder = 'rgba(245, 158, 11, 0.25)';
+            badgeIcon = '🛡️';
+          } else if (lower.includes('security')) {
+            badgeColor = '#ec4899';
+            badgeBg = 'rgba(236, 72, 153, 0.12)';
+            badgeBorder = 'rgba(236, 72, 153, 0.25)';
+            badgeIcon = '🔒';
+          }
+
+          out += `<div style="font-weight: 700; color: ${badgeColor}; margin-top: 12px; margin-bottom: 6px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 6px; background: ${badgeBg}; border: 1px solid ${badgeBorder};"><span style="font-size: 13px;">${badgeIcon}</span><span>${escapeHtml(heading)}</span></div>`;
         } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('+ ')) {
-          const bullet = trimmed.substring(2);
-          out += '<div style="display: flex; gap: 7px; margin-bottom: 5px; align-items: baseline;"><span style="color: #38bdf8; font-size: 11px;">●</span><span style="color: var(--text-main); font-size: 12px; line-height: 1.5;">' + escapeHtml(bullet) + '</span></div>';
+          let bullet = trimmed.substring(2).trim();
+          let tagBadge = '';
+          const bLower = bullet.toLowerCase();
+
+          if (bLower.startsWith('[added]') || bLower.startsWith('added:')) {
+            tagBadge = '<span style="background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px;">ADDED</span>';
+            bullet = bullet.replace(/^(\[added\]|added:)\s*/i, '');
+          } else if (bLower.startsWith('[changed]') || bLower.startsWith('changed:')) {
+            tagBadge = '<span style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px;">CHANGED</span>';
+            bullet = bullet.replace(/^(\[changed\]|changed:)\s*/i, '');
+          } else if (bLower.startsWith('[fixed]') || bLower.startsWith('fixed:')) {
+            tagBadge = '<span style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px;">FIXED</span>';
+            bullet = bullet.replace(/^(\[fixed\]|fixed:)\s*/i, '');
+          }
+
+          out += `<div style="display: flex; gap: 8px; margin-bottom: 6px; align-items: baseline; padding-left: 4px;"><span style="color: #38bdf8; font-size: 10px; flex-shrink: 0;">●</span><span style="color: var(--text-main); font-size: 12px; line-height: 1.5;">${tagBadge}${escapeHtml(bullet)}</span></div>`;
         } else {
-          out += '<div style="margin-bottom: 5px; color: var(--text-muted); font-size: 12px; line-height: 1.5;">' + escapeHtml(trimmed) + '</div>';
+          out += `<div style="margin-bottom: 6px; color: var(--text-muted); font-size: 12px; line-height: 1.5;">${escapeHtml(trimmed)}</div>`;
         }
       });
       return out;
