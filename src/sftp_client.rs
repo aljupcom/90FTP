@@ -619,6 +619,51 @@ impl SftpClient {
             Ok(all_output)
         })
     }
+
+    /// Executes a command in batch mode without PTY, returning exit code and stdout/stderr
+    pub fn exec_command_clean(&self, cmd: &str) -> Result<(i32, String), String> {
+        let cmd_s = cmd.to_string();
+        self.rt.block_on(async {
+            let mut channel = self.session.channel_open_session().await
+                .map_err(|e| format!("Failed to open SSH channel: {}", e))?;
+
+            // DO NOT request PTY: keep stdout clean and preserve accurate exit code
+            channel.exec(true, cmd_s).await
+                .map_err(|e| format!("Failed to execute command: {}", e))?;
+
+            let mut all_output = String::new();
+            let mut exit_code = 0i32;
+
+            loop {
+                tokio::select! {
+                    wait_res = tokio::time::timeout(tokio::time::Duration::from_secs(600), channel.wait()) => {
+                        match wait_res {
+                            Ok(Some(msg)) => {
+                                match msg {
+                                    russh::ChannelMsg::Data { ref data } => {
+                                        all_output.push_str(&String::from_utf8_lossy(data));
+                                    }
+                                    russh::ChannelMsg::ExtendedData { ref data, .. } => {
+                                        all_output.push_str(&String::from_utf8_lossy(data));
+                                    }
+                                    russh::ChannelMsg::ExitStatus { exit_status } => {
+                                        exit_code = exit_status as i32;
+                                    }
+                                    russh::ChannelMsg::Eof | russh::ChannelMsg::Close => {
+                                        break;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => break,
+                        }
+                    }
+                }
+            }
+
+            Ok((exit_code, all_output))
+        })
+    }
 }
 
 fn format_octal_permissions(mode: u32, is_dir: bool) -> String {

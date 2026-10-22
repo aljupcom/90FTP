@@ -195,10 +195,14 @@ pub fn remote_compress(
     let is_tar = dest_lower.ends_with(".tar.gz") || dest_lower.ends_with(".tgz") || dest_lower.ends_with(".tar");
 
     // 1. Try Native SSH server-side execution if SFTP
+    let mut native_succeeded = false;
+    let mut native_count = 0usize;
+
     if let RemoteClient::Sftp(sftp) = client {
-        let check_cmd = if is_tar { "command -v tar 2>/dev/null" } else { "command -v zip 2>/dev/null" };
-        if let Ok(tool) = sftp.exec_command(check_cmd) {
-            if !tool.trim().is_empty() {
+        let check_cmd = if is_tar { "which tar || command -v tar" } else { "which zip || command -v zip" };
+        if let Ok((0, tool_path)) = sftp.exec_command_clean(check_cmd) {
+            let tool_trimmed = tool_path.trim();
+            if !tool_trimmed.is_empty() && !tool_trimmed.contains("not found") {
                 let safe_parent = shell_quote(parent_dir);
                 let safe_archive_name = shell_quote(archive_filename);
                 let rel_sources: Vec<String> = sources.iter().map(|s| {
@@ -217,38 +221,29 @@ pub fn remote_compress(
                 };
 
                 if let Some(cb) = exec_script {
-                    cb(format!("window.onArchiveProgress({{ mode: 'compress', currentItem: 'Starting remote compression...', count: 0, total: {}, percent: 1, status: 'Running native SSH compressor...' }});", sources.len()));
+                    cb(format!("window.onArchiveProgress({{ mode: 'compress', currentItem: 'Compressing on remote server (SSH)...', count: 0, total: {}, percent: 1, status: 'Running server compression...' }});", sources.len()));
                 }
 
-                let exec_cb = exec_script.clone();
-                let mut line_count = 0usize;
-
-                let res = sftp.exec_command_streaming(&cmd, 100, 30, move |chunk| {
-                    for line in chunk.lines() {
-                        let trimmed = line.trim();
-                        if trimmed.is_empty() { continue; }
-                        line_count += 1;
-                        let clean_item = trimmed.trim_start_matches("adding: ").trim_start_matches("updating: ");
-                        let clean_safe = clean_item.split(" (").next().unwrap_or(clean_item).replace('\\', "/").replace('"', "").replace('\'', "");
-                        if let Some(ref cb) = exec_cb {
-                            cb(format!("window.onArchiveProgress({{ mode: 'compress', currentItem: '{}', count: {}, total: -1, percent: -1, status: 'Compressing on server...' }});", clean_safe, line_count));
-                        }
+                if let Ok((code, output)) = sftp.exec_command_clean(&cmd) {
+                    if code == 0 {
+                        native_succeeded = true;
+                        let line_count = output.lines().filter(|l| !l.trim().is_empty()).count();
+                        native_count = line_count.max(sources.len());
                     }
-                });
-
-                if res.is_ok() {
-                    let final_count = line_count.max(sources.len());
-                    if let Some(cb) = exec_script {
-                        cb(format!("window.onArchiveProgress({{ mode: 'compress', currentItem: 'Compression complete!', count: {}, total: {}, percent: 100, status: 'Finished successfully' }});", final_count, final_count));
-                    }
-                    return Ok(serde_json::json!({
-                        "count": final_count,
-                        "dest_zip": dest_zip,
-                        "method": "native_ssh"
-                    }));
                 }
             }
         }
+    }
+
+    if native_succeeded {
+        if let Some(cb) = exec_script {
+            cb(format!("window.onArchiveProgress({{ mode: 'compress', currentItem: 'Compression complete!', count: {}, total: {}, percent: 100, status: 'Finished successfully' }});", native_count, native_count));
+        }
+        return Ok(serde_json::json!({
+            "count": native_count,
+            "dest_zip": dest_zip,
+            "method": "native_ssh"
+        }));
     }
 
     // 2. High-Performance Pure Streaming Engine Fallback (FTP/FTPS or SFTP without zip/tar)
@@ -274,12 +269,17 @@ pub fn remote_compress(
         };
 
         if !is_dir {
-            if let Ok(bytes) = client.download_file(src) {
-                let _ = zip.start_file(base_name, zip_options);
-                let _ = zip.write_all(&bytes);
-                count += 1;
-                if let Some(cb) = exec_script {
-                    cb(format!("window.onArchiveProgress({{ mode: 'compress', currentItem: '{}', count: {}, total: {}, percent: {}, status: 'Streaming file to archive...' }});", base_name, count, sources.len(), (count * 100) / sources.len()));
+            match client.download_file(src) {
+                Ok(bytes) => {
+                    let _ = zip.start_file(base_name, zip_options);
+                    let _ = zip.write_all(&bytes);
+                    count += 1;
+                    if let Some(cb) = exec_script {
+                        cb(format!("window.onArchiveProgress({{ mode: 'compress', currentItem: '{}', count: {}, total: {}, percent: {}, status: 'Streaming file to archive...' }});", base_name, count, sources.len(), (count * 100) / sources.len()));
+                    }
+                }
+                Err(e) => {
+                    crate::logger::log_warn(&format!("remote_compress: skipping file {}: {}", src, e));
                 }
             }
         } else {
@@ -292,6 +292,9 @@ pub fn remote_compress(
     if let Some(cb) = exec_script {
         cb(format!("window.onArchiveProgress({{ mode: 'compress', currentItem: 'Uploading finished archive to remote server...', count: {}, total: {}, percent: 95, status: 'Uploading archive...' }});", count, count));
     }
+
+    // Ensure parent directory exists before uploading
+    let _ = client.make_dir_all(parent_dir);
 
     let temp_str = temp_path.to_string_lossy().to_string();
     let upload_res = client.upload_from_local_file(&temp_str, dest_zip);
@@ -372,9 +375,9 @@ pub fn remote_extract(
 
     // 1. Try Native SSH Extraction
     if let RemoteClient::Sftp(sftp) = client {
-        let check_cmd = if is_tar { "command -v tar 2>/dev/null" } else { "command -v unzip 2>/dev/null" };
-        if let Ok(tool) = sftp.exec_command(check_cmd) {
-            if !tool.trim().is_empty() {
+        let check_cmd = if is_tar { "which tar || command -v tar" } else { "which unzip || command -v unzip" };
+        if let Ok((code, out)) = sftp.exec_command_clean(check_cmd) {
+            if code == 0 && !out.trim().is_empty() {
                 let safe_archive = shell_quote(archive_path);
                 let safe_dest = shell_quote(dest_dir);
 
@@ -398,27 +401,13 @@ pub fn remote_extract(
                     cb("window.onArchiveProgress({ mode: 'extract', currentItem: 'Extracting natively on remote server...', count: 0, skipped: 0, total: -1, percent: 1, status: 'Running native SSH unzip...' });".to_string());
                 }
 
-                let exec_cb = exec_script.clone();
-                let mut line_count = 0usize;
-
-                let res = sftp.exec_command_streaming(&cmd, 100, 30, move |chunk| {
-                    for line in chunk.lines() {
-                        let trimmed = line.trim();
-                        if trimmed.is_empty() { continue; }
-                        line_count += 1;
-                        let clean_item = trimmed.trim_start_matches("inflating: ")
-                            .trim_start_matches("extracting: ")
-                            .replace('\\', "/");
-                        let clean_safe = clean_item.split(" (").next().unwrap_or(&clean_item).replace('"', "").replace('\'', "");
-                        if let Some(ref cb) = exec_cb {
-                            cb(format!("window.onArchiveProgress({{ mode: 'extract', currentItem: '{}', count: {}, skipped: 0, total: -1, percent: -1, status: 'Extracting on server...' }});", clean_safe, line_count));
-                        }
+                if let Ok((exit_code, out)) = sftp.exec_command_clean(&cmd) {
+                    if exit_code == 0 {
+                        native_success = true;
+                        extracted_count = out.lines().filter(|l| !l.trim().is_empty()).count();
+                    } else {
+                        crate::logger::log_warn(&format!("Native remote extraction failed (exit {}): {}", exit_code, out));
                     }
-                });
-
-                if res.is_ok() {
-                    native_success = true;
-                    extracted_count = line_count;
                 }
             }
         }
@@ -485,7 +474,7 @@ pub fn remote_extract(
         let percent = if total_entries > 0 { ((i + 1) * 100) / total_entries } else { 100 };
 
         if entry.is_dir() {
-            let _ = client.make_dir(&full_remote);
+            let _ = client.make_dir_all(&full_remote);
             continue;
         }
 
@@ -514,7 +503,7 @@ pub fn remote_extract(
         if let Some(idx) = full_remote.rfind('/') {
             if idx > 0 {
                 let parent = &full_remote[..idx];
-                let _ = client.make_dir(parent);
+                let _ = client.make_dir_all(parent);
             }
         }
 

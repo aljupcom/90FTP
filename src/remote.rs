@@ -101,6 +101,21 @@ impl RemoteClient {
         }
     }
 
+    pub fn make_dir_all(&mut self, dir_path: &str) -> Result<(), String> {
+        let clean = dir_path.replace('\\', "/");
+        let parts: Vec<&str> = clean.split('/').filter(|s| !s.is_empty()).collect();
+        let mut cur = if clean.starts_with('/') { String::from("/") } else { String::new() };
+
+        for part in parts {
+            if !cur.ends_with('/') && !cur.is_empty() {
+                cur.push('/');
+            }
+            cur.push_str(part);
+            let _ = self.make_dir(&cur);
+        }
+        Ok(())
+    }
+
     pub fn remove_file(&mut self, file_name: &str) -> Result<(), String> {
         match self {
             RemoteClient::Ftp(c) => c.remove_file(file_name),
@@ -137,6 +152,13 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(_) => Err("Terminal command execution is not supported on standard FTP/FTPS. Please connect with SSH/SFTP.".to_string()),
             RemoteClient::Sftp(c) => c.exec_command(cmd),
+        }
+    }
+
+    pub fn exec_command_clean(&self, cmd: &str) -> Result<(i32, String), String> {
+        match self {
+            RemoteClient::Ftp(_) => Err("Terminal command execution is not supported on standard FTP/FTPS. Please connect with SSH/SFTP.".to_string()),
+            RemoteClient::Sftp(c) => c.exec_command_clean(cmd),
         }
     }
 
