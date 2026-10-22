@@ -2276,6 +2276,61 @@
     .fut-desc { font-size: 11.5px; color: #cbd5e1; }
     .fut-actions { display: flex; align-items: center; gap: 6px; margin-left: 8px; }
 
+    /* Directory Comparison Banner (WinSCP-style) */
+    .compare-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 14px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 8px;
+      margin: 0 14px 6px 14px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      animation: slideInToast 0.2s ease-out;
+    }
+    .compare-tag {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+      letter-spacing: 0.2px;
+      flex-shrink: 0;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .tr-compare-diff {
+      background: rgba(234, 179, 8, 0.08) !important;
+    }
+    .tr-compare-missing {
+      background: rgba(34, 197, 94, 0.08) !important;
+    }
+
+    /* Mask Tag Badges */
+    .mask-rule-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .mask-rule-badge .remove-btn {
+      cursor: pointer;
+      font-size: 11px;
+      color: #f87171;
+      font-weight: bold;
+      transition: transform 0.1s;
+    }
+    .mask-rule-badge .remove-btn:hover {
+      transform: scale(1.2);
+    }
   </style>
 </head>
 <body>
@@ -2303,7 +2358,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.35</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.36</span>
         </div>
       </div>
 
@@ -2368,6 +2423,11 @@
             <span>Refresh Both Panes</span>
             <span class="shortcut">F5</span>
           </div>
+          <div class="dropdown-item" onclick="toggleCompareDirectories()">
+            <span class="menu-icon">⚖️</span>
+            <span>Compare Directories</span>
+            <span class="shortcut">Shift+F1</span>
+          </div>
           <div class="dropdown-item" onclick="toggleHiddenFiles()">
             <span class="menu-icon" id="menuCheckHidden">✓</span>
             <span>Show Hidden Files</span>
@@ -2412,12 +2472,37 @@
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
             <span>Set Permissions (CHMOD)...</span>
           </div>
+          <div class="dropdown-separator"></div>
+          <div class="dropdown-item" onclick="openExclusionMaskModal()">
+            <span class="menu-icon">🛡️</span>
+            <span>Transfer Exclusion Mask...</span>
+          </div>
+          <div class="dropdown-item" onclick="toggleCompareDirectories()">
+            <span class="menu-icon">⚖️</span>
+            <span>Compare Directories</span>
+            <span class="shortcut">Shift+F1</span>
+          </div>
         </div>
       </div>
 
       <div class="menu-item" onclick="toggleMenu(event, 'toolsMenu')">
         <span>Tools</span>
         <div class="menu-dropdown" id="toolsMenu">
+          <div class="dropdown-item" onclick="openFindFilesModal()">
+            <span class="menu-icon">🔍</span>
+            <span>Find Files on Server...</span>
+            <span class="shortcut">Ctrl+F</span>
+          </div>
+          <div class="dropdown-item" onclick="toggleCompareDirectories()">
+            <span class="menu-icon">⚖️</span>
+            <span>Compare Directories</span>
+            <span class="shortcut">Shift+F1</span>
+          </div>
+          <div class="dropdown-item" onclick="openExclusionMaskModal()">
+            <span class="menu-icon">🛡️</span>
+            <span>Transfer Exclusion Mask...</span>
+          </div>
+          <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openRemoteTerminal()">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
             <span>Open Remote Terminal (SSH)...</span>
@@ -2541,6 +2626,26 @@
   </div>
 
 
+  <!-- Directory Comparison Banner Bar (WinSCP-style) -->
+  <div id="compareBar" class="compare-banner" style="display: none;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 15px;">⚖️</span>
+      <span style="font-weight: 700; font-size: 12px; color: var(--accent);">Directory Comparison Active:</span>
+      <span id="compareStats" style="font-size: 11.5px; color: var(--text-main);"></span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="syncLocalToRemoteMissing()" style="font-size: 11px; padding: 2px 10px; gap: 4px;" title="Upload all files that exist only on Local or have different size">
+        <span>⬆️ Upload Missing/Diff</span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="syncRemoteToLocalMissing()" style="font-size: 11px; padding: 2px 10px; gap: 4px;" title="Download all files that exist only on Remote or have different size">
+        <span>⬇️ Download Missing/Diff</span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="toggleCompareDirectories(false)" style="font-size: 11px; padding: 2px 8px;" title="Exit Comparison View">
+        <span>✕ Exit</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Dual Panes Workspace (Horizontally Resizable via Gutter) -->
   <div class="workspace-area" id="workspaceArea">
 
@@ -2576,6 +2681,12 @@
             </button>
             <button class="btn-tool" title="Extract Selected ZIP Archive" onclick="extractSelectedLocalToolbar()" style="color: #f59e0b;">
               <svg class="icon" viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+            </button>
+            <button class="btn-tool" id="btnToolbarCompare" title="Compare Local and Remote Directories (Shift+F1)" onclick="toggleCompareDirectories()" style="color: #a855f7;">
+              <svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            </button>
+            <button class="btn-tool" id="btnToolbarMask" title="Transfer Exclusion Mask (node_modules, .git, .env...)" onclick="openExclusionMaskModal()" style="color: #38bdf8;">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             </button>
           </div>
         </div>
@@ -2634,6 +2745,9 @@
             </button>
             <button class="btn-tool" title="Refresh" onclick="refreshRemote()">
               <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+            <button class="btn-tool" style="color: #38bdf8;" title="Find Files on Remote Server (Ctrl+F)" onclick="openFindFilesModal()">
+              <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </button>
             <button class="btn-tool" title="New Folder" onclick="promptNewRemoteFolder()">
               <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
@@ -3286,6 +3400,18 @@
               </select>
             </div>
           </div>
+
+          <div class="options-groupbox" style="margin-top: 10px;">
+            <div class="options-groupbox-legend">Transfer Exclusion Mask</div>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optMaskEnabled" onchange="checkOptionsFormDirty()">
+              <span>Enable Transfer Exclusion Mask during recursive uploads & downloads</span>
+            </label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+              <span style="font-size: 11px; color: var(--text-dim);">Default: skips node_modules, .git, .env, *.log</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="openExclusionMaskModal()">Configure Exclusion Rules...</button>
+            </div>
+          </div>
         </div>
 
         <!-- Tab 3: Security & Storage -->
@@ -3585,6 +3711,211 @@
     </div>
   </div>
 
+  <!-- Modal: Transfer Exclusion Mask Settings -->
+  <div class="modal-overlay" id="exclusionMaskModal" style="z-index: 1055;">
+    <div class="modal-content" style="width: 560px; max-width: 95vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">🛡️</span>
+          <span style="font-weight: 600;">Transfer Exclusion Mask</span>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeExclusionMaskModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 16px; gap: 14px;">
+        <label class="options-checkbox-row" style="font-weight: 600; font-size: 13px;">
+          <input type="checkbox" id="maskEnabledCheckbox" onchange="toggleMaskEnabledFromModal()">
+          <span>Enable Transfer Exclusion Mask during Upload & Download</span>
+        </label>
+        <div style="font-size: 11.5px; color: var(--text-dim); line-height: 1.5;">
+          Files and directories matching these patterns will be automatically skipped during recursive folder transfers. This dramatically accelerates uploads and prevents accidental leaks of secret files (like <code>.env</code>) or uploading huge development libraries (like <code>node_modules</code>).
+        </div>
+        
+        <div class="options-groupbox" style="padding: 10px 12px; gap: 8px;">
+          <div class="options-groupbox-legend">Active Exclusion Rules</div>
+          <div id="maskRulesTagContainer" class="mask-tag-container" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 130px; overflow-y: auto; padding: 4px 0;"></div>
+        </div>
+
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="maskNewRuleInput" class="path-input" placeholder="Add pattern (e.g. *.bak, dist, .vscode)..." style="flex: 1;" onkeydown="if(event.key==='Enter'){ addExclusionRuleFromInput(); }">
+          <button type="button" class="btn btn-primary" onclick="addExclusionRuleFromInput()" style="padding: 0 14px; height: 28px;">Add Rule</button>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px;">
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="applyMaskPreset('web')">Web / Node Preset</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="applyMaskPreset('python')">Python Preset</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="applyMaskPreset('default')">Reset Defaults</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="saveExclusionMaskFromModal()">Save & Apply</button>
+        <button type="button" class="btn btn-secondary" onclick="closeExclusionMaskModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Remote Server Find Files -->
+  <div class="modal-overlay" id="findFilesModal" style="z-index: 1055;">
+    <div class="modal-content" style="width: 760px; max-width: 95vw; height: 580px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">🔍</span>
+          <span style="font-weight: 600;">Find Files on Remote Server</span>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeFindFilesModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 14px; gap: 10px; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Search in Directory:</label>
+            <div style="display: flex; gap: 6px;">
+              <input type="text" id="findSearchPathInput" class="path-input" style="flex: 1;" placeholder="/var/www/html">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="setFindPathCurrent()" title="Set to Current Remote Directory">Current</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('findSearchPathInput').value = '/'" title="Search from Root">Root /</button>
+            </div>
+          </div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">File Name / Pattern (wildcards supported):</label>
+            <div style="display: flex; gap: 6px;">
+              <input type="text" id="findSearchQueryInput" class="path-input" style="flex: 1;" placeholder="e.g. *.php, wp-config, *.conf, nginx" onkeydown="if(event.key==='Enter'){ executeRemoteFind(); }">
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; gap: 16px; align-items: center; font-size: 12px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="findRecursiveCheckbox" checked style="accent-color: var(--accent);">
+              <span>Recursive search in subdirectories</span>
+            </label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="color: var(--text-dim);">Filter Type:</span>
+              <select id="findTypeSelect" class="path-input" style="height: 24px; font-size: 11.5px; padding: 0 6px;">
+                <option value="all">All Items</option>
+                <option value="files">Files Only</option>
+                <option value="dirs">Directories Only</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-primary" id="btnExecuteFind" onclick="executeRemoteFind()" style="padding: 0 16px; height: 28px; gap: 5px;">
+              <span id="findSpinner" class="spinner" style="display: none; width: 12px; height: 12px;"></span>
+              <span>Search Files</span>
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="clearFindResults()" style="height: 28px; padding: 0 10px;">Clear</button>
+          </div>
+        </div>
+
+        <!-- Results Table -->
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-dim); border-bottom: 1px solid var(--border-color); padding-bottom: 4px; margin-top: 2px;">
+          <span id="findResultsSummary">Ready to search</span>
+          <span style="font-size: 10.5px;">Double-click any result to open folder</span>
+        </div>
+
+        <div style="flex: 1; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card);">
+          <table style="width: 100%; border-collapse: collapse; font-size: 11.5px;">
+            <thead style="position: sticky; top: 0; background: var(--bg-header); z-index: 1; border-bottom: 1px solid var(--border-color);">
+              <tr>
+                <th style="text-align: left; padding: 6px 10px; width: 35%;">Name</th>
+                <th style="text-align: left; padding: 6px 10px; width: 40%;">Directory Path</th>
+                <th style="text-align: right; padding: 6px 10px; width: 12%;">Size</th>
+                <th style="text-align: center; padding: 6px 10px; width: 13%;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="findResultsTableBody">
+              <tr>
+                <td colspan="4" style="text-align: center; color: var(--text-dim); padding: 40px; font-style: italic;">
+                  Enter search criteria and click Search Files
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end;">
+        <button type="button" class="btn btn-secondary" onclick="closeFindFilesModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Calculate & Verify File Checksum -->
+  <div class="modal-overlay" id="checksumModal" style="z-index: 1055;">
+    <div class="modal-content" style="width: 580px; max-width: 95vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">🔑</span>
+          <span style="font-weight: 600;">Calculate & Verify File Checksum</span>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeChecksumModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 16px; gap: 14px;">
+        <!-- File Info Card -->
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border-color);">
+          <span id="csFileIcon" style="font-size: 24px;">📄</span>
+          <div style="flex: 1; min-width: 0;">
+            <div id="csFileName" style="font-weight: 700; font-size: 13px; color: var(--text-main); word-break: break-all;">file.zip</div>
+            <div id="csFilePath" style="font-size: 11px; color: var(--text-dim); margin-top: 2px; word-break: break-all;">/path/to/file</div>
+            <div style="display: flex; gap: 12px; margin-top: 4px; font-size: 11px; color: var(--text-muted);">
+              <span>Location: <b id="csFileTarget" style="color: var(--accent);">Remote</b></span>
+              <span>Size: <b id="csFileSize">-</b></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Algorithm Tabs -->
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-sm" id="btnAlgoSha256" onclick="switchChecksumAlgo('sha256')" style="background: var(--accent); color: #fff; font-weight: 600; padding: 2px 14px;">SHA-256</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnAlgoMd5" onclick="switchChecksumAlgo('md5')" style="padding: 2px 14px;">MD5</button>
+          </div>
+          <span id="csComputingSpinner" style="display: none; font-size: 11.5px; color: var(--accent);">
+            <span class="spinner" style="display: inline-block; width: 12px; height: 12px; vertical-align: middle; margin-right: 4px;"></span> Computing hash...
+          </span>
+        </div>
+
+        <!-- Computed Hash Output Box -->
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);" id="csHashLabel">Calculated SHA-256 Hash:</label>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="copyChecksumHash()" id="btnCopyHash" style="font-size: 10.5px; padding: 1px 8px; gap: 4px;">
+              <span>📋 Copy Hash</span>
+            </button>
+          </div>
+          <div id="csHashBox" style="padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; font-family: monospace; font-size: 12px; word-break: break-all; color: #38bdf8; min-height: 38px; display: flex; align-items: center;">
+            Computing...
+          </div>
+        </div>
+
+        <!-- Verification / Compare Section -->
+        <div class="options-groupbox" style="padding: 12px; gap: 10px;">
+          <div class="options-groupbox-legend">Integrity Verification & Comparison</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 11.5px; color: var(--text-muted);">Paste expected checksum hash to verify:</label>
+            <input type="text" id="csVerifyInput" class="path-input" placeholder="Paste hash here to verify..." oninput="checkChecksumMatch()">
+          </div>
+
+          <div id="csCounterpartSection" style="display: none; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 4px; background: rgba(255,255,255,0.03); border: 1px dashed var(--border-color);">
+            <div style="font-size: 11.5px; color: var(--text-main);">
+              <span>Counterpart found on other pane: </span>
+              <b id="csCounterpartName" style="color: var(--accent);">file.zip</b>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCompareCounterpart" onclick="compareWithCounterpartChecksum()" style="font-size: 11px; padding: 2px 10px;">
+              <span>Compute & Compare</span>
+            </button>
+          </div>
+
+          <!-- Match Status Badge -->
+          <div id="csMatchResult" style="display: none; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; align-items: center; gap: 8px;">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeChecksumModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Custom Elegant Right-Click Context Menu -->
   <div id="customContextMenu" class="context-menu"></div>
 
@@ -3733,7 +4064,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.35';
+    let APP_CURRENT_VERSION = '0.0.0.36';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4187,6 +4518,7 @@
     async function initApp() {
       initTheme();
       initOptions();
+      loadExclusionMaskConfig();
       addLog('Starting 90FTP Modern Site Manager...', 'info');
       setupDragAndDrop();
 
@@ -4391,11 +4723,23 @@
           const fileName = (f.name || '').toString();
           const { svg, iconClass } = getFileIcon(fileName, !!f.is_dir);
 
+          let compareBadgeHtml = '';
+          if (typeof compareDirsActive !== 'undefined' && compareDirsActive) {
+            const cmp = getComparisonStatus(f, false);
+            if (cmp && cmp.tag) {
+              compareBadgeHtml = `<span class="compare-tag" style="color:${cmp.color}; background:${cmp.bg}; border:1px solid ${cmp.border};">${cmp.tag}</span>`;
+            }
+            if (cmp && cmp.rowClass) {
+              tr.classList.add(cmp.rowClass);
+            }
+          }
+
           tr.innerHTML = `
             <td>
               <div class="file-cell">
                 <span class="file-icon ${iconClass}">${svg}</span>
                 <span>${escapeHtml(fileName)}</span>
+                ${compareBadgeHtml}
               </div>
             </td>
             <td class="mono-cell">${f.is_dir ? '-' : formatBytes(f.size || 0)}</td>
@@ -4719,11 +5063,23 @@
           const fileName = (f.name || '').toString();
           const { svg, iconClass } = getFileIcon(fileName, !!f.is_dir);
 
+          let compareBadgeHtml = '';
+          if (typeof compareDirsActive !== 'undefined' && compareDirsActive) {
+            const cmp = getComparisonStatus(f, true);
+            if (cmp && cmp.tag) {
+              compareBadgeHtml = `<span class="compare-tag" style="color:${cmp.color}; background:${cmp.bg}; border:1px solid ${cmp.border};">${cmp.tag}</span>`;
+            }
+            if (cmp && cmp.rowClass) {
+              tr.classList.add(cmp.rowClass);
+            }
+          }
+
           tr.innerHTML = `
             <td>
               <div class="file-cell">
                 <span class="file-icon ${iconClass}">${svg}</span>
                 <span>${escapeHtml(fileName)}</span>
+                ${compareBadgeHtml}
               </div>
             </td>
             <td class="mono-cell">${f.is_dir ? '-' : formatBytes(f.size || 0)}</td>
@@ -4987,8 +5343,16 @@
       }
       addLog(`Scanning local folder '${folderName}' for upload...`, 'cmd');
       try {
-        const scanRes = await sendRust('local_scan_dir_recursive', { dir_path: localFolderPath });
+        const rules = typeof getActiveExclusionRules === 'function' ? getActiveExclusionRules() : [];
+        const scanRes = await sendRust('local_scan_dir_recursive', {
+          dir_path: localFolderPath,
+          exclude_patterns: rules
+        });
         const items = scanRes.items || [];
+        const skipped = scanRes.skipped_count || 0;
+        if (skipped > 0) {
+          addLog(`[Exclusion Mask] Skipped ${skipped} item(s) matching exclusion rules`, 'info');
+        }
         const baseRemote = currentRemotePath.endsWith('/') 
           ? currentRemotePath + folderName 
           : currentRemotePath + '/' + folderName;
@@ -5050,8 +5414,16 @@
     async function downloadFolderDirect(remoteFolderPath, folderName) {
       addLog(`Scanning remote folder '${folderName}' for download...`, 'cmd');
       try {
-        const scanRes = await sendRust('remote_scan_dir_recursive', { remote_dir: remoteFolderPath });
+        const rules = typeof getActiveExclusionRules === 'function' ? getActiveExclusionRules() : [];
+        const scanRes = await sendRust('remote_scan_dir_recursive', {
+          remote_dir: remoteFolderPath,
+          exclude_patterns: rules
+        });
         const items = scanRes.items || [];
+        const skipped = scanRes.skipped_count || 0;
+        if (skipped > 0) {
+          addLog(`[Exclusion Mask] Skipped ${skipped} item(s) matching exclusion rules`, 'info');
+        }
         const baseLocal = currentLocalPath.endsWith('\\') 
           ? currentLocalPath + folderName 
           : currentLocalPath + '\\' + folderName;
@@ -5122,6 +5494,13 @@
       if (!isConnected) {
         alert('Please connect to a server first');
         return;
+      }
+
+      if (typeof isItemExcluded === 'function' && isItemExcluded(fileName, fileName)) {
+        if (!confirm(`File '${fileName}' matches your active Transfer Exclusion Mask rules (.env, node_modules, etc.).\n\nDo you really want to upload it?`)) {
+          addLog(`[Exclusion Mask] Upload skipped for: ${fileName}`, 'info');
+          return;
+        }
       }
 
       // File collision check
@@ -5977,6 +6356,25 @@
 
         html += `<div class="context-menu-separator"></div>`;
 
+        if (!item.is_dir) {
+          html += `
+            <div class="context-menu-item" onclick="openChecksumModal('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Calculate Checksum (SHA-256 / MD5)...</span>
+            </div>
+          `;
+          const otherFiles = isRemote ? localFiles : remoteFiles;
+          const counterpart = otherFiles.find(f => !f.is_dir && f.name.toLowerCase() === item.name.toLowerCase());
+          if (counterpart) {
+            html += `
+              <div class="context-menu-item" onclick="openChecksumCompareModal('${escapeJsString(item.path)}', '${escapeJsString(counterpart.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Verify Checksum with ${isRemote ? 'Local' : 'Remote'} Counterpart</span>
+              </div>
+            `;
+          }
+        }
+
         html += `
           <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(item.path)}')">
             <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -6128,7 +6526,11 @@
       closeContextMenu();
       if (!item) return;
       document.getElementById('propTitle').innerText = `${isRemote ? 'Remote' : 'Local'} Properties`;
-      document.getElementById('propIcon').innerText = item.is_dir ? '≡ƒôü' : '≡ƒôä';
+      const { svg, iconClass } = getFileIcon(item.name, !!item.is_dir);
+      const iconContainer = document.getElementById('propIcon');
+      if (iconContainer) {
+        iconContainer.innerHTML = `<span class="file-icon ${iconClass}" style="display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center;">${svg}</span>`;
+      }
       document.getElementById('propName').innerText = item.name;
       document.getElementById('propType').innerText = item.is_dir ? 'Folder / Directory' : (item.is_symlink ? 'Symlink' : 'Regular File');
       document.getElementById('propPath').innerText = item.path;
@@ -6399,6 +6801,638 @@
       } catch (err) {
         addLog('Failed to change permissions: ' + err.message, 'error');
         alert('CHMOD Error:\n' + err.message);
+      }
+    }
+
+    // ==========================================
+    // 1. TRANSFER EXCLUSION MASK ENGINE
+    // ==========================================
+    const DEFAULT_EXCLUSION_RULES = [
+      'node_modules', '.git', '.svn', '*.log', '.env', '.env.*',
+      'Thumbs.db', '.DS_Store', '*.tmp', '*.bak', '__pycache__', '.idea', '.vscode'
+    ];
+
+    let exclusionMaskState = {
+      enabled: true,
+      rules: [...DEFAULT_EXCLUSION_RULES]
+    };
+
+    function loadExclusionMaskConfig() {
+      try {
+        const stored = localStorage.getItem('90ftp_exclusion_mask');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (typeof parsed.enabled === 'boolean') exclusionMaskState.enabled = parsed.enabled;
+          if (Array.isArray(parsed.rules)) exclusionMaskState.rules = parsed.rules;
+        }
+      } catch (_) {}
+      updateExclusionMaskUI();
+    }
+
+    function saveExclusionMaskConfig() {
+      try {
+        localStorage.setItem('90ftp_exclusion_mask', JSON.stringify(exclusionMaskState));
+      } catch (_) {}
+      updateExclusionMaskUI();
+    }
+
+    function updateExclusionMaskUI() {
+      const btn = document.getElementById('btnToolbarMask');
+      if (btn) {
+        btn.style.color = exclusionMaskState.enabled ? '#38bdf8' : 'var(--text-dim)';
+        btn.title = `Transfer Exclusion Mask: ${exclusionMaskState.enabled ? 'ACTIVE (' + exclusionMaskState.rules.length + ' rules)' : 'DISABLED'}`;
+      }
+      const optCheck = document.getElementById('optMaskEnabled');
+      if (optCheck) optCheck.checked = exclusionMaskState.enabled;
+    }
+
+    function openExclusionMaskModal() {
+      const modal = document.getElementById('exclusionMaskModal');
+      if (!modal) return;
+      document.getElementById('maskEnabledCheckbox').checked = exclusionMaskState.enabled;
+      renderMaskRulesBadges();
+      modal.classList.add('active');
+    }
+
+    function closeExclusionMaskModal() {
+      const modal = document.getElementById('exclusionMaskModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function toggleMaskEnabledFromModal() {
+      exclusionMaskState.enabled = document.getElementById('maskEnabledCheckbox').checked;
+      updateExclusionMaskUI();
+    }
+
+    function renderMaskRulesBadges() {
+      const container = document.getElementById('maskRulesTagContainer');
+      if (!container) return;
+      container.innerHTML = '';
+      if (exclusionMaskState.rules.length === 0) {
+        container.innerHTML = '<span style="color: var(--text-dim); font-style: italic; font-size: 11.5px;">No exclusion rules defined (all files will be transferred)</span>';
+        return;
+      }
+      exclusionMaskState.rules.forEach((rule, idx) => {
+        const tag = document.createElement('span');
+        tag.className = 'mask-rule-badge';
+        tag.innerHTML = `<span>${escapeHtml(rule)}</span><span class="remove-btn" onclick="removeExclusionRule(${idx})" title="Remove rule">✕</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    function removeExclusionRule(idx) {
+      exclusionMaskState.rules.splice(idx, 1);
+      renderMaskRulesBadges();
+    }
+
+    function addExclusionRuleFromInput() {
+      const input = document.getElementById('maskNewRuleInput');
+      if (!input) return;
+      const val = input.value.trim();
+      if (!val) return;
+      const parts = val.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+      for (const p of parts) {
+        if (!exclusionMaskState.rules.includes(p)) {
+          exclusionMaskState.rules.push(p);
+        }
+      }
+      input.value = '';
+      renderMaskRulesBadges();
+    }
+
+    function applyMaskPreset(type) {
+      if (type === 'web') {
+        exclusionMaskState.rules = ['node_modules', '.git', '.env', '.env.*', '*.log', 'vendor', '.DS_Store', 'Thumbs.db'];
+      } else if (type === 'python') {
+        exclusionMaskState.rules = ['__pycache__', '.venv', 'venv', '*.pyc', '*.pyo', '.pytest_cache', '.mypy_cache', '.env'];
+      } else {
+        exclusionMaskState.rules = [...DEFAULT_EXCLUSION_RULES];
+      }
+      renderMaskRulesBadges();
+    }
+
+    function saveExclusionMaskFromModal() {
+      exclusionMaskState.enabled = document.getElementById('maskEnabledCheckbox').checked;
+      saveExclusionMaskConfig();
+      closeExclusionMaskModal();
+      addLog(`[Exclusion Mask] Configuration saved: ${exclusionMaskState.enabled ? 'ON' : 'OFF'} (${exclusionMaskState.rules.length} rules active)`, 'info');
+    }
+
+    function getActiveExclusionRules() {
+      return exclusionMaskState.enabled ? exclusionMaskState.rules : [];
+    }
+
+    function isItemExcluded(name, relPath) {
+      if (!exclusionMaskState.enabled) return false;
+      const nLower = (name || '').toLowerCase();
+      const rLower = (relPath || name || '').toLowerCase().replace(/\\/g, '/');
+      for (const rule of exclusionMaskState.rules) {
+        const pat = rule.trim().replace(/\/+$/, '').toLowerCase();
+        if (!pat) continue;
+        if (pat.startsWith('*.')) {
+          if (nLower.endsWith(pat.substring(1))) return true;
+        } else if (pat.includes('*')) {
+          const parts = pat.split('*');
+          if (parts.length === 2 && nLower.startsWith(parts[0]) && nLower.endsWith(parts[1])) return true;
+        } else {
+          if (nLower === pat) return true;
+          const segs = rLower.split('/');
+          if (segs.includes(pat)) return true;
+        }
+      }
+      return false;
+    }
+
+    // ==========================================
+    // 2. SERVER-SIDE FIND FILES ENGINE
+    // ==========================================
+    let findFilesResults = [];
+
+    function openFindFilesModal() {
+      if (!isConnected) {
+        alert('Please connect to a remote server first');
+        return;
+      }
+      const modal = document.getElementById('findFilesModal');
+      if (!modal) return;
+      document.getElementById('findSearchPathInput').value = currentRemotePath || '/';
+      const qInput = document.getElementById('findSearchQueryInput');
+      qInput.value = '';
+      clearFindResults();
+      modal.classList.add('active');
+      setTimeout(() => qInput.focus(), 60);
+    }
+
+    function closeFindFilesModal() {
+      const modal = document.getElementById('findFilesModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function setFindPathCurrent() {
+      document.getElementById('findSearchPathInput').value = currentRemotePath || '/';
+    }
+
+    function clearFindResults() {
+      findFilesResults = [];
+      const tbody = document.getElementById('findResultsTableBody');
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 40px; font-style: italic;">Enter search query and click Search Files</td></tr>`;
+      }
+      const summary = document.getElementById('findResultsSummary');
+      if (summary) summary.innerText = 'Ready to search';
+    }
+
+    async function executeRemoteFind() {
+      if (!isConnected) {
+        alert('Please connect to server first');
+        return;
+      }
+      const path = (document.getElementById('findSearchPathInput').value || '/').trim();
+      const query = (document.getElementById('findSearchQueryInput').value || '').trim();
+      const recursive = document.getElementById('findRecursiveCheckbox').checked;
+      const file_type = document.getElementById('findTypeSelect').value;
+
+      if (!query) {
+        alert('Please enter a file name pattern to search (e.g. *.php or config)');
+        return;
+      }
+
+      const spinner = document.getElementById('findSpinner');
+      const btn = document.getElementById('btnExecuteFind');
+      const summary = document.getElementById('findResultsSummary');
+      if (spinner) spinner.style.display = 'inline-block';
+      if (btn) btn.disabled = true;
+      if (summary) summary.innerText = `Searching for '${query}' in ${path}...`;
+
+      try {
+        const res = await sendRust('remote_find_files', {
+          path,
+          query,
+          recursive,
+          file_type,
+          max_results: 300
+        });
+
+        findFilesResults = res.results || [];
+        renderFindResults(findFilesResults);
+        if (summary) {
+          summary.innerText = `Found ${findFilesResults.length} item(s) matching '${query}'`;
+        }
+      } catch (err) {
+        if (summary) summary.innerText = `Search error: ${err.message || err}`;
+        alert(`Search Failed:\n${err.message || err}`);
+      } finally {
+        if (spinner) spinner.style.display = 'none';
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function renderFindResults(items) {
+      const tbody = document.getElementById('findResultsTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 40px; font-style: italic;">No items found matching criteria</td></tr>`;
+        return;
+      }
+
+      items.forEach((item, idx) => {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+        tr.ondblclick = () => jumpToFoundRemoteItem(item);
+        tr.onmouseenter = () => tr.style.background = 'rgba(56, 189, 248, 0.08)';
+        tr.onmouseleave = () => tr.style.background = 'transparent';
+
+        const { svg, iconClass } = getFileIcon(item.name, !!item.is_dir);
+
+        tr.innerHTML = `
+          <td style="padding: 6px 10px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="file-icon ${iconClass}">${svg}</span>
+              <span style="font-weight: 600; color: var(--text-main); word-break: break-all;">${escapeHtml(item.name)}</span>
+            </div>
+          </td>
+          <td style="padding: 6px 10px; color: var(--text-dim); font-family: monospace; font-size: 11px; word-break: break-all;">
+            ${escapeHtml(item.dir || item.path)}
+          </td>
+          <td style="padding: 6px 10px; text-align: right; color: var(--text-muted); font-family: monospace;">
+            ${item.is_dir ? 'DIR' : formatBytes(item.size || 0)}
+          </td>
+          <td style="padding: 6px 10px; text-align: center;">
+            <div style="display: flex; gap: 4px; justify-content: center;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="jumpToFoundRemoteItem(findFilesResults[${idx}])" title="Open folder in Remote Pane" style="padding: 1px 7px; font-size: 10.5px;">Go</button>
+              ${!item.is_dir ? `
+                <button type="button" class="btn btn-secondary btn-sm" onclick="downloadFoundItem(findFilesResults[${idx}])" title="Download to local directory" style="padding: 1px 7px; font-size: 10.5px;">⬇</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="editFoundItem(findFilesResults[${idx}])" title="Edit in code editor" style="padding: 1px 7px; font-size: 10.5px;">✏</button>
+              ` : ''}
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function jumpToFoundRemoteItem(item) {
+      if (!item) return;
+      closeFindFilesModal();
+      const targetDir = item.is_dir ? item.path : item.dir;
+      await navigateRemote(targetDir);
+      setTimeout(() => {
+        const rows = document.querySelectorAll('#remoteFileList tr');
+        rows.forEach(r => {
+          const nameSpan = r.querySelector('.file-cell span:nth-child(2)');
+          if (nameSpan && nameSpan.innerText.trim() === item.name) {
+            r.classList.add('selected');
+            r.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
+      }, 300);
+    }
+
+    async function downloadFoundItem(item) {
+      if (!item || item.is_dir) return;
+      closeFindFilesModal();
+      downloadFileDirect(item.path, item.name);
+    }
+
+    async function editFoundItem(item) {
+      if (!item || item.is_dir) return;
+      closeFindFilesModal();
+      openRemoteFileInEditor(item.path);
+    }
+
+    // ==========================================
+    // 3. DIRECTORY COMPARISON ENGINE (WinSCP-style)
+    // ==========================================
+    let compareDirsActive = false;
+
+    function toggleCompareDirectories(forceState) {
+      compareDirsActive = typeof forceState === 'boolean' ? forceState : !compareDirsActive;
+      const btn = document.getElementById('btnToolbarCompare');
+      const bar = document.getElementById('compareBar');
+
+      if (btn) {
+        btn.style.color = compareDirsActive ? '#22c55e' : '#a855f7';
+      }
+
+      if (compareDirsActive) {
+        if (bar) bar.style.display = 'flex';
+        updateCompareStats();
+        addLog('Directory Comparison activated (WinSCP mode)', 'info');
+      } else {
+        if (bar) bar.style.display = 'none';
+        addLog('Directory Comparison deactivated', 'info');
+      }
+
+      renderLocalFiles(localFiles);
+      renderRemoteFiles(remoteFiles);
+    }
+
+    function getComparisonStatus(item, isRemote) {
+      const counterpartList = isRemote ? localFiles : remoteFiles;
+      const itemName = (item.name || '').toLowerCase();
+      const match = counterpartList.find(f => (f.name || '').toLowerCase() === itemName);
+
+      if (!match) {
+        return {
+          status: 'missing',
+          tag: isRemote ? 'Remote Only' : 'Local Only',
+          color: '#22c55e',
+          bg: 'rgba(34, 197, 94, 0.15)',
+          border: 'rgba(34, 197, 94, 0.35)',
+          rowClass: 'tr-compare-missing'
+        };
+      }
+
+      if (!item.is_dir && !match.is_dir) {
+        if (item.size !== match.size) {
+          return {
+            status: 'diff',
+            tag: 'Size Diff',
+            color: '#eab308',
+            bg: 'rgba(234, 179, 8, 0.15)',
+            border: 'rgba(234, 179, 8, 0.35)',
+            rowClass: 'tr-compare-diff'
+          };
+        }
+      }
+
+      return {
+        status: 'match',
+        tag: '',
+        color: '#94a3b8',
+        bg: 'transparent',
+        border: 'transparent',
+        rowClass: ''
+      };
+    }
+
+    function updateCompareStats() {
+      const statsEl = document.getElementById('compareStats');
+      if (!statsEl) return;
+
+      let localOnly = 0;
+      let remoteOnly = 0;
+      let sizeDiff = 0;
+      let identical = 0;
+
+      const remoteMap = new Map();
+      remoteFiles.forEach(f => remoteMap.set((f.name || '').toLowerCase(), f));
+
+      localFiles.forEach(lf => {
+        const nameLower = (lf.name || '').toLowerCase();
+        const rf = remoteMap.get(nameLower);
+        if (!rf) {
+          localOnly++;
+        } else {
+          if (!lf.is_dir && !rf.is_dir && lf.size !== rf.size) {
+            sizeDiff++;
+          } else {
+            identical++;
+          }
+        }
+      });
+
+      const localMap = new Map();
+      localFiles.forEach(f => localMap.set((f.name || '').toLowerCase(), f));
+
+      remoteFiles.forEach(rf => {
+        const nameLower = (rf.name || '').toLowerCase();
+        if (!localMap.has(nameLower)) {
+          remoteOnly++;
+        }
+      });
+
+      statsEl.innerHTML = `
+        <span style="color:#22c55e; font-weight:600;">${localOnly} Local Only</span> • 
+        <span style="color:#22c55e; font-weight:600;">${remoteOnly} Remote Only</span> • 
+        <span style="color:#eab308; font-weight:600;">${sizeDiff} Size Diff</span> • 
+        <span style="color:var(--text-dim);">${identical} Matching</span>
+      `;
+    }
+
+    async function syncLocalToRemoteMissing() {
+      if (!isConnected) { alert('Please connect to server first'); return; }
+      const remoteMap = new Map();
+      remoteFiles.forEach(f => remoteMap.set((f.name || '').toLowerCase(), f));
+
+      const toUpload = localFiles.filter(lf => {
+        const rf = remoteMap.get((lf.name || '').toLowerCase());
+        return !rf || (!lf.is_dir && !rf.is_dir && lf.size !== rf.size);
+      });
+
+      if (toUpload.length === 0) {
+        alert('All local files match the remote directory. Nothing to upload.');
+        return;
+      }
+
+      if (!confirm(`Upload ${toUpload.length} missing/modified file(s) to remote server?`)) return;
+
+      addLog(`Starting sync upload of ${toUpload.length} items to remote...`, 'info');
+      for (const item of toUpload) {
+        if (item.is_dir) {
+          await uploadFolderDirect(item.path, item.name);
+        } else {
+          await uploadFileDirect(item.path, item.name);
+        }
+      }
+      refreshRemote();
+    }
+
+    async function syncRemoteToLocalMissing() {
+      if (!isConnected) { alert('Please connect to server first'); return; }
+      const localMap = new Map();
+      localFiles.forEach(f => localMap.set((f.name || '').toLowerCase(), f));
+
+      const toDownload = remoteFiles.filter(rf => {
+        const lf = localMap.get((rf.name || '').toLowerCase());
+        return !lf || (!rf.is_dir && !lf.is_dir && rf.size !== lf.size);
+      });
+
+      if (toDownload.length === 0) {
+        alert('All remote files match the local directory. Nothing to download.');
+        return;
+      }
+
+      if (!confirm(`Download ${toDownload.length} missing/modified file(s) to local directory?`)) return;
+
+      addLog(`Starting sync download of ${toDownload.length} items to local...`, 'info');
+      for (const item of toDownload) {
+        if (item.is_dir) {
+          await downloadFolderDirect(item.path, item.name);
+        } else {
+          await downloadFileDirect(item.path, item.name);
+        }
+      }
+      refreshLocal();
+    }
+
+    // ==========================================
+    // 4. CHECKSUM CALCULATION & VERIFICATION ENGINE
+    // ==========================================
+    let currentChecksumState = {
+      path: '',
+      name: '',
+      isRemote: false,
+      size: 0,
+      algo: 'sha256',
+      hash: '',
+      counterpartPath: '',
+      counterpartHash: ''
+    };
+
+    async function openChecksumModal(filePath, fileName, isRemote, counterpartPath = '') {
+      currentChecksumState.path = filePath;
+      currentChecksumState.name = fileName;
+      currentChecksumState.isRemote = isRemote;
+      currentChecksumState.algo = 'sha256';
+      currentChecksumState.hash = '';
+      currentChecksumState.counterpartPath = counterpartPath;
+      currentChecksumState.counterpartHash = '';
+
+      const modal = document.getElementById('checksumModal');
+      if (!modal) return;
+
+      document.getElementById('csFileName').innerText = fileName;
+      document.getElementById('csFilePath').innerText = filePath;
+      document.getElementById('csFileTarget').innerText = isRemote ? 'Remote Server' : 'Local PC';
+      document.getElementById('csFileTarget').style.color = isRemote ? 'var(--accent)' : '#22c55e';
+      document.getElementById('csVerifyInput').value = '';
+      document.getElementById('csMatchResult').style.display = 'none';
+
+      const fileList = isRemote ? remoteFiles : localFiles;
+      const fileObj = fileList.find(f => (f.name || '') === fileName);
+      document.getElementById('csFileSize').innerText = fileObj ? formatBytes(fileObj.size || 0) : '-';
+
+      const otherList = isRemote ? localFiles : remoteFiles;
+      const counterpart = otherList.find(f => !f.is_dir && (f.name || '').toLowerCase() === fileName.toLowerCase());
+      const cpSection = document.getElementById('csCounterpartSection');
+      if (counterpart) {
+        currentChecksumState.counterpartPath = counterpart.path;
+        document.getElementById('csCounterpartName').innerText = `${counterpart.name} (${formatBytes(counterpart.size)})`;
+        if (cpSection) cpSection.style.display = 'flex';
+      } else {
+        if (cpSection) cpSection.style.display = 'none';
+      }
+
+      switchChecksumAlgo('sha256', false);
+      modal.classList.add('active');
+      await computeActiveChecksum();
+    }
+
+    function openChecksumCompareModal(filePath, counterpartPath, fileName, isRemote) {
+      openChecksumModal(filePath, fileName, isRemote, counterpartPath);
+    }
+
+    function closeChecksumModal() {
+      const modal = document.getElementById('checksumModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    async function switchChecksumAlgo(algo, recompute = true) {
+      currentChecksumState.algo = algo;
+      const btnSha = document.getElementById('btnAlgoSha256');
+      const btnMd5 = document.getElementById('btnAlgoMd5');
+      const hashLabel = document.getElementById('csHashLabel');
+
+      if (algo === 'sha256') {
+        btnSha.className = 'btn btn-sm btn-primary';
+        btnMd5.className = 'btn btn-secondary btn-sm';
+        hashLabel.innerText = 'Calculated SHA-256 Hash:';
+      } else {
+        btnMd5.className = 'btn btn-sm btn-primary';
+        btnSha.className = 'btn btn-secondary btn-sm';
+        hashLabel.innerText = 'Calculated MD5 Hash:';
+      }
+
+      if (recompute) {
+        await computeActiveChecksum();
+      }
+    }
+
+    async function computeActiveChecksum() {
+      const spinner = document.getElementById('csComputingSpinner');
+      const hashBox = document.getElementById('csHashBox');
+      if (spinner) spinner.style.display = 'inline-block';
+      if (hashBox) hashBox.innerText = 'Computing hash (please wait)...';
+
+      try {
+        const res = await sendRust('calculate_checksum', {
+          target: currentChecksumState.isRemote ? 'remote' : 'local',
+          path: currentChecksumState.path,
+          algorithm: currentChecksumState.algo
+        });
+        currentChecksumState.hash = res.hash || '';
+        if (hashBox) hashBox.innerText = currentChecksumState.hash;
+        checkChecksumMatch();
+      } catch (err) {
+        if (hashBox) hashBox.innerText = `Error: ${err.message || err}`;
+      } finally {
+        if (spinner) spinner.style.display = 'none';
+      }
+    }
+
+    function copyChecksumHash() {
+      if (!currentChecksumState.hash) return;
+      navigator.clipboard.writeText(currentChecksumState.hash).then(() => {
+        const btn = document.getElementById('btnCopyHash');
+        if (btn) {
+          const orig = btn.innerHTML;
+          btn.innerHTML = '<span>✓ Copied!</span>';
+          setTimeout(() => btn.innerHTML = orig, 1500);
+        }
+      });
+    }
+
+    function checkChecksumMatch() {
+      const input = document.getElementById('csVerifyInput');
+      const resultBox = document.getElementById('csMatchResult');
+      if (!input || !resultBox) return;
+
+      const expected = input.value.trim().toLowerCase();
+      const actual = (currentChecksumState.hash || '').toLowerCase();
+
+      if (!expected || !actual) {
+        resultBox.style.display = 'none';
+        return;
+      }
+
+      resultBox.style.display = 'flex';
+      if (expected === actual) {
+        resultBox.style.background = 'rgba(34, 197, 94, 0.15)';
+        resultBox.style.border = '1px solid rgba(34, 197, 94, 0.4)';
+        resultBox.style.color = '#22c55e';
+        resultBox.innerHTML = `<span>✓</span> <span>HASH MATCHES PERFECTLY! File integrity and authenticity verified.</span>`;
+      } else {
+        resultBox.style.background = 'rgba(239, 68, 68, 0.15)';
+        resultBox.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+        resultBox.style.color = '#f87171';
+        resultBox.innerHTML = `<span>✗</span> <span>HASH MISMATCH! Expected and calculated checksums do not match.</span>`;
+      }
+    }
+
+    async function compareWithCounterpartChecksum() {
+      if (!currentChecksumState.counterpartPath) return;
+      const btn = document.getElementById('btnCompareCounterpart');
+      if (btn) btn.innerHTML = '<span class="spinner" style="width:10px; height:10px; display:inline-block;"></span> Computing...';
+
+      try {
+        const res = await sendRust('calculate_checksum', {
+          target: currentChecksumState.isRemote ? 'local' : 'remote',
+          path: currentChecksumState.counterpartPath,
+          algorithm: currentChecksumState.algo
+        });
+        currentChecksumState.counterpartHash = res.hash || '';
+        const verifyInput = document.getElementById('csVerifyInput');
+        if (verifyInput) {
+          verifyInput.value = currentChecksumState.counterpartHash;
+          checkChecksumMatch();
+        }
+      } catch (err) {
+        alert(`Failed to compute counterpart checksum: ${err.message || err}`);
+      } finally {
+        if (btn) btn.innerHTML = '<span>Compute & Compare</span>';
       }
     }
 
@@ -9059,12 +10093,21 @@
         closeUpdateModal();
         closeSitesModal();
         closeEditorModal();
+        closeExclusionMaskModal();
+        closeFindFilesModal();
+        closeChecksumModal();
         return;
       }
 
       if (isInput) return;
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+      if (e.shiftKey && e.key === 'F1') {
+        e.preventDefault();
+        toggleCompareDirectories();
+      } else if (e.key === 'F3' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f')) {
+        e.preventDefault();
+        openFindFilesModal();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
         e.preventDefault();
         openUpdateModal(true);
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {

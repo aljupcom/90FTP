@@ -27,6 +27,101 @@ impl AppState {
             current_connection: Arc::new(Mutex::new(None)),
         }
     }
+}
+
+fn matches_exclude(name: &str, rel_path: &str, patterns: &[String]) -> bool {
+    let name_lower = name.to_lowercase();
+    let rel_lower = rel_path.to_lowercase().replace('\\', "/");
+    for p in patterns {
+        let pat = p.trim().trim_end_matches('/').to_lowercase();
+        if pat.is_empty() {
+            continue;
+        }
+        if pat.starts_with("*.") {
+            let ext = &pat[1..];
+            if name_lower.ends_with(ext) {
+                return true;
+            }
+        } else if pat.contains('*') {
+            let parts: Vec<&str> = pat.split('*').collect();
+            if parts.len() == 2 && name_lower.starts_with(parts[0]) && name_lower.ends_with(parts[1]) {
+                return true;
+            }
+        } else {
+            if name_lower == pat {
+                return true;
+            }
+            for seg in rel_lower.split('/') {
+                if seg == pat {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn compute_local_checksum(path: &str, algo: &str) -> Result<String, String> {
+    use std::io::Read;
+    use sha2::{Sha256, Digest};
+    let mut file = std::fs::File::open(path).map_err(|e| format!("Failed to open local file: {}", e))?;
+    let mut buffer = [0u8; 65536];
+
+    if algo.eq_ignore_ascii_case("md5") {
+        let mut context = md5::Context::new();
+        loop {
+            let n = file.read(&mut buffer).map_err(|e| format!("Read error: {}", e))?;
+            if n == 0 { break; }
+            context.consume(&buffer[..n]);
+        }
+        let digest = context.compute();
+        Ok(format!("{:x}", digest))
+    } else {
+        let mut hasher = Sha256::new();
+        loop {
+            let n = file.read(&mut buffer).map_err(|e| format!("Read error: {}", e))?;
+            if n == 0 { break; }
+            hasher.update(&buffer[..n]);
+        }
+        let result = hasher.finalize();
+        Ok(result.iter().map(|b| format!("{:02x}", b)).collect::<String>())
+    }
+}
+
+fn compute_remote_checksum(client: &mut RemoteClient, remote_path: &str, algo: &str) -> Result<String, String> {
+    let cmd = if algo.eq_ignore_ascii_case("md5") {
+        format!("md5sum \"{}\" 2>/dev/null || md5 -q \"{}\" 2>/dev/null", remote_path, remote_path)
+    } else {
+        format!("sha256sum \"{}\" 2>/dev/null || shasum -a 256 \"{}\" 2>/dev/null", remote_path, remote_path)
+    };
+
+    if let Ok(output) = client.exec_command(&cmd) {
+        let trimmed = output.trim();
+        if !trimmed.is_empty() {
+            if let Some(token) = trimmed.split_whitespace().next() {
+                let token_clean = token.trim();
+                let expected_len = if algo.eq_ignore_ascii_case("md5") { 32 } else { 64 };
+                if token_clean.len() == expected_len && token_clean.chars().all(|c| c.is_ascii_hexdigit()) {
+                    return Ok(token_clean.to_lowercase());
+                }
+            }
+        }
+    }
+
+    use sha2::{Sha256, Digest};
+    let data = client.download_file(remote_path)?;
+    if algo.eq_ignore_ascii_case("md5") {
+        let digest = md5::compute(&data);
+        Ok(format!("{:x}", digest))
+    } else {
+        let mut hasher = Sha256::new();
+        hasher.update(&data);
+        let result = hasher.finalize();
+        Ok(result.iter().map(|b| format!("{:02x}", b)).collect::<String>())
+    }
+}
+
+impl AppState {
 
     pub fn handle_request(&self, req: IpcRequest) -> IpcResponse {
         let id = &req.id;
@@ -594,12 +689,23 @@ impl AppState {
 
             "local_scan_dir_recursive" => {
                 let dir_path = payload["dir_path"].as_str().unwrap_or("");
+                let exclude_patterns: Vec<String> = payload["exclude_patterns"]
+                    .as_array()
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                    .unwrap_or_default();
+
                 let base = std::path::Path::new(dir_path);
                 if !base.exists() || !base.is_dir() {
                     return IpcResponse::err(id, action, "Directory does not exist");
                 }
 
-                fn walk(dir: &std::path::Path, base: &std::path::Path, out: &mut Vec<serde_json::Value>) {
+                fn walk(
+                    dir: &std::path::Path,
+                    base: &std::path::Path,
+                    patterns: &[String],
+                    out: &mut Vec<serde_json::Value>,
+                    skipped_count: &mut usize,
+                ) {
                     if let Ok(entries) = std::fs::read_dir(dir) {
                         for entry in entries.flatten() {
                             let p = entry.path();
@@ -607,6 +713,12 @@ impl AppState {
                                 Ok(r) => r.to_string_lossy().replace('\\', "/"),
                                 Err(_) => continue,
                             };
+                            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                            if !patterns.is_empty() && matches_exclude(name, &rel, patterns) {
+                                *skipped_count += 1;
+                                continue;
+                            }
+
                             let is_dir = p.is_dir();
                             let size = if is_dir { 0 } else { p.metadata().map(|m| m.len()).unwrap_or(0) };
                             out.push(serde_json::json!({
@@ -616,22 +728,35 @@ impl AppState {
                                 "size": size
                             }));
                             if is_dir {
-                                walk(&p, base, out);
+                                walk(&p, base, patterns, out, skipped_count);
                             }
                         }
                     }
                 }
 
                 let mut items = Vec::new();
-                walk(base, base, &mut items);
-                IpcResponse::ok(id, action, json!({ "items": items }))
+                let mut skipped = 0usize;
+                walk(base, base, &exclude_patterns, &mut items, &mut skipped);
+                IpcResponse::ok(id, action, json!({ "items": items, "skipped_count": skipped }))
             }
 
             "remote_scan_dir_recursive" => {
                 let remote_dir = payload["remote_dir"].as_str().unwrap_or("/");
+                let exclude_patterns: Vec<String> = payload["exclude_patterns"]
+                    .as_array()
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                    .unwrap_or_default();
+
                 let mut lock = self.remote.lock().unwrap();
                 if let Some(client) = lock.as_mut() {
-                    fn walk_remote(client: &mut RemoteClient, current: &str, base: &str, out: &mut Vec<serde_json::Value>) -> Result<(), String> {
+                    fn walk_remote(
+                        client: &mut RemoteClient,
+                        current: &str,
+                        base: &str,
+                        patterns: &[String],
+                        out: &mut Vec<serde_json::Value>,
+                        skipped_count: &mut usize,
+                    ) -> Result<(), String> {
                         let list = client.list(Some(current))?;
                         for item in list {
                             if item.name == "." || item.name == ".." {
@@ -649,6 +774,11 @@ impl AppState {
                                 item.name.clone()
                             };
 
+                            if !patterns.is_empty() && matches_exclude(&item.name, &rel_path, patterns) {
+                                *skipped_count += 1;
+                                continue;
+                            }
+
                             out.push(serde_json::json!({
                                 "rel_path": rel_path,
                                 "remote_path": item_path,
@@ -657,16 +787,17 @@ impl AppState {
                             }));
 
                             if item.is_dir {
-                                let _ = walk_remote(client, &item_path, base, out);
+                                let _ = walk_remote(client, &item_path, base, patterns, out, skipped_count);
                             }
                         }
                         Ok(())
                     }
 
                     let mut items = Vec::new();
+                    let mut skipped = 0usize;
                     let trimmed_base = remote_dir.trim_end_matches('/');
-                    match walk_remote(client, remote_dir, trimmed_base, &mut items) {
-                        Ok(_) => IpcResponse::ok(id, action, json!({ "items": items })),
+                    match walk_remote(client, remote_dir, trimmed_base, &exclude_patterns, &mut items, &mut skipped) {
+                        Ok(_) => IpcResponse::ok(id, action, json!({ "items": items, "skipped_count": skipped })),
                         Err(e) => IpcResponse::err(id, action, &e),
                     }
                 } else {
@@ -1251,6 +1382,220 @@ impl AppState {
                     "username": user,
                     "remote_path": pwd,
                 }))
+            }
+
+            "calculate_checksum" => {
+                let target = payload["target"].as_str().unwrap_or("local");
+                let file_path = payload["path"].as_str().unwrap_or("");
+                let algorithm = payload["algorithm"].as_str().unwrap_or("sha256");
+
+                if file_path.is_empty() {
+                    return IpcResponse::err(id, action, "File path is required");
+                }
+
+                if target == "local" {
+                    match compute_local_checksum(file_path, algorithm) {
+                        Ok(hash) => {
+                            let size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
+                            let name = std::path::Path::new(file_path)
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or(file_path);
+                            IpcResponse::ok(id, action, json!({
+                                "target": "local",
+                                "name": name,
+                                "path": file_path,
+                                "algorithm": algorithm.to_lowercase(),
+                                "hash": hash,
+                                "size": size
+                            }))
+                        }
+                        Err(e) => IpcResponse::err(id, action, &e),
+                    }
+                } else {
+                    let mut lock = self.remote.lock().unwrap();
+                    if let Some(client) = lock.as_mut() {
+                        match compute_remote_checksum(client, file_path, algorithm) {
+                            Ok(hash) => {
+                                let name = file_path.rsplit('/').next().unwrap_or(file_path);
+                                IpcResponse::ok(id, action, json!({
+                                    "target": "remote",
+                                    "name": name,
+                                    "path": file_path,
+                                    "algorithm": algorithm.to_lowercase(),
+                                    "hash": hash
+                                }))
+                            }
+                            Err(e) => IpcResponse::err(id, action, &e),
+                        }
+                    } else {
+                        IpcResponse::err(id, action, "Not connected")
+                    }
+                }
+            }
+
+            "remote_find_files" => {
+                let search_path = payload["path"].as_str().unwrap_or("/").trim();
+                let query = payload["query"].as_str().unwrap_or("").trim();
+                let recursive = payload["recursive"].as_bool().unwrap_or(true);
+                let file_type = payload["file_type"].as_str().unwrap_or("all");
+                let max_results = payload["max_results"].as_u64().unwrap_or(300) as usize;
+
+                if query.is_empty() {
+                    return IpcResponse::err(id, action, "Search query cannot be empty");
+                }
+
+                let mut lock = self.remote.lock().unwrap();
+                if let Some(client) = lock.as_mut() {
+                    let mut results = Vec::new();
+                    let query_pattern = if query.contains('*') {
+                        query.to_string()
+                    } else {
+                        format!("*{}*", query)
+                    };
+
+                    let type_flag = match file_type {
+                        "files" => "-type f ",
+                        "dirs" => "-type d ",
+                        _ => "",
+                    };
+
+                    let depth_flag = if recursive { "-maxdepth 8 " } else { "-maxdepth 1 " };
+                    let find_cmd = format!(
+                        "find \"{}\" {} {} -name \"{}\" -printf \"%y|%s|%T@|%p\\n\" 2>/dev/null | head -n {}",
+                        search_path, depth_flag, type_flag, query_pattern, max_results
+                    );
+
+                    let mut parsed_via_ssh = false;
+                    if let Ok(output) = client.exec_command(&find_cmd) {
+                        let lines: Vec<&str> = output.lines().filter(|l| !l.trim().is_empty()).collect();
+                        if !lines.is_empty() {
+                            for line in lines {
+                                let parts: Vec<&str> = line.splitn(4, '|').collect();
+                                if parts.len() == 4 {
+                                    let is_dir = parts[0] == "d";
+                                    let size = parts[1].parse::<u64>().unwrap_or(0);
+                                    let mtime_secs = parts[2].split('.').next().unwrap_or("0").parse::<i64>().unwrap_or(0);
+                                    let full_path = parts[3].to_string();
+                                    let name = full_path.rsplit('/').next().unwrap_or(&full_path).to_string();
+                                    let dir_path = if let Some(idx) = full_path.rfind('/') {
+                                        if idx == 0 { "/".to_string() } else { full_path[..idx].to_string() }
+                                    } else {
+                                        "/".to_string()
+                                    };
+
+                                    results.push(serde_json::json!({
+                                        "name": name,
+                                        "path": full_path,
+                                        "dir": dir_path,
+                                        "is_dir": is_dir,
+                                        "size": size,
+                                        "mtime": mtime_secs,
+                                    }));
+                                }
+                            }
+                            if !results.is_empty() {
+                                parsed_via_ssh = true;
+                            }
+                        }
+                    }
+
+                    if !parsed_via_ssh {
+                        let simple_cmd = format!(
+                            "find \"{}\" {} {} -name \"{}\" 2>/dev/null | head -n {}",
+                            search_path, depth_flag, type_flag, query_pattern, max_results
+                        );
+                        if let Ok(output) = client.exec_command(&simple_cmd) {
+                            for line in output.lines().filter(|l| !l.trim().is_empty()) {
+                                let full_path = line.trim().to_string();
+                                let name = full_path.rsplit('/').next().unwrap_or(&full_path).to_string();
+                                let dir_path = if let Some(idx) = full_path.rfind('/') {
+                                    if idx == 0 { "/".to_string() } else { full_path[..idx].to_string() }
+                                } else {
+                                    "/".to_string()
+                                };
+                                results.push(serde_json::json!({
+                                    "name": name,
+                                    "path": full_path,
+                                    "dir": dir_path,
+                                    "is_dir": false,
+                                    "size": 0,
+                                    "mtime": 0,
+                                }));
+                            }
+                            if !results.is_empty() {
+                                parsed_via_ssh = true;
+                            }
+                        }
+                    }
+
+                    if !parsed_via_ssh {
+                        fn walk_find(
+                            client: &mut RemoteClient,
+                            curr: &str,
+                            q: &str,
+                            ftype: &str,
+                            rec: bool,
+                            max: usize,
+                            depth: usize,
+                            out: &mut Vec<serde_json::Value>,
+                        ) {
+                            if depth > 6 || out.len() >= max { return; }
+                            if let Ok(items) = client.list(Some(curr)) {
+                                for it in items {
+                                    if it.name == "." || it.name == ".." { continue; }
+                                    let full = if curr.ends_with('/') {
+                                        format!("{}{}", curr, it.name)
+                                    } else {
+                                        format!("{}/{}", curr, it.name)
+                                    };
+                                    let name_lower = it.name.to_lowercase();
+                                    let q_lower = q.to_lowercase();
+                                    let matches = if q_lower.starts_with('*') && q_lower.ends_with('*') {
+                                        name_lower.contains(&q_lower[1..q_lower.len()-1])
+                                    } else if q_lower.starts_with('*') {
+                                        name_lower.ends_with(&q_lower[1..])
+                                    } else if q_lower.ends_with('*') {
+                                        name_lower.starts_with(&q_lower[..q_lower.len()-1])
+                                    } else {
+                                        name_lower.contains(&q_lower)
+                                    };
+
+                                    let type_ok = match ftype {
+                                        "files" => !it.is_dir,
+                                        "dirs" => it.is_dir,
+                                        _ => true,
+                                    };
+
+                                    if matches && type_ok {
+                                        out.push(serde_json::json!({
+                                            "name": it.name,
+                                            "path": full,
+                                            "dir": curr,
+                                            "is_dir": it.is_dir,
+                                            "size": it.size,
+                                            "mtime": it.modified.clone(),
+                                        }));
+                                    }
+
+                                    if it.is_dir && rec && out.len() < max {
+                                        walk_find(client, &full, q, ftype, rec, max, depth + 1, out);
+                                    }
+                                }
+                            }
+                        }
+                        walk_find(client, search_path, query, file_type, recursive, max_results, 0, &mut results);
+                    }
+
+                    IpcResponse::ok(id, action, json!({
+                        "results": results,
+                        "count": results.len(),
+                        "query": query,
+                        "path": search_path
+                    }))
+                } else {
+                    IpcResponse::err(id, action, "Not connected")
+                }
             }
 
             "get_error_logs" => {
