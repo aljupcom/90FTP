@@ -2358,7 +2358,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.37</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.38</span>
         </div>
       </div>
 
@@ -3531,7 +3531,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.8 Dev</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.38 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -4064,7 +4064,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.37';
+    let APP_CURRENT_VERSION = '0.0.0.38';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -9673,6 +9673,8 @@
     // About Dialog Management
     function openAboutModal() {
       closeAllMenus();
+      const verBadge = document.getElementById('aboutAppVersion');
+      if (verBadge) verBadge.textContent = 'Version ' + APP_CURRENT_VERSION + ' Dev (Windows x64)';
       const modal = document.getElementById('aboutModal');
       if (modal) modal.classList.add('active');
     }
