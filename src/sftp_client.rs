@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use russh::client::{self, Config, Handle, Handler};
 use russh::keys::{key::PrivateKeyWithHashAlg, PublicKeyOrCertificate};
-use russh_sftp::client::SftpSession;
+use russh_sftp::client::{Config as SftpConfig, SftpSession};
 use chrono::{DateTime, Utc};
 use tokio::runtime::Runtime;
 use crate::models::FileItem;
@@ -147,7 +147,12 @@ impl SftpClient {
             channel.request_subsystem(true, "sftp").await
                 .map_err(|e| format!("Failed to request SFTP subsystem: {}", e))?;
 
-            let sftp = SftpSession::new(channel.into_stream()).await
+            let mut sftp_cfg = SftpConfig::default();
+            sftp_cfg.request_timeout_secs = 300; // 5-minute timeout per request for large files and batch transfers
+            sftp_cfg.max_concurrent_writes = 32;
+            sftp_cfg.max_concurrent_reads = 32;
+
+            let sftp = SftpSession::new_with_config(channel.into_stream(), sftp_cfg).await
                 .map_err(|e| format!("Failed to initialize SFTP protocol: {}", e))?;
 
             let default_dir = match sftp.canonicalize(".").await {
@@ -353,9 +358,17 @@ impl SftpClient {
             use tokio::io::AsyncWriteExt;
             let mut file = self.sftp.create(&file_s).await
                 .map_err(|e| format!("Failed to create remote file {}: {}", file_s, e))?;
-            file.write_all(&bytes).await
-                .map_err(|e| format!("Failed to write remote file data {}: {}", file_s, e))?;
-            let _ = file.close().await;
+
+            // Stream in 64 KiB chunks for smooth TCP flow and reliable ACKs
+            const CHUNK_SIZE: usize = 64 * 1024;
+            for chunk in bytes.chunks(CHUNK_SIZE) {
+                file.write_all(chunk).await
+                    .map_err(|e| format!("Failed to write remote file data {}: {}", file_s, e))?;
+            }
+            file.flush().await
+                .map_err(|e| format!("Failed to flush remote file {}: {}", file_s, e))?;
+            file.close().await
+                .map_err(|e| format!("Failed to close remote file {}: {}", file_s, e))?;
             Ok(())
         })
     }
@@ -363,8 +376,12 @@ impl SftpClient {
     pub fn make_dir(&self, dir_path: &str) -> Result<(), String> {
         let dir_s = dir_path.to_string();
         self.rt.block_on(async {
+            // If folder already exists, treat as success without error
+            if let Ok(true) = self.sftp.try_exists(&dir_s).await {
+                return Ok(());
+            }
             self.sftp.create_dir(&dir_s).await
-                .map_err(|e| format!("Failed to create folder: {}", e))?;
+                .map_err(|e| format!("Failed to create folder {}: {}", dir_s, e))?;
             Ok(())
         })
     }

@@ -102,9 +102,17 @@ impl FtpClient {
     }
 
     pub fn make_dir(&mut self, dir_name: &str) -> Result<(), String> {
-        self.stream
-            .mkdir(dir_name)
-            .map_err(|e| format!("Failed to create folder {}: {}", dir_name, e))
+        match self.stream.mkdir(dir_name) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("exists") || err_str.contains("File exists") || err_str.contains("550") {
+                    Ok(())
+                } else {
+                    Err(format!("Failed to create folder {}: {}", dir_name, err_str))
+                }
+            }
+        }
     }
 
     pub fn remove_file(&mut self, file_name: &str) -> Result<(), String> {

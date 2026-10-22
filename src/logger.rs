@@ -70,6 +70,7 @@ pub fn log_error(msg: &str) {
     log_message("ERROR", msg);
 }
 
+#[allow(dead_code)]
 pub fn log_warn(msg: &str) {
     log_message("WARN", msg);
 }

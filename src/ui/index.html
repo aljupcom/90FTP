@@ -4104,9 +4104,11 @@
       await ensureIpcReady();
       return new Promise((resolve, reject) => {
         const id = 'req_' + (++reqCounter);
-        const timeoutMs = ['connect', 'upload', 'download', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'terminal_exec', 'local_compress', 'local_extract'].includes(action) 
-          ? 60000 
-          : 15000;
+        const timeoutMs = ['upload', 'download'].includes(action)
+          ? 600000 
+          : (['connect', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'terminal_exec', 'local_compress', 'local_extract'].includes(action) 
+              ? 60000 
+              : 15000);
 
         const timer = setTimeout(() => {
           if (pendingCallbacks.has(id)) {
@@ -5387,10 +5389,14 @@
           ? currentRemotePath + folderName 
           : currentRemotePath + '/' + folderName;
 
-        // Ensure remote root folder exists
+        // Ensure remote root folder exists and show in queue
+        const rootTx = addTransferItem('dir_upload', folderName, localFolderPath, baseRemote, 'Directory');
         try {
           await sendRust('remote_create_dir', { path: baseRemote });
-        } catch (_) {}
+          updateTransferItem(rootTx.id, { percent: 100, status: 'completed' });
+        } catch (_) {
+          updateTransferItem(rootTx.id, { percent: 100, status: 'completed' });
+        }
 
         if (items.length === 0) {
           addLog(`Created empty remote directory: ${baseRemote}`, 'success');
@@ -5405,10 +5411,14 @@
         for (const item of items) {
           const itemDest = baseRemote + '/' + item.rel_path;
           if (item.is_dir) {
+            const dirTx = addTransferItem('dir_upload', item.rel_path, item.abs_path, itemDest, 'Directory');
             try {
               await sendRust('remote_create_dir', { path: itemDest });
               createdDirs++;
-            } catch (_) {}
+              updateTransferItem(dirTx.id, { percent: 100, status: 'completed' });
+            } catch (dirErr) {
+              updateTransferItem(dirTx.id, { status: 'failed', error: dirErr.message || dirErr });
+            }
           } else {
             const fileName = item.rel_path.split('/').pop();
             const tx = addTransferItem('upload', fileName, item.abs_path, itemDest, formatBytes(item.size));
@@ -5416,6 +5426,7 @@
               const res = await sendRust('upload', {
                 local_path: item.abs_path,
                 remote_path: itemDest,
+                skip_list: true
               });
               updateTransferItem(tx.id, {
                 percent: 100,
@@ -5458,10 +5469,14 @@
           ? currentLocalPath + folderName 
           : currentLocalPath + '\\' + folderName;
 
-        // Ensure local root folder exists
+        // Ensure local root folder exists and show in queue
+        const rootTx = addTransferItem('dir_download', folderName, remoteFolderPath, baseLocal, 'Directory');
         try {
           await sendRust('local_create_dir', { path: baseLocal });
-        } catch (_) {}
+          updateTransferItem(rootTx.id, { percent: 100, status: 'completed' });
+        } catch (_) {
+          updateTransferItem(rootTx.id, { percent: 100, status: 'completed' });
+        }
 
         if (items.length === 0) {
           addLog(`Created empty local directory: ${baseLocal}`, 'success');
@@ -5478,10 +5493,14 @@
           const itemDest = baseLocal + '\\' + localRel;
 
           if (item.is_dir) {
+            const dirTx = addTransferItem('dir_download', item.rel_path, item.remote_path, itemDest, 'Directory');
             try {
               await sendRust('local_create_dir', { path: itemDest });
               createdDirs++;
-            } catch (_) {}
+              updateTransferItem(dirTx.id, { percent: 100, status: 'completed' });
+            } catch (dirErr) {
+              updateTransferItem(dirTx.id, { status: 'failed', error: dirErr.message || dirErr });
+            }
           } else {
             // Ensure parent directory exists locally
             const parentDir = itemDest.substring(0, itemDest.lastIndexOf('\\'));
@@ -7946,10 +7965,19 @@
       }
 
       tbody.innerHTML = transferQueue.map((item, idx) => {
-        const isUpload = item.type === 'upload';
-        const typeBadge = isUpload 
-          ? '<span style="color: #38bdf8; font-weight: 700; font-size: 11px;">▲ UP</span>' 
-          : '<span style="color: #4ade80; font-weight: 700; font-size: 11px;">▼ DOWN</span>';
+        const isUpload = item.type === 'upload' || item.type === 'dir_upload';
+        const isDir = item.type === 'dir_upload' || item.type === 'dir_download';
+
+        let typeBadge = '';
+        if (item.type === 'dir_upload') {
+          typeBadge = '<span style="color: #f59e0b; font-weight: 700; font-size: 11px;">▲ DIR</span>';
+        } else if (item.type === 'dir_download') {
+          typeBadge = '<span style="color: #f59e0b; font-weight: 700; font-size: 11px;">▼ DIR</span>';
+        } else if (isUpload) {
+          typeBadge = '<span style="color: #38bdf8; font-weight: 700; font-size: 11px;">▲ UP</span>';
+        } else {
+          typeBadge = '<span style="color: #4ade80; font-weight: 700; font-size: 11px;">▼ DOWN</span>';
+        }
 
         let statusBadge = '';
         let barClass = '';
@@ -7963,11 +7991,13 @@
           barClass = 'failed';
         }
 
+        const iconPrefix = isDir ? '📁 ' : (isUpload ? '📄 ' : '📥 ');
+
         return '<tr>' +
           '<td style="text-align: center; color: var(--text-dim); font-size: 11px;">' + (idx + 1) + '</td>' +
           '<td>' + typeBadge + '</td>' +
           '<td style="font-weight: 600; color: var(--text-main); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(item.name) + '">' +
-            (isUpload ? '📄 ' : '📥 ') + escapeHtml(item.name) +
+            iconPrefix + escapeHtml(item.name) +
           '</td>' +
           '<td style="color: var(--text-dim); font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(item.src) + ' ➔ ' + escapeHtml(item.dest) + '">' +
             escapeHtml(item.src) + ' &rarr; ' + escapeHtml(item.dest) +

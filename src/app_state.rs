@@ -690,6 +690,7 @@ impl AppState {
             "upload" => {
                 let local_path = payload["local_path"].as_str().unwrap_or("");
                 let remote_path = payload["remote_path"].as_str().unwrap_or("");
+                let skip_list = payload["skip_list"].as_bool().unwrap_or(false);
 
                 let data = match std::fs::read(local_path) {
                     Ok(d) => d,
@@ -700,7 +701,11 @@ impl AppState {
                 if let Some(client) = lock.as_mut() {
                     match client.upload_file(remote_path, &data) {
                         Ok(_) => {
-                            let files = client.list(None).unwrap_or_default();
+                            let files = if skip_list {
+                                Vec::new()
+                            } else {
+                                client.list(None).unwrap_or_default()
+                            };
                             IpcResponse::ok(
                                 id,
                                 action,
@@ -711,7 +716,10 @@ impl AppState {
                                 }),
                             )
                         }
-                        Err(e) => IpcResponse::err(id, action, &e),
+                        Err(e) => {
+                            crate::logger::log_error(&format!("Upload error for '{}' -> '{}': {}", local_path, remote_path, e));
+                            IpcResponse::err(id, action, &e)
+                        }
                     }
                 } else {
                     IpcResponse::err(id, action, "Not connected")
