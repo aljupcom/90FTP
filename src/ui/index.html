@@ -2358,7 +2358,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.43</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.44</span>
         </div>
       </div>
 
@@ -3537,7 +3537,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.43 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.44 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -3667,7 +3667,7 @@
             </span>
             <span style="font-size: 11px; color: var(--text-dim);" id="updateReleaseDate"></span>
           </div>
-          <div id="updateChangelog" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 14px; font-size: 12px; line-height: 1.6; color: var(--text-main); max-height: 220px; overflow-y: auto;">
+          <div id="updateChangelog" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 12px; font-size: 11.5px; line-height: 1.4; color: var(--text-main); max-height: 240px; overflow-y: auto;">
           </div>
         </div>
 
@@ -4343,7 +4343,7 @@
     let currentConnectedProfile = null;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.43';
+    let APP_CURRENT_VERSION = '0.0.0.44';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -10947,14 +10947,14 @@
 
     function formatChangelogHtml(rawText) {
       if (!rawText || !rawText.trim()) {
-        return '<div style="color: var(--text-dim); text-align: center; padding: 12px;">Release notes are available on the official releases page.</div>';
+        return '<div style="color: var(--text-dim); text-align: center; padding: 8px;">Release notes are available on the official releases page.</div>';
       }
       const lines = rawText.split('\n');
       let out = '';
       lines.forEach(line => {
         const trimmed = line.trim();
         if (!trimmed) {
-          out += '<div style="height: 6px;"></div>';
+          return;
         } else if (trimmed.startsWith('### ') || trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
           const rawHeading = trimmed.replace(/^#+\s*/, '');
           
@@ -10965,64 +10965,46 @@
             .trim();
 
           const lower = rawHeading.toLowerCase();
-          let badgeColor = 'var(--accent)';
-          let badgeBg = 'rgba(14, 165, 233, 0.12)';
-          let badgeBorder = 'rgba(14, 165, 233, 0.25)';
-          let badgeIcon = '✦';
+          let headingColor = 'var(--accent)';
+          let headingIcon = '';
           let displayTitle = cleanHeading || rawHeading;
 
           if (lower.includes('added') || lower.includes('feature') || lower.includes('🚀') || lower.includes('ðÿš€')) {
-            badgeColor = '#22c55e';
-            badgeBg = 'rgba(34, 197, 94, 0.12)';
-            badgeBorder = 'rgba(34, 197, 94, 0.25)';
-            badgeIcon = '🚀';
+            headingColor = '#22c55e';
+            headingIcon = '🚀 ';
             displayTitle = 'Added';
           } else if (lower.includes('changed') || lower.includes('improv') || lower.includes('⚡') || lower.includes('âš¡')) {
-            badgeColor = '#38bdf8';
-            badgeBg = 'rgba(56, 189, 248, 0.12)';
-            badgeBorder = 'rgba(56, 189, 248, 0.25)';
-            badgeIcon = '⚡';
+            headingColor = '#38bdf8';
+            headingIcon = '⚡ ';
             displayTitle = 'Changed';
           } else if (lower.includes('fixed') || lower.includes('fix') || lower.includes('bug') || lower.includes('🛡') || lower.includes('ðÿ›¡')) {
-            badgeColor = '#f59e0b';
-            badgeBg = 'rgba(245, 158, 11, 0.12)';
-            badgeBorder = 'rgba(245, 158, 11, 0.25)';
-            badgeIcon = '🛡️';
+            headingColor = '#f59e0b';
+            headingIcon = '🛡️ ';
             displayTitle = 'Fixed';
           } else if (lower.includes('security')) {
-            badgeColor = '#ec4899';
-            badgeBg = 'rgba(236, 72, 153, 0.12)';
-            badgeBorder = 'rgba(236, 72, 153, 0.25)';
-            badgeIcon = '🔒';
+            headingColor = '#ec4899';
+            headingIcon = '🔒 ';
             displayTitle = 'Security';
           } else if (lower.includes("what's new") || lower.includes("whats new")) {
-            badgeColor = 'var(--text-main)';
-            badgeBg = 'rgba(255, 255, 255, 0.06)';
-            badgeBorder = 'rgba(255, 255, 255, 0.15)';
-            badgeIcon = '✨';
+            headingColor = 'var(--text-main)';
+            headingIcon = '✨ ';
           }
 
-          out += `<div style="font-weight: 700; color: ${badgeColor}; margin-top: 12px; margin-bottom: 6px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 6px; background: ${badgeBg}; border: 1px solid ${badgeBorder};"><span style="font-size: 13px;">${badgeIcon}</span><span>${escapeHtml(displayTitle)}</span></div>`;
+          // Render as clean colored text without stickers, borders or boxes
+          out += `<div style="font-weight: 700; color: ${headingColor}; font-size: 12px; margin-top: 6px; margin-bottom: 2px;">${headingIcon}${escapeHtml(displayTitle)}</div>`;
         } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('+ ')) {
           let bullet = trimmed.substring(2).trim();
-          let tagBadge = '';
-          const bLower = bullet.toLowerCase();
+          
+          // Clean legacy bracket tags to keep text clean and minimal
+          bullet = bullet.replace(/^(\[(added|changed|fixed|security)\]|(added|changed|fixed|security):)\s*/i, '');
 
-          if (bLower.startsWith('[added]') || bLower.startsWith('added:')) {
-            tagBadge = '<span style="background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px;">ADDED</span>';
-            bullet = bullet.replace(/^(\[added\]|added:)\s*/i, '');
-          } else if (bLower.startsWith('[changed]') || bLower.startsWith('changed:')) {
-            tagBadge = '<span style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px;">CHANGED</span>';
-            bullet = bullet.replace(/^(\[changed\]|changed:)\s*/i, '');
-          } else if (bLower.startsWith('[fixed]') || bLower.startsWith('fixed:')) {
-            tagBadge = '<span style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px;">FIXED</span>';
-            bullet = bullet.replace(/^(\[fixed\]|fixed:)\s*/i, '');
-          }
-
-          out += `<div style="display: flex; gap: 8px; margin-bottom: 6px; align-items: baseline; padding-left: 4px;"><span style="color: #38bdf8; font-size: 10px; flex-shrink: 0;">●</span><span style="color: var(--text-main); font-size: 12px; line-height: 1.5;">${tagBadge}${escapeHtml(bullet)}</span></div>`;
+          out += `<div style="display: flex; gap: 6px; margin-bottom: 2px; align-items: baseline; padding-left: 4px; line-height: 1.35;"><span style="color: var(--text-dim); font-size: 10px; flex-shrink: 0;">•</span><span style="color: var(--text-main); font-size: 11.5px;">${escapeHtml(bullet)}</span></div>`;
         } else {
-          out += `<div style="margin-bottom: 6px; color: var(--text-muted); font-size: 12px; line-height: 1.5;">${escapeHtml(trimmed)}</div>`;
+          out += `<div style="margin-bottom: 3px; color: var(--text-muted); font-size: 11.5px; line-height: 1.35;">${escapeHtml(trimmed)}</div>`;
         }
+      });
+      return out;
+    }
       });
       return out;
     }
