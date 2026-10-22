@@ -37,6 +37,8 @@ impl AppState {
             "init" => {
                 let initial_dir = local_fs::get_initial_dir();
                 let drives = local_fs::list_drives();
+                let drives_info = local_fs::list_drives_info();
+                let desktop_dir = local_fs::get_desktop_dir();
                 let sites = sessions::load_sites();
                 let local_files = local_fs::list_dir(&initial_dir).unwrap_or_default();
                 let remote_history = sessions::load_remote_history();
@@ -47,12 +49,23 @@ impl AppState {
                     json!({
                         "initial_dir": initial_dir,
                         "drives": drives,
+                        "drives_info": drives_info,
+                        "desktop_dir": desktop_dir,
                         "sites": sites,
                         "local_files": local_files,
                         "remote_history": remote_history,
                         "app_version": format!("0.0.0.{}", env!("CARGO_PKG_VERSION").split('.').last().unwrap_or("2")),
                     }),
                 )
+            }
+
+            "get_local_drives" => {
+                let drives_info = local_fs::list_drives_info();
+                let desktop_dir = local_fs::get_desktop_dir();
+                IpcResponse::ok(id, action, json!({
+                    "drives_info": drives_info,
+                    "desktop_dir": desktop_dir,
+                }))
             }
 
             "local_list" => {

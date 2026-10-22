@@ -4,6 +4,16 @@ use std::time::SystemTime;
 use chrono::{DateTime, Utc};
 use crate::models::FileItem;
 
+pub fn get_desktop_dir() -> String {
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        let desktop = Path::new(&profile).join("Desktop");
+        if desktop.exists() {
+            return desktop.to_string_lossy().to_string();
+        }
+    }
+    "C:\\".to_string()
+}
+
 pub fn get_initial_dir() -> String {
     if let Ok(profile) = std::env::var("USERPROFILE") {
         let desktop = Path::new(&profile).join("Desktop");
@@ -16,9 +26,28 @@ pub fn get_initial_dir() -> String {
         .unwrap_or_else(|_| "C:\\".to_string())
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DriveInfo {
+    pub path: String,
+    pub letter: String,
+    pub label: String,
+    pub display: String,
+    pub is_system: bool,
+}
+
 #[cfg(target_os = "windows")]
 unsafe extern "system" {
     fn GetLogicalDrives() -> u32;
+    fn GetVolumeInformationW(
+        lpRootPathName: *const u16,
+        lpVolumeNameBuffer: *mut u16,
+        nVolumeNameSize: u32,
+        lpVolumeSerialNumber: *mut u32,
+        lpMaximumComponentLength: *mut u32,
+        lpFileSystemFlags: *mut u32,
+        lpFileSystemNameBuffer: *mut u16,
+        nFileSystemNameSize: u32,
+    ) -> i32;
 }
 
 pub fn list_drives() -> Vec<String> {
@@ -35,6 +64,69 @@ pub fn list_drives() -> Vec<String> {
     }
     if drives.is_empty() {
         drives.push("C:\\".to_string());
+    }
+    drives
+}
+
+pub fn list_drives_info() -> Vec<DriveInfo> {
+    let mut drives = Vec::new();
+    #[cfg(target_os = "windows")]
+    {
+        let mask = unsafe { GetLogicalDrives() };
+        for i in 0..26 {
+            if (mask & (1 << i)) != 0 {
+                let letter = (b'A' + i as u8) as char;
+                let root = format!("{}:\\", letter);
+                let wide_root: Vec<u16> = root.encode_utf16().chain(std::iter::once(0)).collect();
+                let mut vol_name = [0u16; 260];
+                let success = unsafe {
+                    GetVolumeInformationW(
+                        wide_root.as_ptr(),
+                        vol_name.as_mut_ptr(),
+                        vol_name.len() as u32,
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        0,
+                    )
+                };
+                let raw_label = if success != 0 {
+                    let len = vol_name.iter().position(|&c| c == 0).unwrap_or(vol_name.len());
+                    String::from_utf16_lossy(&vol_name[..len]).trim().to_string()
+                } else {
+                    String::new()
+                };
+
+                let label = if !raw_label.is_empty() {
+                    raw_label
+                } else if letter == 'C' {
+                    "Local Disk".to_string()
+                } else {
+                    "Drive".to_string()
+                };
+
+                let is_system = letter == 'C';
+                let display = format!("{} ({}:)", label, letter);
+
+                drives.push(DriveInfo {
+                    path: root,
+                    letter: format!("{}:", letter),
+                    label,
+                    display,
+                    is_system,
+                });
+            }
+        }
+    }
+    if drives.is_empty() {
+        drives.push(DriveInfo {
+            path: "C:\\".to_string(),
+            letter: "C:".to_string(),
+            label: "Local Disk".to_string(),
+            display: "Local Disk (C:)".to_string(),
+            is_system: true,
+        });
     }
     drives
 }
