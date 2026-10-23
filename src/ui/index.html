@@ -2331,6 +2331,130 @@
     .mask-rule-badge .remove-btn:hover {
       transform: scale(1.2);
     }
+
+    /* Interactive Folder & Parent (..) Drag-and-Drop Styles */
+    tr.row-drop-target-parent {
+      background: linear-gradient(90deg, rgba(34, 197, 94, 0.22) 0%, rgba(16, 185, 129, 0.08) 100%) !important;
+      outline: 1.5px dashed #22c55e !important;
+      outline-offset: -2px;
+      transition: all 0.12s ease;
+    }
+    tr.row-drop-target-folder {
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.22) 0%, rgba(14, 165, 233, 0.08) 100%) !important;
+      outline: 1.5px dashed #38bdf8 !important;
+      outline-offset: -2px;
+      transition: all 0.12s ease;
+    }
+    .drop-hint-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-left: 10px;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.45);
+      pointer-events: none;
+      animation: fadeIn 0.12s ease;
+    }
+    .drop-hint-pill.folder-pill {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.45);
+    }
+    tr.row-cut-pending {
+      opacity: 0.52;
+      background: rgba(245, 158, 11, 0.07) !important;
+    }
+    .quick-filter-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 125px;
+      flex-shrink: 0;
+    }
+    .quick-filter-input {
+      width: 100%;
+      height: 26px;
+      padding: 2px 20px 2px 8px;
+      font-size: 11.5px;
+      border-radius: 5px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+    }
+    .quick-filter-input:focus {
+      border-color: var(--accent);
+      outline: none;
+    }
+    .quick-filter-clear {
+      position: absolute;
+      right: 5px;
+      font-size: 10px;
+      color: var(--text-dim);
+      cursor: pointer;
+      display: none;
+      user-select: none;
+    }
+    .quick-dest-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .quick-dest-chip:hover, .quick-dest-chip.active {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.14);
+      color: #38bdf8;
+    }
+    .quick-dest-chip.parent-chip {
+      border-color: rgba(34, 197, 94, 0.4);
+      background: rgba(34, 197, 94, 0.1);
+      color: #4ade80;
+    }
+    .quick-dest-chip.parent-chip:hover {
+      background: rgba(34, 197, 94, 0.22);
+    }
+    .pane-stats-badge {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-dim);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-left: 6px;
+      font-family: var(--font-mono, monospace);
+    }
+    .interactive-action-toast {
+      position: fixed;
+      bottom: 44px;
+      right: 18px;
+      z-index: 2100;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(10px);
+      animation: slideInToast 0.2s ease-out;
+      max-width: 520px;
+    }
   </style>
 </head>
 <body>
@@ -2358,7 +2482,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.46</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.47</span>
         </div>
       </div>
 
@@ -2665,6 +2789,7 @@
           <div class="pane-heading">
             <svg class="icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             <span>Local PC</span>
+            <span class="pane-stats-badge" id="localStatsBadge">0 items</span>
             <select id="driveSelect" onchange="onDriveChange()" style="display: none;">
               <option value="C:\">C:\</option>
             </select>
@@ -2675,6 +2800,12 @@
             </button>
             <button class="btn-tool" title="Go to Parent Folder" onclick="localNavigateUp()">
               <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </button>
+            <button class="btn-tool" style="color: #4ade80;" title="Move Selected Items to Parent Folder (..) [Alt+Up]" onclick="moveSelectedToParent(false)">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+            </button>
+            <button class="btn-tool" style="color: #38bdf8;" title="Interactive Move / Copy Selected Items (F6)" onclick="openInteractiveMoveModal(false)">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
             </button>
             <button class="btn-tool" title="Refresh" onclick="refreshLocal()">
               <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -2699,12 +2830,16 @@
             </button>
           </div>
         </div>
-        <div class="path-bar-row" style="position: relative;">
-          <div class="path-combobox-wrapper">
+        <div class="path-bar-row" style="position: relative; display: flex; gap: 6px; align-items: center;">
+          <div class="path-combobox-wrapper" style="flex: 1;">
             <input type="text" id="localPathInput" class="path-input" placeholder="C:\Users\aljailane\Desktop" onkeydown="if(event.key==='Enter'){ closeLocalPathTree(); navigateLocal(this.value); }" onclick="toggleLocalPathTree(event)">
             <button type="button" class="path-dropdown-btn" id="btnToggleLocalTree" onclick="toggleLocalPathTree(event)" title="Browse Local Path Hierarchy (Desktop, Drives, Folders)">
               <svg class="icon" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
+          </div>
+          <div class="quick-filter-box" title="Instant Quick Filter (Ctrl+I)">
+            <input type="text" id="localQuickFilter" class="quick-filter-input" placeholder="🔍 Filter..." oninput="onQuickFilterChange(false, this.value)">
+            <span class="quick-filter-clear" id="localQuickFilterClear" onclick="clearQuickFilter(false)">✕</span>
           </div>
           <!-- Hierarchical Path Dropdown Tree Popup (FileZilla / Windows Explorer Style) -->
           <div id="localPathTreePopup" class="local-path-tree-popup"></div>
@@ -2744,6 +2879,7 @@
           <div class="pane-heading">
             <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
             <span>Remote Server</span>
+            <span class="pane-stats-badge" id="remoteStatsBadge">0 items</span>
           </div>
           <div style="display: flex; gap: 4px;">
             <button class="btn-tool" id="btnToolbarReconnect" style="display: none; color: #4ade80; border-color: rgba(34, 197, 94, 0.4); background: rgba(34, 197, 94, 0.12);" title="Reconnect to Server Silently" onclick="handleReconnect(true)">
@@ -2757,6 +2893,12 @@
             </button>
             <button class="btn-tool" title="Go to Parent Folder" onclick="remoteNavigateUp()">
               <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </button>
+            <button class="btn-tool" style="color: #4ade80;" title="Move Selected Remote Items to Parent Folder (..) [Alt+Up]" onclick="moveSelectedToParent(true)">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+            </button>
+            <button class="btn-tool" style="color: #38bdf8;" title="Interactive Move / Copy Selected Remote Items (F6)" onclick="openInteractiveMoveModal(true)">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
             </button>
             <button class="btn-tool" title="Refresh" onclick="refreshRemote()">
               <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -2790,9 +2932,13 @@
         <div class="path-bar-row" style="display: flex; gap: 6px; align-items: center;">
           <input type="text" id="remotePathInput" class="path-input" style="flex: 1;" placeholder="Not connected" list="remoteHistoryDatalist" onkeydown="if(event.key==='Enter') navigateRemote(this.value)">
           <datalist id="remoteHistoryDatalist"></datalist>
-          <select id="remoteHistorySelect" class="path-input" style="width: auto; max-width: 175px; flex-shrink: 0; background: var(--bg-card); cursor: pointer;" onchange="onRemoteHistorySelected(this.value)" title="Recent Remote Directories">
-            <option value="" disabled selected>🕒 Recent Paths</option>
+          <select id="remoteHistorySelect" class="path-input" style="width: auto; max-width: 145px; flex-shrink: 0; background: var(--bg-card); cursor: pointer;" onchange="onRemoteHistorySelected(this.value)" title="Recent Remote Directories">
+            <option value="" disabled selected>🕒 Recent</option>
           </select>
+          <div class="quick-filter-box" title="Instant Remote Quick Filter (Ctrl+I)">
+            <input type="text" id="remoteQuickFilter" class="quick-filter-input" placeholder="🔍 Filter..." oninput="onQuickFilterChange(true, this.value)">
+            <span class="quick-filter-clear" id="remoteQuickFilterClear" onclick="clearQuickFilter(true)">✕</span>
+          </div>
         </div>
       </div>
 
@@ -3597,7 +3743,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.46 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.47 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -3902,6 +4048,87 @@
           <button type="button" class="btn btn-secondary btn-sm" onclick="resolveCollisionModal('skip_all')">Skip All</button>
         </div>
         <button type="button" class="btn btn-danger btn-sm" onclick="resolveCollisionModal('cancel')">Cancel Transfer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Interactive Action Toast (Move / Copy / Undo / Open Target) -->
+  <div id="interactiveActionToast" class="interactive-action-toast">
+    <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+      <span id="iatIcon" style="font-size: 18px;">✨</span>
+      <div style="min-width: 0;">
+        <div id="iatTitle" style="font-size: 12px; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Moved 1 item</div>
+        <div id="iatSubtitle" style="font-size: 10.5px; color: var(--text-dim); font-family: var(--font-mono, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Target: ../</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+      <button type="button" class="btn btn-secondary btn-sm" id="iatOpenBtn" onclick="openLastInteractiveTarget()" style="padding: 3px 9px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.35);">
+        📂 Go to Folder
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="iatUndoBtn" onclick="undoLastInteractiveMove()" style="padding: 3px 9px; font-size: 11px; color: #4ade80; border-color: rgba(34, 197, 94, 0.35);">
+        ↩ Undo
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="hideInteractiveActionToast()" style="padding: 2px 6px; font-size: 10.5px;">✕</button>
+    </div>
+  </div>
+
+  <!-- Modal: Interactive Move / Copy / Duplicate To Destination (F6) -->
+  <div class="modal-overlay" id="interactiveMoveModal" style="z-index: 1086;">
+    <div class="modal-content" style="width: 550px; max-width: 95vw;">
+      <div class="modal-header" style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.14) 0%, rgba(0, 0, 0, 0.2) 100%); border-bottom: 1px solid rgba(56, 189, 248, 0.3);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">⇄</span>
+          <div>
+            <div style="font-weight: 700; font-size: 13.5px; color: var(--text-main);" id="imModalTitle">Interactive Move / Copy Items</div>
+            <div style="font-size: 11px; color: var(--text-dim);" id="imModalSubtitle">Select a quick destination folder or enter a custom target path</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeInteractiveMoveModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+        <!-- Selected Items Summary & Operation Mode -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <span style="font-size: 16px;">📦</span>
+            <div style="font-size: 12px; color: var(--text-main); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="imSourceSummary">1 item selected</div>
+          </div>
+          <div style="display: flex; gap: 6px; flex-shrink: 0;">
+            <button type="button" class="btn btn-sm" id="imModeMoveBtn" onclick="setInteractiveMoveMode('move')" style="padding: 3px 10px; font-size: 11px; background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; font-weight: 700;">
+              ↪ Move
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="imModeCopyBtn" onclick="setInteractiveMoveMode('copy')" style="padding: 3px 10px; font-size: 11px;">
+              📋 Copy / Duplicate
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick One-Click Destination Chips (Parent .., Subfolders, Recent) -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-dim);">Quick One-Click Destinations:</label>
+          <div id="imQuickChipsContainer" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 135px; overflow-y: auto; padding: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px;">
+          </div>
+        </div>
+
+        <!-- Target Directory Input -->
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-dim);">Destination Folder Path:</label>
+          <input type="text" id="imTargetDirInput" class="input-text" style="font-family: var(--font-mono, monospace); font-size: 12.5px; padding: 7px 10px;" placeholder="/destination/path">
+        </div>
+
+        <!-- Optional Open Folder After Move -->
+        <label class="options-checkbox-row" style="font-size: 12px;">
+          <input type="checkbox" id="imOpenAfterMove">
+          <span>Automatically navigate into destination folder after operation</span>
+        </label>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border-color);">
+        <button type="button" class="btn btn-secondary" onclick="closeInteractiveMoveModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="imSubmitBtn" onclick="submitInteractiveMoveModal()" style="display: flex; align-items: center; gap: 6px;">
+          <span>↪</span>
+          <span id="imSubmitBtnText">Move Here</span>
+        </button>
       </div>
     </div>
   </div>
@@ -4407,7 +4634,7 @@
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.46';
+    let APP_CURRENT_VERSION = '0.0.0.47';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4802,6 +5029,10 @@
       // Local Drop Target (Downloads from Remote)
       leftPane.addEventListener('dragover', (e) => {
         e.preventDefault();
+        if (activeDragPayload && activeDragPayload.source === 'local') {
+          e.dataTransfer.dropEffect = 'move';
+          return;
+        }
         e.dataTransfer.dropEffect = 'copy';
         leftPane.classList.add('drag-target');
       });
@@ -4818,10 +5049,15 @@
         try {
           const data = JSON.parse(text);
           if (data.source === 'remote') {
-            if (data.is_dir) {
-              await downloadFolderDirect(data.path, data.name);
-            } else {
-              await downloadFileDirect(data.path, data.name);
+            const batch = Array.isArray(data.items) && data.items.length > 0
+              ? data.items
+              : [{ path: data.path, name: data.name, is_dir: data.is_dir }];
+            for (const item of batch) {
+              if (item.is_dir) {
+                await downloadFolderDirect(item.path, item.name);
+              } else {
+                await downloadFileDirect(item.path, item.name);
+              }
             }
           }
         } catch (_) {}
@@ -4830,6 +5066,10 @@
       // Remote Drop Target (Uploads from Local)
       rightPane.addEventListener('dragover', (e) => {
         e.preventDefault();
+        if (activeDragPayload && activeDragPayload.source === 'remote') {
+          e.dataTransfer.dropEffect = 'move';
+          return;
+        }
         e.dataTransfer.dropEffect = 'copy';
         rightPane.classList.add('drag-target');
       });
@@ -4853,10 +5093,15 @@
           try {
             const data = JSON.parse(text);
             if (data.source === 'local') {
-              if (data.is_dir) {
-                await uploadFolderDirect(data.path, data.name);
-              } else {
-                await uploadFileDirect(data.path, data.name);
+              const batch = Array.isArray(data.items) && data.items.length > 0
+                ? data.items
+                : [{ path: data.path, name: data.name, is_dir: data.is_dir }];
+              for (const item of batch) {
+                if (item.is_dir) {
+                  await uploadFolderDirect(item.path, item.name);
+                } else {
+                  await uploadFileDirect(item.path, item.name);
+                }
               }
               return;
             }
@@ -5002,6 +5247,176 @@
       return p === '/' || p === '.' || p === '';
     }
 
+    // ========================================================
+    // Interactive File Movement, Quick Filter & Multi-Selection State
+    // ========================================================
+    let localQuickFilterText = '';
+    let remoteQuickFilterText = '';
+    let lastLocalClickedIdx = -1;
+    let lastRemoteClickedIdx = -1;
+    let activeDragPayload = null;
+    let lastInteractiveMoveUndo = null;
+    let interactiveClipboard = null;
+    let interactiveMoveContext = null;
+    let recentLocalMoveDirs = [];
+    let recentRemoteMoveDirs = [];
+    let interactiveToastTimer = null;
+
+    function getLocalParentDir(path) {
+      if (!path) return 'C:\\';
+      const cleaned = path.replace(/[\\/]+$/, '');
+      const lastSep = Math.max(cleaned.lastIndexOf('\\'), cleaned.lastIndexOf('/'));
+      if (lastSep <= 2) {
+        return cleaned.substring(0, 2) + '\\';
+      }
+      return cleaned.substring(0, lastSep);
+    }
+
+    function getRemoteParentDir(path) {
+      if (!path || path === '/') return '/';
+      const cleaned = path.replace(/\/+$/, '');
+      const lastSep = cleaned.lastIndexOf('/');
+      if (lastSep <= 0) return '/';
+      return cleaned.substring(0, lastSep);
+    }
+
+    function updatePaneStatsBadge(isRemote) {
+      const badge = document.getElementById(isRemote ? 'remoteStatsBadge' : 'localStatsBadge');
+      if (!badge) return;
+      const allList = isRemote ? (remoteFiles || []) : (localFiles || []);
+      const filterVal = (isRemote ? remoteQuickFilterText : localQuickFilterText).trim().toLowerCase();
+      const visibleCount = filterVal
+        ? allList.filter(f => (f.name || '').toLowerCase().includes(filterVal)).length
+        : allList.length;
+      const selSelector = isRemote ? '#remoteFileList tr.selected:not(.parent-dir-row)' : '#localFileList tr.selected:not(.parent-dir-row)';
+      const selCount = document.querySelectorAll(selSelector).length;
+
+      if (selCount > 0) {
+        badge.textContent = `${selCount} selected / ${allList.length}`;
+        badge.classList.add('has-selection');
+      } else if (filterVal) {
+        badge.textContent = `${visibleCount} / ${allList.length} items`;
+        badge.classList.remove('has-selection');
+      } else {
+        badge.textContent = `${allList.length} item${allList.length === 1 ? '' : 's'}`;
+        badge.classList.remove('has-selection');
+      }
+    }
+
+    function onQuickFilterChange(isRemote, val) {
+      const clean = (val || '').toString();
+      const clearBtn = document.getElementById(isRemote ? 'remoteQuickFilterClear' : 'localQuickFilterClear');
+      if (clearBtn) {
+        clearBtn.style.display = clean.length > 0 ? 'inline-block' : 'none';
+      }
+      if (isRemote) {
+        remoteQuickFilterText = clean;
+        renderRemoteFiles(remoteFiles);
+      } else {
+        localQuickFilterText = clean;
+        renderLocalFiles(localFiles);
+      }
+    }
+
+    function clearQuickFilter(isRemote) {
+      const inp = document.getElementById(isRemote ? 'remoteQuickFilter' : 'localQuickFilter');
+      if (inp) inp.value = '';
+      onQuickFilterChange(isRemote, '');
+    }
+
+    function attachInteractiveRowDropTarget(rowEl, isRemoteTarget, targetDirPath, targetDisplayName, isParentRow = false) {
+      rowEl.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const targetScope = isRemoteTarget ? 'remote' : 'local';
+        const payload = activeDragPayload;
+        if (payload && Array.isArray(payload.items)) {
+          // Prevent dropping a folder onto itself
+          if (payload.source === targetScope && payload.items.some(it => it.path === targetDirPath)) {
+            e.dataTransfer.dropEffect = 'none';
+            return;
+          }
+        }
+
+        const isCopyHold = e.ctrlKey || e.altKey;
+        const isSamePane = payload && payload.source === targetScope;
+        e.dataTransfer.dropEffect = (isSamePane && !isCopyHold) ? 'move' : 'copy';
+
+        rowEl.classList.add(isParentRow ? 'row-drop-target-parent' : 'row-drop-target-folder');
+
+        const cell = rowEl.querySelector('.file-cell');
+        if (cell) {
+          let pill = cell.querySelector('.drop-hint-pill');
+          if (!pill) {
+            pill = document.createElement('span');
+            pill.className = 'drop-hint-pill';
+            cell.appendChild(pill);
+          }
+          const count = (payload && Array.isArray(payload.items) && payload.items.length > 0) ? payload.items.length : 1;
+          const itemLabel = count === 1 ? (payload?.items?.[0]?.name || '1 item') : `${count} items`;
+          if (isSamePane || !payload) {
+            if (isParentRow) {
+              pill.className = 'drop-hint-pill';
+              pill.textContent = `${isCopyHold ? '📋 Copy' : '⤴ Move'} ${itemLabel} to .. (${targetDisplayName})`;
+            } else {
+              pill.className = 'drop-hint-pill folder-pill';
+              pill.textContent = `${isCopyHold ? '📋 Copy' : '↪ Move'} ${itemLabel} into "${targetDisplayName}"`;
+            }
+          } else {
+            pill.className = 'drop-hint-pill folder-pill';
+            pill.textContent = `🚀 ${isRemoteTarget ? 'Upload' : 'Download'} ${itemLabel} into "${targetDisplayName}"`;
+          }
+        }
+      });
+
+      rowEl.addEventListener('dragleave', (e) => {
+        if (!rowEl.contains(e.relatedTarget)) {
+          rowEl.classList.remove('row-drop-target-parent', 'row-drop-target-folder');
+          const pill = rowEl.querySelector('.drop-hint-pill');
+          if (pill) pill.remove();
+        }
+      });
+
+      rowEl.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        rowEl.classList.remove('row-drop-target-parent', 'row-drop-target-folder');
+        const pill = rowEl.querySelector('.drop-hint-pill');
+        if (pill) pill.remove();
+
+        const leftPane = document.getElementById('leftPane');
+        const rightPane = document.getElementById('rightPane');
+        if (leftPane) leftPane.classList.remove('drag-target');
+        if (rightPane) rightPane.classList.remove('drag-target');
+
+        let data = activeDragPayload;
+        if (!data) {
+          const text = e.dataTransfer.getData('text/plain');
+          if (text) {
+            try { data = JSON.parse(text); } catch (_) {}
+          }
+        }
+        if (!data) return;
+
+        const items = Array.isArray(data.items) && data.items.length > 0
+          ? data.items
+          : [{ path: data.path, name: data.name, is_dir: data.is_dir }];
+
+        const targetScope = isRemoteTarget ? 'remote' : 'local';
+        const isCopyHold = e.ctrlKey || e.altKey;
+
+        if (data.source === targetScope) {
+          // Same-pane Interactive Move or Copy into `..` or subfolder
+          await executeInteractiveMove(isRemoteTarget, items, targetDirPath, isCopyHold, false);
+        } else {
+          // Cross-pane targeted transfer directly into the hovered subfolder or `..` parent folder!
+          await executeTargetedCrossPaneTransfer(items, isRemoteTarget, targetDirPath);
+        }
+      });
+    }
+
     // Local Directory Listing
     function renderLocalFiles(files) {
       localFiles = files || [];
@@ -5011,9 +5426,11 @@
 
       const canGoUp = !isLocalRoot(currentLocalPath);
       if (canGoUp) {
+        const parentDirPath = getLocalParentDir(currentLocalPath);
+        const parentBaseName = parentDirPath.split(/[\\/]/).filter(Boolean).pop() || parentDirPath;
         const trUp = document.createElement('tr');
         trUp.className = 'parent-dir-row';
-        trUp.title = 'Parent Directory (Double-click to go up)';
+        trUp.title = `Parent Directory: ${parentDirPath} (Double-click to go up, or Drag & Drop files here to move up)`;
         trUp.ondblclick = (e) => {
           e.preventDefault();
           localNavigateUp();
@@ -5023,6 +5440,7 @@
           rows.forEach(r => r.classList.remove('selected'));
           trUp.classList.add('selected');
           selectedLocalFile = null;
+          updatePaneStatsBadge(false);
         };
 
         const { svg, iconClass } = getFileIcon('..', true);
@@ -5031,45 +5449,92 @@
             <div class="file-cell">
               <span class="file-icon ${iconClass}">${svg}</span>
               <span class="parent-dir-dots">..</span>
+              <span style="font-size: 10.5px; color: var(--text-dim); margin-left: 6px;">(${escapeHtml(parentBaseName)})</span>
             </div>
           </td>
           <td class="mono-cell">-</td>
           <td class="mono-cell">-</td>
           <td class="mono-cell">Parent Directory</td>
         `;
+        attachInteractiveRowDropTarget(trUp, false, parentDirPath, parentBaseName, true);
         tbody.appendChild(trUp);
       }
+
+      const filterLower = (localQuickFilterText || '').trim().toLowerCase();
+      let renderedCount = 0;
 
       if (localFiles.length === 0) {
         const emptyTr = document.createElement('tr');
         emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '30px'} 10px; font-style: italic;">Folder is empty</td>`;
         tbody.appendChild(emptyTr);
+        updatePaneStatsBadge(false);
         return;
       }
 
       localFiles.forEach((f, idx) => {
         try {
+          const fileName = (f.name || '').toString();
+          if (filterLower && !fileName.toLowerCase().includes(filterLower)) {
+            return;
+          }
+          renderedCount++;
+
           const tr = document.createElement('tr');
           tr.draggable = true;
+          tr.setAttribute('data-idx', idx);
+
+          if (interactiveClipboard && !interactiveClipboard.isRemote && interactiveClipboard.mode === 'cut') {
+            if (interactiveClipboard.items.some(it => it.path === f.path)) {
+              tr.classList.add('row-cut-pending');
+            }
+          }
+
           tr.ondragstart = (e) => {
-            e.dataTransfer.setData('text/plain', JSON.stringify({
+            if (!tr.classList.contains('selected')) {
+              selectLocalRow(idx);
+            }
+            const selectedBatch = getSelectedLocalItems();
+            const batchItems = selectedBatch.length > 0 ? selectedBatch : [f];
+            activeDragPayload = {
               source: 'local',
               path: f.path,
               name: f.name,
-              is_dir: f.is_dir
-            }));
+              is_dir: f.is_dir,
+              items: batchItems.map(it => ({ path: it.path, name: it.name, is_dir: !!it.is_dir }))
+            };
+            e.dataTransfer.setData('text/plain', JSON.stringify(activeDragPayload));
             tr.classList.add('dragging');
           };
           tr.ondragend = () => {
             tr.classList.remove('dragging');
+            activeDragPayload = null;
           };
-          tr.setAttribute('data-idx', idx);
+
+          if (f.is_dir) {
+            attachInteractiveRowDropTarget(tr, false, f.path, fileName, false);
+          }
+
           tr.onclick = (e) => {
-            if (e.ctrlKey || e.metaKey) {
+            if (e.shiftKey && lastLocalClickedIdx >= 0) {
+              const start = Math.min(lastLocalClickedIdx, idx);
+              const end = Math.max(lastLocalClickedIdx, idx);
+              const rows = document.querySelectorAll('#localFileList tr:not(.parent-dir-row)');
+              rows.forEach(r => {
+                const rIdx = parseInt(r.getAttribute('data-idx'));
+                if (!isNaN(rIdx)) {
+                  r.classList.toggle('selected', rIdx >= start && rIdx <= end);
+                }
+              });
+              selectedLocalFile = f;
+              updatePaneStatsBadge(false);
+            } else if (e.ctrlKey || e.metaKey) {
               tr.classList.toggle('selected');
               selectedLocalFile = f;
+              lastLocalClickedIdx = idx;
+              updatePaneStatsBadge(false);
             } else {
               selectLocalRow(idx);
+              lastLocalClickedIdx = idx;
             }
           };
           tr.ondblclick = () => openLocalItem(f, tr);
@@ -5082,7 +5547,6 @@
             openContextMenu(e, 'local', f, idx);
           };
 
-          const fileName = (f.name || '').toString();
           const { svg, iconClass } = getFileIcon(fileName, !!f.is_dir);
 
           let compareBadgeHtml = '';
@@ -5113,14 +5577,26 @@
           console.error('Error rendering file item:', f, itemErr);
         }
       });
+
+      if (renderedCount === 0 && filterLower) {
+        const noMatchTr = document.createElement('tr');
+        noMatchTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: 20px 10px; font-style: italic;">No items match filter "${escapeHtml(localQuickFilterText)}"</td>`;
+        tbody.appendChild(noMatchTr);
+      }
+
+      updatePaneStatsBadge(false);
     }
 
     function selectLocalRow(idx) {
       const rows = document.querySelectorAll('#localFileList tr:not(.parent-dir-row)');
-      rows.forEach((r, i) => r.classList.toggle('selected', i === idx));
+      rows.forEach((r) => {
+        const rIdx = parseInt(r.getAttribute('data-idx'));
+        r.classList.toggle('selected', rIdx === idx);
+      });
       const upRow = document.querySelector('#localFileList tr.parent-dir-row');
       if (upRow) upRow.classList.remove('selected');
       selectedLocalFile = localFiles[idx];
+      updatePaneStatsBadge(false);
     }
 
     async function openLocalItem(item, rowEl = null) {
@@ -5390,9 +5866,11 @@
 
       const canGoUp = !isRemoteRoot(currentRemotePath);
       if (canGoUp) {
+        const parentDirPath = getRemoteParentDir(currentRemotePath);
+        const parentBaseName = parentDirPath === '/' ? '/' : (parentDirPath.split('/').filter(Boolean).pop() || '/');
         const trUp = document.createElement('tr');
         trUp.className = 'parent-dir-row';
-        trUp.title = 'Parent Directory (Double-click to go up)';
+        trUp.title = `Parent Directory: ${parentDirPath} (Double-click to go up, or Drag & Drop files here to move up)`;
         trUp.ondblclick = (e) => {
           e.preventDefault();
           remoteNavigateUp();
@@ -5402,6 +5880,7 @@
           rows.forEach(r => r.classList.remove('selected'));
           trUp.classList.add('selected');
           selectedRemoteFile = null;
+          updatePaneStatsBadge(true);
         };
 
         const { svg, iconClass } = getFileIcon('..', true);
@@ -5410,12 +5889,14 @@
             <div class="file-cell">
               <span class="file-icon ${iconClass}">${svg}</span>
               <span class="parent-dir-dots">..</span>
+              <span style="font-size: 10.5px; color: var(--text-dim); margin-left: 6px;">(${escapeHtml(parentBaseName)})</span>
             </div>
           </td>
           <td class="mono-cell">-</td>
           <td class="mono-cell">-</td>
           <td class="mono-cell">Parent Directory</td>
         `;
+        attachInteractiveRowDropTarget(trUp, true, parentDirPath, parentBaseName, true);
         tbody.appendChild(trUp);
       }
 
@@ -5439,42 +5920,97 @@
           </td>
         `;
         tbody.appendChild(errTr);
+        updatePaneStatsBadge(true);
         return;
       }
+
+      const filterLower = (remoteQuickFilterText || '').trim().toLowerCase();
+      let renderedCount = 0;
 
       if (remoteFiles.length === 0) {
         const emptyTr = document.createElement('tr');
         emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '25px'}; font-style: italic;">Empty Directory</td>`;
         tbody.appendChild(emptyTr);
+        updatePaneStatsBadge(true);
         return;
       }
 
       remoteFiles.forEach((f, idx) => {
         try {
+          const fileName = (f.name || '').toString();
+          if (filterLower && !fileName.toLowerCase().includes(filterLower)) {
+            return;
+          }
+          renderedCount++;
+
           const tr = document.createElement('tr');
           tr.draggable = true;
+          tr.setAttribute('data-idx', idx);
+
+          if (interactiveClipboard && interactiveClipboard.isRemote && interactiveClipboard.mode === 'cut') {
+            if (interactiveClipboard.items.some(it => it.path === f.path)) {
+              tr.classList.add('row-cut-pending');
+            }
+          }
+
           tr.ondragstart = (e) => {
-            e.dataTransfer.setData('text/plain', JSON.stringify({
+            if (!tr.classList.contains('selected')) {
+              selectRemoteRow(idx);
+            }
+            const selectedBatch = getSelectedRemoteItems();
+            const batchItems = selectedBatch.length > 0 ? selectedBatch : [f];
+            activeDragPayload = {
               source: 'remote',
               path: f.path,
               name: f.name,
-              is_dir: f.is_dir
-            }));
+              is_dir: f.is_dir,
+              items: batchItems.map(it => ({ path: it.path, name: it.name, is_dir: !!it.is_dir }))
+            };
+            e.dataTransfer.setData('text/plain', JSON.stringify(activeDragPayload));
             tr.classList.add('dragging');
           };
           tr.ondragend = () => {
             tr.classList.remove('dragging');
+            activeDragPayload = null;
           };
-          tr.onclick = () => selectRemoteRow(idx);
+
+          if (f.is_dir) {
+            attachInteractiveRowDropTarget(tr, true, f.path, fileName, false);
+          }
+
+          tr.onclick = (e) => {
+            if (e.shiftKey && lastRemoteClickedIdx >= 0) {
+              const start = Math.min(lastRemoteClickedIdx, idx);
+              const end = Math.max(lastRemoteClickedIdx, idx);
+              const rows = document.querySelectorAll('#remoteFileList tr:not(.parent-dir-row)');
+              rows.forEach(r => {
+                const rIdx = parseInt(r.getAttribute('data-idx'));
+                if (!isNaN(rIdx)) {
+                  r.classList.toggle('selected', rIdx >= start && rIdx <= end);
+                }
+              });
+              selectedRemoteFile = f;
+              updatePaneStatsBadge(true);
+            } else if (e.ctrlKey || e.metaKey) {
+              tr.classList.toggle('selected');
+              selectedRemoteFile = f;
+              lastRemoteClickedIdx = idx;
+              updatePaneStatsBadge(true);
+            } else {
+              selectRemoteRow(idx);
+              lastRemoteClickedIdx = idx;
+            }
+          };
           tr.ondblclick = () => openRemoteItem(f, tr);
           tr.oncontextmenu = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            selectRemoteRow(idx);
+            if (!tr.classList.contains('selected')) {
+              selectRemoteRow(idx);
+            }
             openContextMenu(e, 'remote', f, idx);
           };
 
-          const fileName = (f.name || '').toString();
           const { svg, iconClass } = getFileIcon(fileName, !!f.is_dir);
 
           let compareBadgeHtml = '';
@@ -5505,14 +6041,618 @@
           console.error('Error rendering remote file item:', f, itemErr);
         }
       });
+
+      if (renderedCount === 0 && filterLower) {
+        const noMatchTr = document.createElement('tr');
+        noMatchTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: 20px 10px; font-style: italic;">No items match filter "${escapeHtml(remoteQuickFilterText)}"</td>`;
+        tbody.appendChild(noMatchTr);
+      }
+
+      updatePaneStatsBadge(true);
     }
 
     function selectRemoteRow(idx) {
       const rows = document.querySelectorAll('#remoteFileList tr:not(.parent-dir-row)');
-      rows.forEach((r, i) => r.classList.toggle('selected', i === idx));
+      rows.forEach((r) => {
+        const rIdx = parseInt(r.getAttribute('data-idx'));
+        r.classList.toggle('selected', rIdx === idx);
+      });
       const upRow = document.querySelector('#remoteFileList tr.parent-dir-row');
       if (upRow) upRow.classList.remove('selected');
       selectedRemoteFile = remoteFiles[idx];
+      updatePaneStatsBadge(true);
+    }
+
+    // ========================================================
+    // Interactive File Move, Copy, Undo, Toast & Clipboard Engine
+    // ========================================================
+    function showInteractiveActionToast(title, subtitle, targetDir, isRemote, allowUndo = false) {
+      const toast = document.getElementById('interactiveActionToast');
+      if (!toast) return;
+      if (interactiveToastTimer) clearTimeout(interactiveToastTimer);
+
+      const tEl = document.getElementById('iatTitle');
+      const sEl = document.getElementById('iatSubtitle');
+      const undoBtn = document.getElementById('iatUndoBtn');
+      const gotoBtn = document.getElementById('iatGotoBtn');
+
+      if (tEl) tEl.textContent = title;
+      if (sEl) sEl.textContent = subtitle;
+      if (undoBtn) undoBtn.style.display = allowUndo ? 'inline-flex' : 'none';
+      if (gotoBtn) gotoBtn.style.display = targetDir ? 'inline-flex' : 'none';
+
+      toast.dataset.targetDir = targetDir || '';
+      toast.dataset.isRemote = isRemote ? 'true' : 'false';
+      toast.classList.add('active');
+
+      interactiveToastTimer = setTimeout(() => {
+        closeInteractiveActionToast();
+      }, 9500);
+    }
+
+    function closeInteractiveActionToast() {
+      const toast = document.getElementById('interactiveActionToast');
+      if (toast) toast.classList.remove('active');
+      if (interactiveToastTimer) {
+        clearTimeout(interactiveToastTimer);
+        interactiveToastTimer = null;
+      }
+    }
+
+    async function openLastInteractiveTarget() {
+      const toast = document.getElementById('interactiveActionToast');
+      if (!toast) return;
+      const targetDir = toast.dataset.targetDir;
+      const isRemote = toast.dataset.isRemote === 'true';
+      closeInteractiveActionToast();
+      if (!targetDir) return;
+      if (isRemote) {
+        await navigateRemote(targetDir);
+      } else {
+        await navigateLocal(targetDir);
+      }
+    }
+
+    async function undoLastInteractiveMove() {
+      if (!lastInteractiveMoveUndo || !Array.isArray(lastInteractiveMoveUndo.moves) || lastInteractiveMoveUndo.moves.length === 0) {
+        closeInteractiveActionToast();
+        return;
+      }
+      const undoData = lastInteractiveMoveUndo;
+      lastInteractiveMoveUndo = null;
+      closeInteractiveActionToast();
+
+      const isRemote = undoData.isRemote;
+      addLog(`Reverting last move (${undoData.moves.length} item(s))...`, 'cmd');
+
+      try {
+        if (isRemote) {
+          for (const m of undoData.moves) {
+            await sendRust('remote_rename', { old_path: m.to, new_path: m.from });
+          }
+          await navigateRemote(currentRemotePath);
+        } else {
+          for (const m of undoData.moves) {
+            await sendRust('local_rename', { old_path: m.to, new_path: m.from });
+          }
+          await refreshLocal();
+        }
+        addLog(`Undo complete: Restored ${undoData.moves.length} item(s) to their original folder.`, 'success');
+        showInteractiveActionToast(
+          `↩ Undo Completed (${undoData.moves.length} item${undoData.moves.length === 1 ? '' : 's'})`,
+          `Restored back to ${undoData.prevDir || 'original folder'}`,
+          undoData.prevDir,
+          isRemote,
+          false
+        );
+      } catch (err) {
+        addLog(`Undo move failed: ${err.message || err}`, 'error');
+        alert(`Failed to undo move:\n${err.message || err}`);
+      }
+    }
+
+    async function executeInteractiveMove(isRemote, items, targetDir, isCopy = false, openAfter = false) {
+      closeContextMenu();
+      if (!items || items.length === 0) {
+        alert('Please select one or more files or folders first.');
+        return;
+      }
+      const cleanTarget = (targetDir || '').trim();
+      if (!cleanTarget) return;
+
+      const sourceDir = isRemote ? currentRemotePath : currentLocalPath;
+      if (!isCopy && cleanTarget.replace(/[\\/]+$/, '') === (sourceDir || '').replace(/[\\/]+$/, '')) {
+        addLog('Source and destination folders are identical.', 'info');
+        return;
+      }
+
+      // Prevent moving a folder into itself or its own descendant
+      for (const it of items) {
+        if (it.is_dir) {
+          const normIt = it.path.replace(/[\\/]+$/, '').toLowerCase();
+          const normTgt = cleanTarget.replace(/[\\/]+$/, '').toLowerCase();
+          const sep = isRemote ? '/' : '\\';
+          if (normTgt === normIt || normTgt.startsWith(normIt + sep)) {
+            alert(`Cannot ${isCopy ? 'copy' : 'move'} folder "${it.name}" into itself.`);
+            return;
+          }
+        }
+      }
+
+      const sources = items.map(it => it.path);
+      const actionVerb = isCopy ? 'Copying' : 'Moving';
+      const pastVerb = isCopy ? 'Copied' : 'Moved';
+      const shortDest = cleanTarget.split(/[\\/]/).filter(Boolean).pop() || cleanTarget;
+
+      addLog(`${actionVerb} ${sources.length} ${isRemote ? 'remote' : 'local'} item(s) to '${cleanTarget}'...`, 'cmd');
+
+      try {
+        if (isRemote) {
+          if (!isConnected && appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile) {
+            const ok = await ensureSilentConnected(currentRemotePath);
+            if (!ok) return;
+          }
+          const res = await sendRust('remote_move_batch', {
+            sources,
+            target_dir: cleanTarget,
+            copy: !!isCopy
+          });
+          if (!recentRemoteMoveDirs.includes(cleanTarget)) {
+            recentRemoteMoveDirs.unshift(cleanTarget);
+            if (recentRemoteMoveDirs.length > 6) recentRemoteMoveDirs.pop();
+          }
+          if (!isCopy && res.moves && res.moves.length > 0) {
+            lastInteractiveMoveUndo = {
+              isRemote: true,
+              moves: res.moves,
+              targetDir: cleanTarget,
+              prevDir: currentRemotePath
+            };
+          }
+          if (openAfter) {
+            await navigateRemote(cleanTarget);
+          } else if (res.files) {
+            renderRemoteFiles(res.files);
+          } else {
+            await refreshRemote();
+          }
+          const movedCount = res.moved_count || sources.length;
+          addLog(`${pastVerb} ${movedCount} remote item(s) to ${cleanTarget}`, 'success');
+          if (res.errors && res.errors.length > 0) {
+            addLog(`Notice during remote operation: ${res.errors.join(' | ')}`, 'warning');
+          }
+          showInteractiveActionToast(
+            `${isCopy ? '📋 Copied' : '⤴ Moved'} ${movedCount} item${movedCount === 1 ? '' : 's'} to "${shortDest}"`,
+            `Destination: ${cleanTarget}`,
+            cleanTarget,
+            true,
+            !isCopy && res.moves && res.moves.length > 0
+          );
+        } else {
+          const res = await sendRust('local_move_batch', {
+            sources,
+            target_dir: cleanTarget,
+            copy: !!isCopy
+          });
+          if (!recentLocalMoveDirs.includes(cleanTarget)) {
+            recentLocalMoveDirs.unshift(cleanTarget);
+            if (recentLocalMoveDirs.length > 6) recentLocalMoveDirs.pop();
+          }
+          if (!isCopy && res.moves && res.moves.length > 0) {
+            lastInteractiveMoveUndo = {
+              isRemote: false,
+              moves: res.moves,
+              targetDir: cleanTarget,
+              prevDir: currentLocalPath
+            };
+          }
+          if (openAfter) {
+            await navigateLocal(cleanTarget);
+          } else {
+            await refreshLocal();
+          }
+          const movedCount = res.moved_count || sources.length;
+          addLog(`${pastVerb} ${movedCount} local item(s) to ${cleanTarget}`, 'success');
+          if (res.errors && res.errors.length > 0) {
+            addLog(`Notice during local operation: ${res.errors.join(' | ')}`, 'warning');
+          }
+          showInteractiveActionToast(
+            `${isCopy ? '📋 Copied' : '⤴ Moved'} ${movedCount} item${movedCount === 1 ? '' : 's'} to "${shortDest}"`,
+            `Destination: ${cleanTarget}`,
+            cleanTarget,
+            false,
+            !isCopy && res.moves && res.moves.length > 0
+          );
+        }
+      } catch (err) {
+        addLog(`${actionVerb} failed: ${err.message || err}`, 'error');
+        alert(`Failed to ${isCopy ? 'copy' : 'move'} items:\n${err.message || err}`);
+      }
+    }
+
+    async function executeTargetedCrossPaneTransfer(items, isRemoteTarget, targetDirPath) {
+      if (!items || items.length === 0) return;
+      if (isRemoteTarget) {
+        if (!isConnected) {
+          if (appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile) {
+            const ok = await ensureSilentConnected(currentRemotePath);
+            if (!ok) return;
+          } else {
+            alert('Please connect to a remote server before uploading.');
+            return;
+          }
+        }
+        const savedRemotePath = currentRemotePath;
+        currentRemotePath = targetDirPath;
+        try {
+          addLog(`Targeted Upload: Sending ${items.length} item(s) directly into remote '${targetDirPath}'...`, 'cmd');
+          for (const it of items) {
+            if (it.is_dir) {
+              await uploadFolderDirect(it.path, it.name);
+            } else {
+              await uploadFileDirect(it.path, it.name);
+            }
+          }
+          showInteractiveActionToast(
+            `🚀 Uploaded ${items.length} item${items.length === 1 ? '' : 's'} into folder`,
+            `Remote Target: ${targetDirPath}`,
+            targetDirPath,
+            true,
+            false
+          );
+        } finally {
+          currentRemotePath = savedRemotePath;
+          await navigateRemote(savedRemotePath);
+        }
+      } else {
+        const savedLocalPath = currentLocalPath;
+        currentLocalPath = targetDirPath;
+        try {
+          addLog(`Targeted Download: Saving ${items.length} item(s) directly into local '${targetDirPath}'...`, 'cmd');
+          for (const it of items) {
+            if (it.is_dir) {
+              await downloadFolderDirect(it.path, it.name);
+            } else {
+              await downloadFileDirect(it.path, it.name);
+            }
+          }
+          showInteractiveActionToast(
+            `🚀 Downloaded ${items.length} item${items.length === 1 ? '' : 's'} into folder`,
+            `Local Target: ${targetDirPath}`,
+            targetDirPath,
+            false,
+            false
+          );
+        } finally {
+          currentLocalPath = savedLocalPath;
+          await navigateLocal(savedLocalPath);
+        }
+      }
+    }
+
+    async function moveSelectedToParent(isRemote) {
+      closeContextMenu();
+      closeAllMenus();
+      if (isRemote) {
+        if (isRemoteRoot(currentRemotePath)) {
+          alert('Already at the root directory (/). Cannot move items higher.');
+          return;
+        }
+        const items = getSelectedRemoteItems();
+        if (items.length === 0) {
+          alert('Please select one or more remote files or folders to move to the parent directory (..).');
+          return;
+        }
+        const parentDir = getRemoteParentDir(currentRemotePath);
+        await executeInteractiveMove(true, items, parentDir, false, false);
+      } else {
+        if (isLocalRoot(currentLocalPath)) {
+          alert('Already at the drive root directory. Cannot move items higher.');
+          return;
+        }
+        const items = getSelectedLocalItems();
+        if (items.length === 0) {
+          alert('Please select one or more local files or folders to move to the parent directory (..).');
+          return;
+        }
+        const parentDir = getLocalParentDir(currentLocalPath);
+        await executeInteractiveMove(false, items, parentDir, false, false);
+      }
+    }
+
+    function openInteractiveMoveModal(isRemote, initialMode = 'move') {
+      closeContextMenu();
+      closeAllMenus();
+      const items = isRemote ? getSelectedRemoteItems() : getSelectedLocalItems();
+      if (items.length === 0) {
+        alert(`Please select one or more ${isRemote ? 'remote' : 'local'} files or folders first.`);
+        return;
+      }
+
+      const sourceDir = isRemote ? currentRemotePath : currentLocalPath;
+      const defaultDest = isRemote
+        ? (!isRemoteRoot(currentRemotePath) ? getRemoteParentDir(currentRemotePath) : currentRemotePath)
+        : (!isLocalRoot(currentLocalPath) ? getLocalParentDir(currentLocalPath) : currentLocalPath);
+
+      interactiveMoveContext = {
+        isRemote: !!isRemote,
+        items,
+        sourceDir,
+        mode: initialMode === 'copy' ? 'copy' : 'move'
+      };
+
+      const scopeBadge = document.getElementById('imScopeBadge');
+      const summaryEl = document.getElementById('imSelectedSummary');
+      const srcPathEl = document.getElementById('imSourcePathDisplay');
+      const destInput = document.getElementById('imDestPathInput');
+      const chipsBox = document.getElementById('imQuickChipsContainer');
+
+      if (scopeBadge) {
+        scopeBadge.textContent = isRemote ? 'Remote Server' : 'Local Computer';
+        scopeBadge.style.color = isRemote ? '#22c55e' : '#38bdf8';
+        scopeBadge.style.borderColor = isRemote ? 'rgba(34, 197, 94, 0.35)' : 'rgba(56, 189, 248, 0.35)';
+        scopeBadge.style.background = isRemote ? 'rgba(34, 197, 94, 0.14)' : 'rgba(56, 189, 248, 0.14)';
+      }
+
+      if (summaryEl) {
+        summaryEl.textContent = items.length === 1
+          ? `${items[0].is_dir ? '📁 ' : '📄 '}${items[0].name}`
+          : `${items.length} items selected (${items.slice(0, 3).map(i => i.name).join(', ')}${items.length > 3 ? '...' : ''})`;
+      }
+      if (srcPathEl) srcPathEl.textContent = `From: ${sourceDir}`;
+      if (destInput) destInput.value = defaultDest;
+
+      // Build Quick Destination Chips
+      if (chipsBox) {
+        let chipsHtml = '';
+        const canUp = isRemote ? !isRemoteRoot(currentRemotePath) : !isLocalRoot(currentLocalPath);
+        if (canUp) {
+          const parentPath = isRemote ? getRemoteParentDir(currentRemotePath) : getLocalParentDir(currentLocalPath);
+          const parentName = parentPath.split(/[\\/]/).filter(Boolean).pop() || parentPath;
+          chipsHtml += `
+            <span class="quick-dest-chip parent-chip" onclick="selectInteractiveDestChip('${escapeJsString(parentPath)}')" title="${escapeHtml(parentPath)}">
+              <span>⤴</span>
+              <span>.. Parent (${escapeHtml(parentName)})</span>
+            </span>
+          `;
+        }
+
+        // Subfolders in current directory (excluding selected folders themselves)
+        const allFiles = isRemote ? (remoteFiles || []) : (localFiles || []);
+        const subFolders = allFiles.filter(f => f.is_dir && !items.some(it => it.path === f.path));
+        subFolders.slice(0, 14).forEach(sub => {
+          chipsHtml += `
+            <span class="quick-dest-chip" onclick="selectInteractiveDestChip('${escapeJsString(sub.path)}')" title="${escapeHtml(sub.path)}">
+              <span>📁</span>
+              <span>${escapeHtml(sub.name)}</span>
+            </span>
+          `;
+        });
+
+        // Recent move destinations
+        const recents = isRemote ? recentRemoteMoveDirs : recentLocalMoveDirs;
+        recents.forEach(rPath => {
+          if (rPath !== sourceDir && !subFolders.some(s => s.path === rPath)) {
+            const rLabel = rPath.split(/[\\/]/).filter(Boolean).pop() || rPath;
+            chipsHtml += `
+              <span class="quick-dest-chip" onclick="selectInteractiveDestChip('${escapeJsString(rPath)}')" title="Recent: ${escapeHtml(rPath)}">
+                <span>🕒</span>
+                <span>${escapeHtml(rLabel)}</span>
+              </span>
+            `;
+          }
+        });
+
+        if (!chipsHtml) {
+          chipsHtml = `<span style="font-size: 11px; color: var(--text-dim); font-style: italic;">Type any target directory path below</span>`;
+        }
+        chipsBox.innerHTML = chipsHtml;
+      }
+
+      setInteractiveMoveMode(interactiveMoveContext.mode);
+      updateInteractiveMovePreview();
+
+      const modal = document.getElementById('interactiveMoveModal');
+      if (modal) modal.classList.add('active');
+      setTimeout(() => {
+        if (destInput) {
+          destInput.focus();
+          destInput.select();
+        }
+      }, 60);
+    }
+
+    function closeInteractiveMoveModal() {
+      const modal = document.getElementById('interactiveMoveModal');
+      if (modal) modal.classList.remove('active');
+      interactiveMoveContext = null;
+    }
+
+    function selectInteractiveDestChip(path) {
+      const destInput = document.getElementById('imDestPathInput');
+      if (destInput) {
+        destInput.value = path;
+        updateInteractiveMovePreview();
+      }
+      const chips = document.querySelectorAll('#imQuickChipsContainer .quick-dest-chip');
+      chips.forEach(c => {
+        c.classList.toggle('active', c.getAttribute('title') === path || c.getAttribute('title') === 'Recent: ' + path);
+      });
+    }
+
+    function setInteractiveMoveMode(mode) {
+      if (interactiveMoveContext) {
+        interactiveMoveContext.mode = mode === 'copy' ? 'copy' : 'move';
+      }
+      const movePill = document.getElementById('imModeMovePill');
+      const copyPill = document.getElementById('imModeCopyPill');
+      const submitBtn = document.getElementById('imSubmitBtn');
+      const radios = document.getElementsByName('imActionMode');
+      for (const r of radios) {
+        r.checked = (r.value === mode);
+      }
+      if (movePill) {
+        movePill.style.borderColor = mode === 'move' ? 'var(--accent)' : 'var(--border-color)';
+        movePill.style.background = mode === 'move' ? 'rgba(56, 189, 248, 0.12)' : 'rgba(15, 23, 42, 0.6)';
+      }
+      if (copyPill) {
+        copyPill.style.borderColor = mode === 'copy' ? 'var(--accent)' : 'var(--border-color)';
+        copyPill.style.background = mode === 'copy' ? 'rgba(56, 189, 248, 0.12)' : 'rgba(15, 23, 42, 0.6)';
+      }
+      if (submitBtn) {
+        submitBtn.innerHTML = mode === 'copy' ? '📋 Copy Now' : '🚀 Move Now';
+      }
+      updateInteractiveMovePreview();
+    }
+
+    function updateInteractiveMovePreview() {
+      const destInput = document.getElementById('imDestPathInput');
+      const previewEl = document.getElementById('imPreviewTargetText');
+      if (!destInput || !previewEl || !interactiveMoveContext) return;
+      const rawDest = (destInput.value || '').trim() || '/';
+      const sep = interactiveMoveContext.isRemote ? '/' : '\\';
+      const firstItem = interactiveMoveContext.items[0]?.name || 'file';
+      const cleanedDest = rawDest.replace(/[\\/]+$/, '');
+      const sampleFull = cleanedDest ? (cleanedDest + sep + firstItem) : (sep + firstItem);
+      if (interactiveMoveContext.items.length === 1) {
+        previewEl.textContent = sampleFull;
+      } else {
+        previewEl.textContent = `${sampleFull} (+${interactiveMoveContext.items.length - 1} more)`;
+      }
+    }
+
+    async function submitInteractiveMoveModal() {
+      if (!interactiveMoveContext) return;
+      const destInput = document.getElementById('imDestPathInput');
+      const openAfter = document.getElementById('imOpenDestAfterCheck')?.checked || false;
+      const targetDir = (destInput?.value || '').trim();
+      if (!targetDir) {
+        alert('Please enter or select a destination folder.');
+        if (destInput) destInput.focus();
+        return;
+      }
+      const ctx = interactiveMoveContext;
+      closeInteractiveMoveModal();
+      await executeInteractiveMove(ctx.isRemote, ctx.items, targetDir, ctx.mode === 'copy', openAfter);
+    }
+
+    // ========================================================
+    // Interactive Clipboard (Cut / Copy / Paste / Duplicate)
+    // ========================================================
+    function clipboardCutSelected(isRemote) {
+      closeContextMenu();
+      const items = isRemote ? getSelectedRemoteItems() : getSelectedLocalItems();
+      if (items.length === 0) return;
+      interactiveClipboard = {
+        isRemote: !!isRemote,
+        mode: 'cut',
+        items: items.map(i => ({ path: i.path, name: i.name, is_dir: !!i.is_dir })),
+        sourceDir: isRemote ? currentRemotePath : currentLocalPath
+      };
+      if (isRemote) renderRemoteFiles(remoteFiles);
+      else renderLocalFiles(localFiles);
+      addLog(`Cut ${items.length} ${isRemote ? 'remote' : 'local'} item(s) to clipboard. Navigate to destination and press Ctrl+V or Paste.`, 'info');
+    }
+
+    function clipboardCopySelected(isRemote) {
+      closeContextMenu();
+      const items = isRemote ? getSelectedRemoteItems() : getSelectedLocalItems();
+      if (items.length === 0) return;
+      interactiveClipboard = {
+        isRemote: !!isRemote,
+        mode: 'copy',
+        items: items.map(i => ({ path: i.path, name: i.name, is_dir: !!i.is_dir })),
+        sourceDir: isRemote ? currentRemotePath : currentLocalPath
+      };
+      if (isRemote) renderRemoteFiles(remoteFiles);
+      else renderLocalFiles(localFiles);
+      addLog(`Copied ${items.length} ${isRemote ? 'remote' : 'local'} item(s) to clipboard. Press Ctrl+V or Paste in any folder.`, 'info');
+    }
+
+    async function clipboardPasteHere(isRemoteTarget) {
+      closeContextMenu();
+      if (!interactiveClipboard || !interactiveClipboard.items || interactiveClipboard.items.length === 0) {
+        return;
+      }
+      const clip = interactiveClipboard;
+      const targetDir = isRemoteTarget ? currentRemotePath : currentLocalPath;
+
+      if (clip.isRemote === isRemoteTarget) {
+        const isSameDir = clip.sourceDir.replace(/[\\/]+$/, '') === (targetDir || '').replace(/[\\/]+$/, '');
+        if (clip.mode === 'copy' && isSameDir) {
+          await duplicateItemsInPlace(isRemoteTarget, clip.items);
+          return;
+        }
+        await executeInteractiveMove(isRemoteTarget, clip.items, targetDir, clip.mode === 'copy', false);
+        if (clip.mode === 'cut') {
+          interactiveClipboard = null;
+        }
+      } else {
+        // Cross-pane paste transfers files between Local and Remote!
+        await executeTargetedCrossPaneTransfer(clip.items, isRemoteTarget, targetDir);
+        if (clip.mode === 'cut') {
+          interactiveClipboard = null;
+        }
+      }
+    }
+
+    function buildDuplicateName(originalName) {
+      const dotIdx = originalName.lastIndexOf('.');
+      if (dotIdx > 0) {
+        return originalName.substring(0, dotIdx) + '_copy' + originalName.substring(dotIdx);
+      }
+      return originalName + '_copy';
+    }
+
+    async function duplicateItemsInPlace(isRemote, items) {
+      closeContextMenu();
+      if (!items || items.length === 0) return;
+      for (const it of items) {
+        const dupName = buildDuplicateName(it.name);
+        if (isRemote) {
+          const parent = getRemoteParentDir(it.path);
+          const newPath = parent === '/' ? '/' + dupName : parent + '/' + dupName;
+          const qSrc = "'" + it.path.replace(/'/g, "'\\''") + "'";
+          const qDst = "'" + newPath.replace(/'/g, "'\\''") + "'";
+          try {
+            const res = await sendRust('remote_exec_ssh', {
+              command: `cp -rf ${qSrc} ${qDst}`,
+              cwd: currentRemotePath
+            });
+            if (res && res.exit_code === 0) {
+              addLog(`Duplicated remote item '${it.name}' -> '${dupName}'`, 'success');
+            } else {
+              const readRes = await sendRust('remote_read', { path: it.path });
+              await sendRust('remote_write', { path: newPath, content: readRes.content || '' });
+              addLog(`Duplicated remote file '${it.name}' -> '${dupName}'`, 'success');
+            }
+          } catch (err) {
+            addLog(`Failed to duplicate '${it.name}': ${err.message || err}`, 'error');
+          }
+        } else {
+          try {
+            const readRes = await sendRust('local_read', { path: it.path });
+            const newPath = joinLocalPath(currentLocalPath, dupName);
+            await sendRust('local_write', { path: newPath, content: readRes.content || '' });
+            addLog(`Duplicated local file '${it.name}' -> '${dupName}'`, 'success');
+          } catch (err) {
+            addLog(`Failed to duplicate '${it.name}': ${err.message || err}`, 'error');
+          }
+        }
+      }
+      if (isRemote) await refreshRemote();
+      else await refreshLocal();
+    }
+
+    function selectAllItemsInPane(isRemote) {
+      const selector = isRemote ? '#remoteFileList tr:not(.parent-dir-row)' : '#localFileList tr:not(.parent-dir-row)';
+      const rows = document.querySelectorAll(selector);
+      rows.forEach(r => {
+        if (r.hasAttribute('data-idx')) {
+          r.classList.add('selected');
+        }
+      });
+      updatePaneStatsBadge(isRemote);
     }
 
     async function openRemoteItem(item, rowEl = null) {
@@ -7200,7 +8340,18 @@
 
       if (isBlank) {
         const dirPath = isRemote ? currentRemotePath : currentLocalPath;
+        const hasClipboard = interactiveClipboard && Array.isArray(interactiveClipboard.items) && interactiveClipboard.items.length > 0;
         html += `<div class="context-menu-header">${isRemote ? 'Remote Directory' : 'Local Directory'}</div>`;
+        if (hasClipboard) {
+          html += `
+            <div class="context-menu-item" onclick="clipboardPasteHere(${isRemote})" style="color: #22c55e;">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #22c55e;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+              <span style="font-weight: 700;">Paste ${interactiveClipboard.items.length} Item(s) Here (${interactiveClipboard.mode === 'cut' ? 'Move' : 'Copy'})</span>
+              <span class="shortcut">Ctrl+V</span>
+            </div>
+            <div class="context-menu-separator"></div>
+          `;
+        }
         html += `
           <div class="context-menu-item" onclick="promptNewFile(${isRemote})">
             <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
@@ -7209,6 +8360,11 @@
           <div class="context-menu-item" onclick="promptNewFolder(${isRemote})">
             <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
             <span>New Folder...</span>
+          </div>
+          <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote});">
+            <svg class="icon" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <span>Select All</span>
+            <span class="shortcut">Ctrl+A</span>
           </div>
           <div class="context-menu-separator"></div>
           <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(dirPath)}')">
@@ -7237,7 +8393,12 @@
           </div>
         `;
       } else if (item) {
-        html += `<div class="context-menu-header">${item.is_dir ? 'Folder: ' : 'File: '} ${escapeHtml(item.name.length > 20 ? item.name.substring(0, 18) + '...' : item.name)}</div>`;
+        const selectedItems = isRemote ? getSelectedRemoteItems() : getSelectedLocalItems();
+        const selCount = selectedItems.length > 1 ? selectedItems.length : 1;
+        const canGoUp = isRemote ? !isRemoteRoot(currentRemotePath) : !isLocalRoot(currentLocalPath);
+        const hasClipboard = interactiveClipboard && Array.isArray(interactiveClipboard.items) && interactiveClipboard.items.length > 0;
+
+        html += `<div class="context-menu-header">${selCount > 1 ? `${selCount} Items Selected` : ((item.is_dir ? 'Folder: ' : 'File: ') + escapeHtml(item.name.length > 20 ? item.name.substring(0, 18) + '...' : item.name))}</div>`;
 
         if (item.is_dir) {
           html += `
@@ -7279,6 +8440,50 @@
             </div>
           `;
         }
+
+        html += `<div class="context-menu-separator"></div>`;
+
+        // Interactive Move & Clipboard Actions
+        if (canGoUp) {
+          html += `
+            <div class="context-menu-item" onclick="moveSelectedToParent(${isRemote})">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
+              <span style="font-weight: 600; color: #fbbf24;">Move to .. (Parent Directory)</span>
+              <span class="shortcut">Alt+↑</span>
+            </div>
+          `;
+        }
+        html += `
+          <div class="context-menu-item" onclick="openInteractiveMoveModal(${isRemote}, 'move')">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            <span style="font-weight: 600;">Interactive Move / Copy To...</span>
+            <span class="shortcut">F6</span>
+          </div>
+          <div class="context-menu-item" onclick="clipboardCutSelected(${isRemote})">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+            <span>Cut</span>
+            <span class="shortcut">Ctrl+X</span>
+          </div>
+          <div class="context-menu-item" onclick="clipboardCopySelected(${isRemote})">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copy</span>
+            <span class="shortcut">Ctrl+C</span>
+          </div>
+          ${hasClipboard ? `
+          <div class="context-menu-item" onclick="clipboardPasteHere(${isRemote})" style="color: #22c55e;">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #22c55e;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            <span style="font-weight: 600;">Paste ${interactiveClipboard.items.length} Item(s) Here</span>
+            <span class="shortcut">Ctrl+V</span>
+          </div>
+          ` : ''}
+          ${!item.is_dir ? `
+          <div class="context-menu-item" onclick="duplicateItemsInPlace(${isRemote}, [{ path: '${escapeJsString(item.path)}', name: '${escapeJsString(item.name)}', is_dir: false }])">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+            <span>Duplicate File</span>
+          </div>
+          ` : ''}
+          <div class="context-menu-separator"></div>
+        `;
 
         if (!isRemote) {
           const isArchive = !item.is_dir && item.name.toLowerCase().endsWith('.zip');
@@ -11624,6 +12829,12 @@
       }
     }
 
+    let lastActivePaneIsRemote = false;
+    document.addEventListener('mousedown', (e) => {
+      if (e.target.closest('#rightPane')) lastActivePaneIsRemote = true;
+      else if (e.target.closest('#leftPane')) lastActivePaneIsRemote = false;
+    });
+
     // Global Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
       const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
@@ -11638,6 +12849,7 @@
         closeExclusionMaskModal();
         closeFindFilesModal();
         closeChecksumModal();
+        closeInteractiveMoveModal();
         return;
       }
 
@@ -11646,6 +12858,49 @@
       if (e.shiftKey && e.key === 'F1') {
         e.preventDefault();
         toggleCompareDirectories();
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        const useRemote = lastActivePaneIsRemote ? (getSelectedRemoteItems().length > 0) : (getSelectedLocalItems().length === 0 && getSelectedRemoteItems().length > 0);
+        openInteractiveMoveModal(useRemote, 'move');
+      } else if (e.altKey && e.key === 'ArrowUp') {
+        e.preventDefault();
+        const useRemote = lastActivePaneIsRemote ? (getSelectedRemoteItems().length > 0) : (getSelectedLocalItems().length === 0 && getSelectedRemoteItems().length > 0);
+        if ((useRemote && getSelectedRemoteItems().length > 0) || (!useRemote && getSelectedLocalItems().length > 0)) {
+          moveSelectedToParent(useRemote);
+        } else if (lastActivePaneIsRemote) {
+          remoteNavigateUp();
+        } else {
+          localNavigateUp();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        const filterInp = document.getElementById(lastActivePaneIsRemote ? 'remoteQuickFilter' : 'localQuickFilter');
+        if (filterInp) {
+          filterInp.focus();
+          filterInp.select();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        selectAllItemsInPane(lastActivePaneIsRemote);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        e.preventDefault();
+        clipboardCutSelected(lastActivePaneIsRemote);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        const selText = window.getSelection()?.toString();
+        if (!selText) {
+          e.preventDefault();
+          clipboardCopySelected(lastActivePaneIsRemote);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        if (interactiveClipboard && interactiveClipboard.items && interactiveClipboard.items.length > 0) {
+          e.preventDefault();
+          clipboardPasteHere(lastActivePaneIsRemote);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (lastInteractiveMoveUndo) {
+          e.preventDefault();
+          undoLastInteractiveMove();
+        }
       } else if (e.key === 'F3' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f')) {
         e.preventDefault();
         openFindFilesModal();

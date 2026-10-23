@@ -317,6 +317,68 @@ impl AppState {
                 }
             }
 
+            "local_move_batch" => {
+                let is_copy = payload["copy"].as_bool().unwrap_or(false);
+                let items = payload["items"].as_array().cloned().unwrap_or_default();
+                let mut moves = Vec::new();
+                let mut errors = Vec::new();
+
+                fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+                    if !dst.exists() {
+                        std::fs::create_dir_all(dst).map_err(|e| format!("Failed to create dir {:?}: {}", dst, e))?;
+                    }
+                    let entries = std::fs::read_dir(src).map_err(|e| format!("Failed to read dir {:?}: {}", src, e))?;
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        let target = dst.join(entry.file_name());
+                        if p.is_dir() {
+                            copy_dir_recursive(&p, &target)?;
+                        } else {
+                            std::fs::copy(&p, &target).map_err(|e| format!("Failed to copy {:?} to {:?}: {}", p, target, e))?;
+                        }
+                    }
+                    Ok(())
+                }
+
+                for item in items {
+                    let old_p = item["old_path"].as_str().unwrap_or("").trim();
+                    let new_p = item["new_path"].as_str().unwrap_or("").trim();
+                    if old_p.is_empty() || new_p.is_empty() || old_p.eq_ignore_ascii_case(new_p) {
+                        continue;
+                    }
+                    let res = if is_copy {
+                        let sp = std::path::Path::new(old_p);
+                        let dp = std::path::Path::new(new_p);
+                        if sp.is_dir() {
+                            copy_dir_recursive(sp, dp)
+                        } else {
+                            if let Some(parent) = dp.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
+                            std::fs::copy(sp, dp).map(|_| ()).map_err(|e| format!("Failed to copy: {}", e))
+                        }
+                    } else {
+                        local_fs::rename_path(old_p, new_p)
+                    };
+
+                    match res {
+                        Ok(_) => moves.push(json!({ "from": old_p, "to": new_p })),
+                        Err(e) => errors.push(format!("{}: {}", old_p, e)),
+                    }
+                }
+
+                if moves.is_empty() && !errors.is_empty() {
+                    IpcResponse::err(id, action, &errors.join("; "))
+                } else {
+                    IpcResponse::ok(id, action, json!({
+                        "status": if is_copy { "copied" } else { "moved" },
+                        "moved_count": moves.len(),
+                        "moves": moves,
+                        "errors": errors,
+                    }))
+                }
+            }
+
             "local_compress" => {
                 let sources: Vec<String> = payload.get("sources")
                     .and_then(|v| v.as_array())
@@ -910,6 +972,70 @@ impl AppState {
                     Ok(files)
                 }) {
                     Ok((files, reconnected)) => IpcResponse::ok(id, action, json!({ "status": "renamed", "files": files, "reconnected": reconnected })),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "remote_move_batch" => {
+                let is_copy = payload["copy"].as_bool().unwrap_or(false);
+                let items = payload["items"].as_array().cloned().unwrap_or_default();
+
+                match self.with_remote_retry(|client| {
+                    let mut moves = Vec::new();
+                    let mut errors = Vec::new();
+
+                    for item in &items {
+                        let old_p = item["old_path"].as_str().unwrap_or("").trim();
+                        let new_p = item["new_path"].as_str().unwrap_or("").trim();
+                        if old_p.is_empty() || new_p.is_empty() || old_p == new_p {
+                            continue;
+                        }
+
+                        if let Some(idx) = new_p.rfind('/') {
+                            if idx > 0 {
+                                let parent = &new_p[..idx];
+                                let _ = client.make_dir_all(parent);
+                            }
+                        }
+
+                        let op_res = if is_copy {
+                            let sq_old = format!("'{}'", old_p.replace('\'', "'\\''"));
+                            let sq_new = format!("'{}'", new_p.replace('\'', "'\\''"));
+                            match client.exec_command_clean(&format!("cp -rf {} {}", sq_old, sq_new)) {
+                                Ok((0, _)) => Ok(()),
+                                _ => {
+                                    // Fallback for regular files via SFTP/FTP buffer
+                                    match client.download_file(old_p) {
+                                        Ok(bytes) => client.upload_file(new_p, &bytes),
+                                        Err(e) => Err(e),
+                                    }
+                                }
+                            }
+                        } else {
+                            client.rename(old_p, new_p)
+                        };
+
+                        match op_res {
+                            Ok(_) => moves.push(json!({ "from": old_p, "to": new_p })),
+                            Err(e) => errors.push(format!("{}: {}", old_p, e)),
+                        }
+                    }
+
+                    if moves.is_empty() && !errors.is_empty() {
+                        return Err(errors.join("; "));
+                    }
+
+                    let files = client.list(None).unwrap_or_default();
+                    Ok((moves, errors, files))
+                }) {
+                    Ok(((moves, errors, files), reconnected)) => IpcResponse::ok(id, action, json!({
+                        "status": if is_copy { "copied" } else { "moved" },
+                        "moved_count": moves.len(),
+                        "moves": moves,
+                        "errors": errors,
+                        "files": files,
+                        "reconnected": reconnected,
+                    })),
                     Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
