@@ -3530,7 +3530,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.57</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.58</span>
         </div>
       </div>
 
@@ -6731,7 +6731,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.57';
+    let APP_CURRENT_VERSION = '0.0.0.58';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -7782,6 +7782,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       localFiles = applyPaneSort([...(files || [])], false);
       selectedLocalFile = null;
       lastLocalClickedIdx = -1;
+      const activeTab = getActiveLocalTab();
+      if (activeTab) {
+        activeTab.files = [...localFiles];
+        activeTab.path = currentLocalPath || activeTab.path;
+        activeTab.title = getLocalTabDisplayTitle(activeTab.path);
+      }
       const tbody = document.getElementById('localFileList');
       if (!tbody) return;
       tbody.innerHTML = '';
@@ -8249,6 +8255,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       }
       currentLocalPath = target.path || globalDesktopDir || 'C:\\';
       localQuickFilterText = target.filter || '';
+      localFiles = Array.isArray(target.files) ? [...target.files] : [];
+
       const fInp = document.getElementById('localQuickFilter');
       const fClr = document.getElementById('localQuickFilterClear');
       if (fInp) fInp.value = localQuickFilterText;
@@ -8260,6 +8268,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       if (target.files && target.files.length > 0) {
         renderLocalFiles(target.files);
       } else {
+        const tbody = document.getElementById('localFileList');
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 30px 10px; font-style: italic;">Loading directory...</td></tr>`;
+        }
         await navigateLocal(currentLocalPath, true);
       }
     }
@@ -8269,7 +8281,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       syncCurrentLocalTabState();
       localTabCounter++;
       const newId = 'ltab_' + localTabCounter;
-      const startPath = initialPath || currentLocalPath || globalDesktopDir || 'C:\\';
+      // Opening a new tab via '+' opens Desktop/Home freshly without inheriting previous tab's path
+      const startPath = initialPath || globalDesktopDir || 'C:\\';
       const newTab = {
         id: newId,
         title: getLocalTabDisplayTitle(startPath),
@@ -8282,12 +8295,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       localTabs.push(newTab);
       activeLocalTabId = newId;
       currentLocalPath = startPath;
+      localFiles = [];
       localQuickFilterText = '';
+
+      const tbody = document.getElementById('localFileList');
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 30px 10px; font-style: italic;">Loading directory...</td></tr>`;
+      }
+
       const fInp = document.getElementById('localQuickFilter');
       const fClr = document.getElementById('localQuickFilterClear');
       if (fInp) fInp.value = '';
       if (fClr) fClr.style.display = 'none';
+
       renderLocalTabsBar();
+      updateLocalAddressBarUI(startPath);
       await navigateLocal(startPath, true);
     }
 
@@ -8341,9 +8363,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 Each remote tab maintains its own independent live server session and directory path. Select a saved server below or use the Quick Connect bar above.
               </div>
               ${cloneProfile ? `
-                <button type="button" class="btn btn-primary" onclick="cloneServerIntoActiveRemoteTab()" style="padding: 6px 16px; height: auto; font-weight: 600;">
-                  <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="2" y1="10" x2="22" y2="10"/></svg> Open Another Folder on ${escapeHtml(cloneProfile.host)} (${escapeHtml(otherConnectedTab.path || '/')})
-                </button>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+                  <button type="button" class="btn btn-primary" onclick="cloneServerIntoActiveRemoteTab()" style="padding: 6px 16px; height: auto; font-weight: 600;">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="2" y1="10" x2="22" y2="10"/></svg> Open Folder on ${escapeHtml(cloneProfile.host)} (${escapeHtml(otherConnectedTab.path || '/')})
+                  </button>
+                  <button type="button" class="btn btn-secondary" onclick="cloneServerIntoActiveRemoteTab('/')" style="padding: 6px 14px; height: auto;">
+                    Open Root (/)
+                  </button>
+                </div>
               ` : ''}
               ${sitesHtml ? `
                 <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px;">
@@ -8420,7 +8447,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       lastConnectedProfile = target.lastProfile ? { ...target.lastProfile } : null;
       selectedQuickSite = target.selectedSite ? { ...target.selectedSite } : null;
       currentRemotePath = target.path || '';
-      remoteFiles = Array.isArray(target.files) ? target.files : [];
+      remoteFiles = Array.isArray(target.files) ? [...target.files] : [];
       remoteQuickFilterText = target.filter || '';
 
       const fInp = document.getElementById('remoteQuickFilter');
@@ -8460,8 +8487,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       renderRemoteTabsBar();
       updateRemoteAddressBarUI();
 
-      if (isConnected || (remoteFiles && remoteFiles.length > 0)) {
-        renderRemoteFiles(remoteFiles, target.listError || null);
+      if (isConnected) {
+        if (remoteFiles && remoteFiles.length > 0) {
+          renderRemoteFiles(remoteFiles, target.listError || null);
+        } else {
+          const tbody = document.getElementById('remoteFileList');
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 45px;">Loading remote directory...</td></tr>`;
+          }
+          await navigateRemote(currentRemotePath || '/', true);
+        }
       } else {
         renderRemoteTabLauncherCard();
       }
@@ -8487,9 +8522,45 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         filter: ''
       };
       remoteTabs.push(newTab);
-      await switchRemoteTab(newId);
+      activeRemoteTabId = newId;
+
+      // Cleanly reset active remote state for the new tab
+      isConnected = false;
+      currentConnectedProfile = null;
+      lastConnectedProfile = null;
+      selectedQuickSite = options.site || null;
+      currentRemotePath = options.path || '';
+      remoteFiles = [];
+      remoteQuickFilterText = '';
+
+      const fInp = document.getElementById('remoteQuickFilter');
+      const fClr = document.getElementById('remoteQuickFilterClear');
+      if (fInp) fInp.value = '';
+      if (fClr) fClr.style.display = 'none';
+
+      const rInp = document.getElementById('remotePathInput');
+      if (rInp) {
+        rInp.value = currentRemotePath || 'Not connected';
+      }
+
+      setConnectedState(false);
+      stopKeepAliveTimer();
+
+      try {
+        await sendRust('switch_remote_tab', {
+          tab_id: newId,
+          path: options.path || ''
+        });
+      } catch (_) {}
+
+      renderRemoteTabsBar();
+      updateRemoteAddressBarUI();
 
       if (options.connectProfile) {
+        const tbody = document.getElementById('remoteFileList');
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 45px;">Connecting to ${escapeHtml(options.connectProfile.host)}...</td></tr>`;
+        }
         await executeConnect({
           ...options.connectProfile,
           remote_dir: options.path || options.connectProfile.remote_dir || '/',
@@ -8497,6 +8568,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         });
       } else if (options.siteId) {
         await connectRemoteTabToSavedSite(options.siteId, options.path || null);
+      } else {
+        renderRemoteTabLauncherCard();
       }
     }
 
@@ -8558,10 +8631,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           remote_dir: folderPath,
           site_name: selectedQuickSite.name
         } : null);
+        if (!baseProf) {
+          alert('No active or saved profile to open this remote folder in a new tab.');
+          return;
+        }
+        const displayName = folderName || folderPath.replace(/\/+$/, '').split('/').filter(Boolean).pop() || folderPath;
         await createNewRemoteTab({
-          title: folderName || folderPath,
+          title: displayName,
           path: folderPath,
-          connectProfile: baseProf
+          connectProfile: { ...baseProf, remote_dir: folderPath }
         });
       } else {
         await createNewLocalTab(folderPath);
@@ -9112,6 +9190,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       remoteFiles = applyPaneSort([...(files || [])], true);
       selectedRemoteFile = null;
       lastRemoteClickedIdx = -1;
+      const activeTab = getActiveRemoteTab();
+      if (activeTab) {
+        activeTab.files = [...remoteFiles];
+        activeTab.path = currentRemotePath || activeTab.path;
+        activeTab.listError = listError;
+        activeTab.isConnected = !!isConnected;
+        if (currentConnectedProfile) {
+          activeTab.currentProfile = { ...currentConnectedProfile };
+        }
+        if (lastConnectedProfile) {
+          activeTab.lastProfile = { ...lastConnectedProfile };
+        }
+        activeTab.title = getRemoteTabDisplayTitle(activeTab);
+      }
       const tbody = document.getElementById('remoteFileList');
       if (!tbody) return;
       tbody.innerHTML = '';
@@ -10154,6 +10246,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           addLog('Remote directory notice: ' + res.list_error, 'error');
         }
         renderRemoteFiles(res.files || [], res.list_error);
+        syncCurrentRemoteTabState();
+        renderRemoteTabsBar();
 
         const label = params.site_name ? `${params.site_name} (${params.host})` : `${params.protocol.toUpperCase()}://${params.host}`;
         setConnectedState(true, label);
@@ -10258,6 +10352,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       isConnected = false;
       currentConnectedProfile = null;
       setConnectedState(false);
+      syncCurrentRemoteTabState();
+      renderRemoteTabsBar();
 
       const keepView = !wipe && (appOptions ? appOptions.keepViewOnDisconnect !== false : true) && !!lastConnectedProfile;
       if (keepView && remoteFiles && remoteFiles.length > 0) {
@@ -10386,6 +10482,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           if (res.remote_history) updateRemoteHistory(res.remote_history);
           if (res.files) {
             renderRemoteFiles(res.files || [], res.list_error);
+        syncCurrentRemoteTabState();
+        renderRemoteTabsBar();
           }
 
           const label = profile.site_name
