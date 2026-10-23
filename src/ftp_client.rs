@@ -180,6 +180,10 @@ impl FtpClient {
     pub fn rename(&mut self, from: &str, to: &str) -> Result<(), String> {
         self.stream.rename(from, to).map_err(|e| format!("FTP rename failed: {}", e))
     }
+
+    pub fn ping(&mut self) -> Result<(), String> {
+        self.stream.noop().map_err(|e| format!("FTP keepalive failed: {}", e))
+    }
 }
 
 // Parses both Unix-style and DOS/Windows-style FTP LIST output

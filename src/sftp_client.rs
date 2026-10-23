@@ -82,7 +82,13 @@ impl SftpClient {
         let prompt_holder_clone = prompt_holder.clone();
 
         let res: Result<(SftpSession, Handle<ClientHandler>, String, tokio::sync::broadcast::Sender<(u32, u32)>, tokio::sync::broadcast::Sender<Vec<u8>>), String> = rt.block_on(async {
-            let config = Arc::new(Config::default());
+            let mut cfg = Config::default();
+            cfg.inactivity_timeout = Some(std::time::Duration::from_secs(3600 * 24));
+            cfg.keepalive_interval = Some(std::time::Duration::from_secs(15));
+            cfg.keepalive_max = 10;
+            cfg.window_size = 4 * 1024 * 1024;
+            cfg.maximum_packet_size = 65536;
+            let config = Arc::new(cfg);
             let handler = ClientHandler {
                 host: host_s.clone(),
                 port,
@@ -662,6 +668,29 @@ impl SftpClient {
             }
 
             Ok((exit_code, all_output))
+        })
+    }
+
+    pub fn ping(&self) -> Result<(), String> {
+        let dir = self.current_dir.clone();
+        self.rt.block_on(async {
+            match tokio::time::timeout(
+                tokio::time::Duration::from_secs(10),
+                self.sftp.canonicalize(&dir),
+            )
+            .await
+            {
+                Ok(Ok(_)) => Ok(()),
+                Ok(Err(_)) => {
+                    // Fallback to root canonicalize in case current_dir was deleted
+                    self.sftp
+                        .canonicalize(".")
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| format!("SFTP keepalive failed: {}", e))
+                }
+                Err(_) => Err("SFTP keepalive timed out".to_string()),
+            }
         })
     }
 }

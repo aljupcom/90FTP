@@ -183,4 +183,11 @@ impl RemoteClient {
             c.send_terminal_input(data);
         }
     }
+
+    pub fn ping(&mut self) -> Result<(), String> {
+        match self {
+            RemoteClient::Ftp(c) => c.ping(),
+            RemoteClient::Sftp(c) => c.ping(),
+        }
+    }
 }

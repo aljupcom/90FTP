@@ -124,6 +124,93 @@ fn compute_remote_checksum(client: &mut RemoteClient, remote_path: &str, algo: &
 }
 
 impl AppState {
+    pub fn reconnect_client_locked(
+        &self,
+        lock: &mut Option<RemoteClient>,
+        target_dir: Option<&str>,
+    ) -> Result<String, String> {
+        let conn_info = {
+            let conn_lock = self.current_connection.lock().unwrap();
+            conn_lock.clone()
+        };
+        let info = conn_info.ok_or_else(|| "No previous connection session available to reconnect".to_string())?;
+        let protocol = info["protocol"].as_str().unwrap_or("ftp");
+        let host = info["host"].as_str().unwrap_or("");
+        let port = info["port"].as_u64().unwrap_or(0) as u16;
+        let user = info["username"].as_str().unwrap_or("");
+        let pass = info["password"].as_str().unwrap_or("");
+        let auth_type = info["auth_type"].as_str().unwrap_or("password");
+        let key_path = info["key_path"].as_str();
+        let passphrase = info["passphrase"].as_str();
+        let saved_pwd = info["pwd"].as_str().unwrap_or("");
+
+        if host.is_empty() {
+            return Err("No host stored in connection state".to_string());
+        }
+
+        crate::logger::log_info(&format!("Auto-reconnecting to {}://{}:{} as {}...", protocol, host, port, user));
+        let mut client = RemoteClient::connect(
+            protocol,
+            host,
+            port,
+            user,
+            pass,
+            auth_type,
+            key_path,
+            passphrase,
+            true,
+        )?;
+
+        let desired_dir = target_dir.filter(|s| !s.is_empty()).unwrap_or(saved_pwd);
+        let pwd = if !desired_dir.is_empty() {
+            client.change_dir(desired_dir).unwrap_or_else(|_| client.pwd())
+        } else {
+            client.pwd()
+        };
+
+        {
+            let mut conn_lock = self.current_connection.lock().unwrap();
+            if let Some(ref mut c) = *conn_lock {
+                c["pwd"] = json!(pwd);
+            }
+        }
+
+        *lock = Some(client);
+        Ok(pwd)
+    }
+
+    pub fn update_stored_pwd(&self, new_pwd: &str) {
+        let mut conn_lock = self.current_connection.lock().unwrap();
+        if let Some(ref mut c) = *conn_lock {
+            c["pwd"] = json!(new_pwd);
+        }
+    }
+
+    pub fn with_remote_retry<T, F>(&self, mut op: F) -> Result<(T, bool), String>
+    where
+        F: FnMut(&mut RemoteClient) -> Result<T, String>,
+    {
+        let mut lock = self.remote.lock().unwrap();
+        let mut reconnected = false;
+        if lock.is_none() {
+            self.reconnect_client_locked(&mut lock, None)?;
+            reconnected = true;
+        }
+        let client = lock.as_mut().ok_or_else(|| "Not connected to any remote server".to_string())?;
+        match op(client) {
+            Ok(val) => Ok((val, reconnected)),
+            Err(first_err) => {
+                if !reconnected && client.ping().is_err() {
+                    if self.reconnect_client_locked(&mut lock, None).is_ok() {
+                        if let Some(client2) = lock.as_mut() {
+                            return op(client2).map(|v| (v, true));
+                        }
+                    }
+                }
+                Err(first_err)
+            }
+        }
+    }
 
     pub fn handle_request(&self, req: IpcRequest) -> IpcResponse {
         let id = &req.id;
@@ -305,20 +392,20 @@ impl AppState {
                 let exec_script = self.exec_script.clone();
                 let cancelled = self.archive_cancelled.clone();
 
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match crate::archive::remote_compress(client, &sources, &dest_zip, level, &cancelled, &exec_script) {
-                        Ok(val) => {
-                            crate::logger::log_info(&format!("remote_compress succeeded for {:?}", dest_zip));
-                            IpcResponse::ok(id, action, val)
+                match self.with_remote_retry(|client| {
+                    crate::archive::remote_compress(client, &sources, &dest_zip, level, &cancelled, &exec_script)
+                }) {
+                    Ok((mut val, reconnected)) => {
+                        if reconnected {
+                            val["reconnected"] = json!(true);
                         }
-                        Err(e) => {
-                            crate::logger::log_error(&format!("remote_compress failed for {:?}: {}", dest_zip, e));
-                            IpcResponse::err(id, action, &e)
-                        }
+                        crate::logger::log_info(&format!("remote_compress succeeded for {:?}", dest_zip));
+                        IpcResponse::ok(id, action, val)
                     }
-                } else {
-                    IpcResponse::err(id, action, "Not connected to any remote server")
+                    Err(e) => {
+                        crate::logger::log_error(&format!("remote_compress failed for {:?}: {}", dest_zip, e));
+                        IpcResponse::err(id, action, &e)
+                    }
                 }
             }
 
@@ -338,20 +425,20 @@ impl AppState {
                 let exec_script = self.exec_script.clone();
                 let cancelled = self.archive_cancelled.clone();
 
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match crate::archive::remote_extract(client, &archive_path, &dest_dir, &overwrite_mode, &cancelled, &exec_script) {
-                        Ok(val) => {
-                            crate::logger::log_info(&format!("remote_extract succeeded from {:?} to {:?}", archive_path, dest_dir));
-                            IpcResponse::ok(id, action, val)
+                match self.with_remote_retry(|client| {
+                    crate::archive::remote_extract(client, &archive_path, &dest_dir, &overwrite_mode, &cancelled, &exec_script)
+                }) {
+                    Ok((mut val, reconnected)) => {
+                        if reconnected {
+                            val["reconnected"] = json!(true);
                         }
-                        Err(e) => {
-                            crate::logger::log_error(&format!("remote_extract failed for {:?}: {}", archive_path, e));
-                            IpcResponse::err(id, action, &e)
-                        }
+                        crate::logger::log_info(&format!("remote_extract succeeded from {:?} to {:?}", archive_path, dest_dir));
+                        IpcResponse::ok(id, action, val)
                     }
-                } else {
-                    IpcResponse::err(id, action, "Not connected to any remote server")
+                    Err(e) => {
+                        crate::logger::log_error(&format!("remote_extract failed for {:?}: {}", archive_path, e));
+                        IpcResponse::err(id, action, &e)
+                    }
                 }
             }
 
@@ -514,6 +601,7 @@ impl AppState {
                             "password": pass,
                             "auth_type": auth_type,
                             "key_path": key_path,
+                            "passphrase": passphrase,
                             "pwd": pwd
                         }));
 
@@ -562,23 +650,124 @@ impl AppState {
             }
 
             "disconnect" => {
+                let wipe = payload["wipe_credentials"].as_bool().unwrap_or(false);
                 let mut lock = self.remote.lock().unwrap();
                 *lock = None;
-                let mut conn_lock = self.current_connection.lock().unwrap();
-                *conn_lock = None;
+                if wipe {
+                    let mut conn_lock = self.current_connection.lock().unwrap();
+                    *conn_lock = None;
+                }
                 IpcResponse::ok(id, action, json!({ "connected": false }))
+            }
+
+            "reconnect" => {
+                let target_path = payload["path"].as_str();
+                let mut lock = self.remote.lock().unwrap();
+                match self.reconnect_client_locked(&mut lock, target_path) {
+                    Ok(pwd) => {
+                        let history = sessions::add_remote_history(&pwd);
+                        let client = lock.as_mut().unwrap();
+                        let (files, list_err) = match client.list(None) {
+                            Ok(f) => (f, None),
+                            Err(e) => (Vec::new(), Some(e)),
+                        };
+                        let conn_info = self.current_connection.lock().unwrap().clone().unwrap_or_else(|| json!({}));
+                        IpcResponse::ok(
+                            id,
+                            action,
+                            json!({
+                                "connected": true,
+                                "reconnected": true,
+                                "protocol": conn_info["protocol"].as_str().unwrap_or("sftp"),
+                                "host": conn_info["host"].as_str().unwrap_or(""),
+                                "pwd": pwd,
+                                "files": files,
+                                "list_error": list_err,
+                                "remote_history": history,
+                            }),
+                        )
+                    }
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "ping_keepalive" => {
+                let auto_reconnect = payload["auto_reconnect"].as_bool().unwrap_or(true);
+                let mut lock = self.remote.lock().unwrap();
+                if let Some(client) = lock.as_mut() {
+                    match client.ping() {
+                        Ok(_) => IpcResponse::ok(id, action, json!({ "alive": true, "reconnected": false })),
+                        Err(ping_err) => {
+                            if auto_reconnect {
+                                match self.reconnect_client_locked(&mut lock, None) {
+                                    Ok(pwd) => {
+                                        let files = lock.as_mut().and_then(|c| c.list(None).ok()).unwrap_or_default();
+                                        IpcResponse::ok(id, action, json!({
+                                            "alive": true,
+                                            "reconnected": true,
+                                            "pwd": pwd,
+                                            "files": files
+                                        }))
+                                    }
+                                    Err(e) => {
+                                        *lock = None;
+                                        IpcResponse::err(id, action, &format!("Keepalive failed ({}) and reconnect failed: {}", ping_err, e))
+                                    }
+                                }
+                            } else {
+                                *lock = None;
+                                IpcResponse::err(id, action, &ping_err)
+                            }
+                        }
+                    }
+                } else if auto_reconnect {
+                    match self.reconnect_client_locked(&mut lock, None) {
+                        Ok(pwd) => {
+                            let files = lock.as_mut().and_then(|c| c.list(None).ok()).unwrap_or_default();
+                            IpcResponse::ok(id, action, json!({
+                                "alive": true,
+                                "reconnected": true,
+                                "pwd": pwd,
+                                "files": files
+                            }))
+                        }
+                        Err(e) => IpcResponse::err(id, action, &e),
+                    }
+                } else {
+                    IpcResponse::err(id, action, "Not connected")
+                }
             }
 
             "remote_list" => {
                 let path = payload["path"].as_str();
                 let mut lock = self.remote.lock().unwrap();
+                let mut reconnected = false;
+                if lock.is_none() {
+                    if self.reconnect_client_locked(&mut lock, path).is_ok() {
+                        reconnected = true;
+                    }
+                }
                 if let Some(client) = lock.as_mut() {
                     match client.list(path) {
                         Ok(files) => {
                             let pwd = client.pwd();
-                            IpcResponse::ok(id, action, json!({ "pwd": pwd, "files": files }))
+                            IpcResponse::ok(id, action, json!({ "pwd": pwd, "files": files, "reconnected": reconnected }))
                         }
-                        Err(e) => IpcResponse::err(id, action, &e),
+                        Err(first_err) => {
+                            let is_dead = client.ping().is_err();
+                            if is_dead && self.reconnect_client_locked(&mut lock, path).is_ok() {
+                                if let Some(client2) = lock.as_mut() {
+                                    match client2.list(path) {
+                                        Ok(files) => {
+                                            let pwd = client2.pwd();
+                                            return IpcResponse::ok(id, action, json!({ "pwd": pwd, "files": files, "reconnected": true }));
+                                        }
+                                        Err(e2) => return IpcResponse::err(id, action, &e2),
+                                    }
+                                }
+                            }
+                            IpcResponse::err(id, action, &first_err)
+                        }
                     }
                 } else {
                     IpcResponse::err(id, action, "Not connected to any remote server")
@@ -588,18 +777,45 @@ impl AppState {
             "remote_cd" => {
                 let path = payload["path"].as_str().unwrap_or("/");
                 let mut lock = self.remote.lock().unwrap();
+                let mut reconnected = false;
+                if lock.is_none() {
+                    if self.reconnect_client_locked(&mut lock, Some(path)).is_ok() {
+                        reconnected = true;
+                    }
+                }
                 if let Some(client) = lock.as_mut() {
-                    match client.change_dir(path) {
+                    let cd_res = client.change_dir(path);
+                    let final_cd = match cd_res {
+                        Ok(p) => Ok(p),
+                        Err(first_err) => {
+                            let is_dead = client.ping().is_err();
+                            if is_dead && self.reconnect_client_locked(&mut lock, Some(path)).is_ok() {
+                                reconnected = true;
+                                lock.as_mut().unwrap().change_dir(path)
+                            } else {
+                                Err(first_err)
+                            }
+                        }
+                    };
+                    match final_cd {
                         Ok(new_pwd) => {
+                            self.update_stored_pwd(&new_pwd);
                             let history = sessions::add_remote_history(&new_pwd);
-                            let (files, list_err) = match client.list(None) {
+                            let client_ref = lock.as_mut().unwrap();
+                            let (files, list_err) = match client_ref.list(None) {
                                 Ok(f) => (f, None),
                                 Err(e) => {
                                     crate::logger::log_error(&format!("remote_cd: listing directory '{}' failed: {}", new_pwd, e));
                                     (Vec::new(), Some(e))
                                 }
                             };
-                            IpcResponse::ok(id, action, json!({ "pwd": new_pwd, "files": files, "list_error": list_err, "remote_history": history }))
+                            IpcResponse::ok(id, action, json!({
+                                "pwd": new_pwd,
+                                "files": files,
+                                "list_error": list_err,
+                                "remote_history": history,
+                                "reconnected": reconnected
+                            }))
                         }
                         Err(e) => {
                             crate::logger::log_error(&format!("remote_cd to '{}' failed: {}", path, e));
@@ -624,25 +840,21 @@ impl AppState {
 
             "remote_read" => {
                 let remote_file = payload["path"].as_str().unwrap_or("");
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match client.download_file(remote_file) {
-                        Ok(bytes) => {
-                            let text = String::from_utf8_lossy(&bytes).to_string();
-                            IpcResponse::ok(
-                                id,
-                                action,
-                                json!({
-                                    "path": remote_file,
-                                    "content": text,
-                                    "size": bytes.len(),
-                                }),
-                            )
-                        }
-                        Err(e) => IpcResponse::err(id, action, &e),
+                match self.with_remote_retry(|client| client.download_file(remote_file)) {
+                    Ok((bytes, reconnected)) => {
+                        let text = String::from_utf8_lossy(&bytes).to_string();
+                        IpcResponse::ok(
+                            id,
+                            action,
+                            json!({
+                                "path": remote_file,
+                                "content": text,
+                                "size": bytes.len(),
+                                "reconnected": reconnected,
+                            }),
+                        )
                     }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                    Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
 
@@ -650,117 +862,91 @@ impl AppState {
                 let remote_file = payload["path"].as_str().unwrap_or("");
                 let content = payload["content"].as_str().unwrap_or("");
                 let bytes = content.as_bytes();
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match client.upload_file(remote_file, bytes) {
-                        Ok(_) => IpcResponse::ok(id, action, json!({ "status": "uploaded", "size": bytes.len() })),
-                        Err(e) => IpcResponse::err(id, action, &e),
-                    }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                match self.with_remote_retry(|client| client.upload_file(remote_file, bytes)) {
+                    Ok((_, reconnected)) => IpcResponse::ok(id, action, json!({ "status": "uploaded", "size": bytes.len(), "reconnected": reconnected })),
+                    Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
 
             "remote_create_dir" => {
                 let dir_path = payload["path"].as_str().unwrap_or("");
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match client.make_dir(dir_path) {
-                        Ok(_) => {
-                            let files = client.list(None).unwrap_or_else(|e| {
-                                crate::logger::log_error(&format!("Listing remote directory failed after create_dir: {}", e));
-                                Vec::new()
-                            });
-                            IpcResponse::ok(id, action, json!({ "status": "created", "files": files }))
-                        }
-                        Err(e) => IpcResponse::err(id, action, &e),
-                    }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                match self.with_remote_retry(|client| {
+                    client.make_dir(dir_path)?;
+                    let files = client.list(None).unwrap_or_else(|e| {
+                        crate::logger::log_error(&format!("Listing remote directory failed after create_dir: {}", e));
+                        Vec::new()
+                    });
+                    Ok(files)
+                }) {
+                    Ok((files, reconnected)) => IpcResponse::ok(id, action, json!({ "status": "created", "files": files, "reconnected": reconnected })),
+                    Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
 
             "remote_create_file" => {
                 let path = payload["path"].as_str().unwrap_or("");
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match client.upload_file(path, b"") {
-                        Ok(_) => {
-                            let files = client.list(None).unwrap_or_else(|e| {
-                                crate::logger::log_error(&format!("Listing remote directory failed after create_file: {}", e));
-                                Vec::new()
-                            });
-                            IpcResponse::ok(id, action, json!({ "status": "created", "files": files }))
-                        }
-                        Err(e) => IpcResponse::err(id, action, &e),
-                    }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                match self.with_remote_retry(|client| {
+                    client.upload_file(path, b"")?;
+                    let files = client.list(None).unwrap_or_else(|e| {
+                        crate::logger::log_error(&format!("Listing remote directory failed after create_file: {}", e));
+                        Vec::new()
+                    });
+                    Ok(files)
+                }) {
+                    Ok((files, reconnected)) => IpcResponse::ok(id, action, json!({ "status": "created", "files": files, "reconnected": reconnected })),
+                    Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
 
             "remote_rename" => {
                 let old_p = payload["old_path"].as_str().unwrap_or("");
                 let new_p = payload["new_path"].as_str().unwrap_or("");
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match client.rename(old_p, new_p) {
-                        Ok(_) => {
-                            let files = client.list(None).unwrap_or_else(|e| {
-                                crate::logger::log_error(&format!("Listing remote directory failed after rename: {}", e));
-                                Vec::new()
-                            });
-                            IpcResponse::ok(id, action, json!({ "status": "renamed", "files": files }))
-                        }
-                        Err(e) => IpcResponse::err(id, action, &e),
-                    }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                match self.with_remote_retry(|client| {
+                    client.rename(old_p, new_p)?;
+                    let files = client.list(None).unwrap_or_else(|e| {
+                        crate::logger::log_error(&format!("Listing remote directory failed after rename: {}", e));
+                        Vec::new()
+                    });
+                    Ok(files)
+                }) {
+                    Ok((files, reconnected)) => IpcResponse::ok(id, action, json!({ "status": "renamed", "files": files, "reconnected": reconnected })),
+                    Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
 
             "remote_delete" => {
                 let path = payload["path"].as_str().unwrap_or("");
                 let is_dir = payload["is_dir"].as_bool().unwrap_or(false);
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    let res = if is_dir {
-                        client.remove_dir(path)
+                match self.with_remote_retry(|client| {
+                    if is_dir {
+                        client.remove_dir(path)?;
                     } else {
-                        client.remove_file(path)
-                    };
-                    match res {
-                        Ok(_) => {
-                            let files = client.list(None).unwrap_or_else(|e| {
-                                crate::logger::log_error(&format!("Listing remote directory failed after delete: {}", e));
-                                Vec::new()
-                            });
-                            IpcResponse::ok(id, action, json!({ "status": "deleted", "files": files }))
-                        }
-                        Err(e) => IpcResponse::err(id, action, &e),
+                        client.remove_file(path)?;
                     }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                    let files = client.list(None).unwrap_or_else(|e| {
+                        crate::logger::log_error(&format!("Listing remote directory failed after delete: {}", e));
+                        Vec::new()
+                    });
+                    Ok(files)
+                }) {
+                    Ok((files, reconnected)) => IpcResponse::ok(id, action, json!({ "status": "deleted", "files": files, "reconnected": reconnected })),
+                    Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
 
             "remote_chmod" => {
                 let path = payload["path"].as_str().unwrap_or("");
                 let mode = payload["mode"].as_str().unwrap_or("0644");
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match client.chmod(mode, path) {
-                        Ok(_) => {
-                            let files = client.list(None).unwrap_or_else(|e| {
-                                crate::logger::log_error(&format!("Listing remote directory failed after chmod: {}", e));
-                                Vec::new()
-                            });
-                            IpcResponse::ok(id, action, json!({ "status": "chmod_applied", "files": files }))
-                        }
-                        Err(e) => IpcResponse::err(id, action, &e),
-                    }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                match self.with_remote_retry(|client| {
+                    client.chmod(mode, path)?;
+                    let files = client.list(None).unwrap_or_else(|e| {
+                        crate::logger::log_error(&format!("Listing remote directory failed after chmod: {}", e));
+                        Vec::new()
+                    });
+                    Ok(files)
+                }) {
+                    Ok((files, reconnected)) => IpcResponse::ok(id, action, json!({ "status": "chmod_applied", "files": files, "reconnected": reconnected })),
+                    Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
 
@@ -769,32 +955,31 @@ impl AppState {
                 let remote_path = payload["remote_path"].as_str().unwrap_or("");
                 let skip_list = payload["skip_list"].as_bool().unwrap_or(false);
 
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match client.upload_from_local_file(local_path, remote_path) {
-                        Ok(bytes) => {
-                            let files = if skip_list {
-                                Vec::new()
-                            } else {
-                                client.list(None).unwrap_or_default()
-                            };
-                            IpcResponse::ok(
-                                id,
-                                action,
-                                json!({
-                                    "status": "uploaded",
-                                    "bytes": bytes,
-                                    "files": files,
-                                }),
-                            )
-                        }
-                        Err(e) => {
-                            crate::logger::log_error(&format!("Upload error for '{}' -> '{}': {}", local_path, remote_path, e));
-                            IpcResponse::err(id, action, &e)
-                        }
+                match self.with_remote_retry(|client| {
+                    let bytes = client.upload_from_local_file(local_path, remote_path)?;
+                    let files = if skip_list {
+                        Vec::new()
+                    } else {
+                        client.list(None).unwrap_or_default()
+                    };
+                    Ok((bytes, files))
+                }) {
+                    Ok(((bytes, files), reconnected)) => {
+                        IpcResponse::ok(
+                            id,
+                            action,
+                            json!({
+                                "status": "uploaded",
+                                "bytes": bytes,
+                                "files": files,
+                                "reconnected": reconnected,
+                            }),
+                        )
                     }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                    Err(e) => {
+                        crate::logger::log_error(&format!("Upload error for '{}' -> '{}': {}", local_path, remote_path, e));
+                        IpcResponse::err(id, action, &e)
+                    }
                 }
             }
 
@@ -920,27 +1105,23 @@ impl AppState {
                 let remote_path = payload["remote_path"].as_str().unwrap_or("");
                 let local_path = payload["local_path"].as_str().unwrap_or("");
 
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match client.download_to_local_file(remote_path, local_path) {
-                        Ok(bytes) => {
-                            IpcResponse::ok(
-                                id,
-                                action,
-                                json!({
-                                    "status": "downloaded",
-                                    "bytes": bytes,
-                                    "local_path": local_path,
-                                }),
-                            )
-                        }
-                        Err(e) => {
-                            crate::logger::log_error(&format!("Download error for '{}' -> '{}': {}", remote_path, local_path, e));
-                            IpcResponse::err(id, action, &e)
-                        }
+                match self.with_remote_retry(|client| client.download_to_local_file(remote_path, local_path)) {
+                    Ok((bytes, reconnected)) => {
+                        IpcResponse::ok(
+                            id,
+                            action,
+                            json!({
+                                "status": "downloaded",
+                                "bytes": bytes,
+                                "local_path": local_path,
+                                "reconnected": reconnected,
+                            }),
+                        )
                     }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                    Err(e) => {
+                        crate::logger::log_error(&format!("Download error for '{}' -> '{}': {}", remote_path, local_path, e));
+                        IpcResponse::err(id, action, &e)
+                    }
                 }
             }
 
@@ -973,18 +1154,14 @@ impl AppState {
 
             "remote_stat" => {
                 let path = payload["path"].as_str().unwrap_or("");
-                let mut lock = self.remote.lock().unwrap();
-                if let Some(client) = lock.as_mut() {
-                    match client.stat(path) {
-                        Ok(Some(item)) => IpcResponse::ok(id, action, json!({
-                            "exists": true,
-                            "item": item
-                        })),
-                        Ok(None) => IpcResponse::ok(id, action, json!({ "exists": false })),
-                        Err(e) => IpcResponse::err(id, action, &e),
-                    }
-                } else {
-                    IpcResponse::err(id, action, "Not connected")
+                match self.with_remote_retry(|client| client.stat(path)) {
+                    Ok((Some(item), reconnected)) => IpcResponse::ok(id, action, json!({
+                        "exists": true,
+                        "item": item,
+                        "reconnected": reconnected
+                    })),
+                    Ok((None, reconnected)) => IpcResponse::ok(id, action, json!({ "exists": false, "reconnected": reconnected })),
+                    Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
 

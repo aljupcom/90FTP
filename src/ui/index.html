@@ -2358,7 +2358,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.45</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.46</span>
         </div>
       </div>
 
@@ -2401,7 +2401,12 @@
             <span class="shortcut">Ctrl+Q</span>
           </div>
           <div class="dropdown-separator"></div>
-          <div class="dropdown-item" onclick="disconnect()">
+          <div class="dropdown-item" id="menuItemReconnect" onclick="handleReconnect(true)" style="display: none;">
+            <span class="menu-icon" style="color: #22c55e;"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+            <span style="color: #4ade80; font-weight: 600;">Reconnect Session</span>
+            <span class="shortcut">Ctrl+R</span>
+          </div>
+          <div class="dropdown-item" id="menuItemDisconnect" onclick="disconnect()">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/></svg></span>
             <span>Disconnect</span>
             <span class="shortcut">Ctrl+D</span>
@@ -2602,6 +2607,10 @@
         <svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         <span>Connect</span>
       </button>
+      <button class="btn" id="btnReconnect" onclick="handleReconnect(true)" style="display: none; background: rgba(34, 197, 94, 0.16); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.45); font-weight: 600;" title="Reconnect to last session without opening connection dialog">
+        <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        <span>Reconnect</span>
+      </button>
       <button class="btn btn-danger" id="btnDisconnect" onclick="handleDisconnect()" style="display: none;">
         <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         <span>Disconnect</span>
@@ -2737,6 +2746,12 @@
             <span>Remote Server</span>
           </div>
           <div style="display: flex; gap: 4px;">
+            <button class="btn-tool" id="btnToolbarReconnect" style="display: none; color: #4ade80; border-color: rgba(34, 197, 94, 0.4); background: rgba(34, 197, 94, 0.12);" title="Reconnect to Server Silently" onclick="handleReconnect(true)">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+            <button class="btn-tool" id="btnToolbarSyncBrowsing" style="color: var(--text-dim);" title="Toggle Synchronized Browsing (Lock Local & Remote folder navigation)" onclick="toggleSyncBrowsingToolbar()">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </button>
             <button class="btn-tool" style="color: var(--accent);" title="Download Selected File to Local PC" onclick="transferDownload()">
               <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </button>
@@ -3337,6 +3352,7 @@
       
       <div class="options-tab-bar">
         <button type="button" class="options-tab-btn active" id="tabOptGeneral" onclick="switchOptionsTab('general')">General</button>
+        <button type="button" class="options-tab-btn" id="tabOptConnection" onclick="switchOptionsTab('connection')">Connection & Sync</button>
         <button type="button" class="options-tab-btn" id="tabOptTransfer" onclick="switchOptionsTab('transfer')">Transfers</button>
         <button type="button" class="options-tab-btn" id="tabOptSecurity" onclick="switchOptionsTab('security')">Security & Storage</button>
         <button type="button" class="options-tab-btn" id="tabOptInterface" onclick="switchOptionsTab('interface')">Interface & Console</button>
@@ -3382,6 +3398,50 @@
                 <option value="transfer">Transfer (Download)</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        <!-- Tab 1.5: Connection & Sync -->
+        <div class="options-pane" id="paneOptConnection">
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend">Session Persistence & Silent Auto-Reconnect</div>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optAutoReconnectOnClick" onchange="checkOptionsFormDirty()">
+              <span>Auto-reconnect silently when clicking folders or files if connection is closed (no loading modal)</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optKeepViewOnDisconnect" onchange="checkOptionsFormDirty()">
+              <span>Keep remote folder list visible when disconnected for instant one-click folder navigation</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optKeepAliveEnabled" onchange="checkOptionsFormDirty()">
+              <span>Send periodic Keep-Alive heartbeat packets to prevent server idle session drops</span>
+            </label>
+            <div class="options-select-row" style="margin-top: 8px;">
+              <span style="color: var(--text-muted);">Keep-Alive Heartbeat Interval:</span>
+              <select id="optKeepAliveInterval" style="width: 170px;" onchange="checkOptionsFormDirty()">
+                <option value="15">Every 15 seconds (High)</option>
+                <option value="25">Every 25 seconds (Recommended)</option>
+                <option value="45">Every 45 seconds (Normal)</option>
+                <option value="60">Every 60 seconds (Low)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="options-groupbox" style="margin-top: 10px;">
+            <div class="options-groupbox-legend">Directory Synchronization & Optimization</div>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optSyncBrowsing" onchange="checkOptionsFormDirty()">
+              <span>Synchronized Browsing (lock Local & Remote folder navigation together)</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optAutoRefreshOnFocus" onchange="checkOptionsFormDirty()">
+              <span>Automatically refresh active directories when application window regains focus</span>
+            </label>
+            <label class="options-checkbox-row">
+              <input type="checkbox" id="optAutoRefreshAfterTransfer" onchange="checkOptionsFormDirty()">
+              <span>Automatically refresh directory listing after file transfers & archive tasks</span>
+            </label>
           </div>
         </div>
 
@@ -3537,7 +3597,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.45 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.46 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -4341,9 +4401,13 @@
     let savedSites = [];
     let selectedQuickSite = null;
     let currentConnectedProfile = null;
+    let lastConnectedProfile = null;
+    let keepAliveTimer = null;
+    let silentReconnectPromise = null;
+    let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.45';
+    let APP_CURRENT_VERSION = '0.0.0.46';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4385,7 +4449,7 @@
         const id = 'req_' + (++reqCounter);
         const timeoutMs = ['upload', 'download', 'remote_compress', 'remote_extract'].includes(action)
           ? 600000 
-          : (['connect', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'terminal_exec', 'local_compress', 'local_extract'].includes(action) 
+          : (['connect', 'reconnect', 'ping_keepalive', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'terminal_exec', 'local_compress', 'local_extract'].includes(action) 
               ? 60000 
               : 15000);
 
@@ -4439,6 +4503,11 @@
       if (cb) {
         pendingCallbacks.delete(resp.id);
         if (resp.success) {
+          if (resp.data && resp.data.reconnected === true) {
+            try {
+              onBackendAutoReconnected(resp.data);
+            } catch (_) {}
+          }
           cb.resolve(resp.data);
         } else {
           cb.reject(new Error(resp.error || 'Unknown error'));
@@ -4537,9 +4606,7 @@
     function onRemoteHistorySelected(path) {
       if (!path) return;
       document.getElementById('remotePathInput').value = path;
-      if (isConnected) {
-        navigateRemote(path);
-      }
+      navigateRemote(path);
     }
 
     // Quick Connect Server Selector (Sites from Site Manager)
@@ -4579,6 +4646,10 @@
         selectedQuickSite = null;
         if (manualGroup) manualGroup.style.display = 'flex';
         if (siteBadge) siteBadge.style.display = 'none';
+        if (!isConnected) {
+          const btnConn = document.getElementById('btnConnect');
+          if (btnConn) btnConn.style.display = 'inline-flex';
+        }
         return;
       }
 
@@ -4587,6 +4658,16 @@
 
       selectedQuickSite = site;
       if (manualGroup) manualGroup.style.display = 'none';
+      if (!isConnected) {
+        const btnConn = document.getElementById('btnConnect');
+        const btnRec = document.getElementById('btnReconnect');
+        if (lastConnectedProfile && lastConnectedProfile.host === site.host && lastConnectedProfile.username === site.username) {
+          if (btnRec) btnRec.style.display = 'inline-flex';
+          if (btnConn) btnConn.style.display = 'none';
+        } else {
+          if (btnConn) btnConn.style.display = 'inline-flex';
+        }
+      }
       if (siteBadge && badgeInfo) {
         siteBadge.style.display = 'flex';
         const authDesc = site.auth_type === 'key' ? 'SSH Key' : 'Password';
@@ -5073,6 +5154,7 @@
 
     async function navigateLocal(path) {
       if (!path) path = currentLocalPath || 'C:\\Users\\aljailane\\Desktop';
+      const prevLocal = (currentLocalPath || '').replace(/[\\/]+$/, '');
       try {
         const data = await sendRust('local_list', { path });
         currentLocalPath = data.path;
@@ -5092,6 +5174,34 @@
         const treePopup = document.getElementById('localPathTreePopup');
         if (treePopup && treePopup.classList.contains('active')) {
           renderLocalPathTree();
+        }
+
+        // Synchronized Browsing (Local -> Remote)
+        if (appOptions && appOptions.syncBrowsing && !isSyncNavigating && prevLocal) {
+          const newLocal = (currentLocalPath || '').replace(/[\\/]+$/, '');
+          if (newLocal && newLocal.toLowerCase() !== prevLocal.toLowerCase() && (isConnected || lastConnectedProfile)) {
+            isSyncNavigating = true;
+            try {
+              if (newLocal.toLowerCase().startsWith(prevLocal.toLowerCase() + '\\')) {
+                const subName = newLocal.substring(prevLocal.length + 1);
+                if (subName && !subName.includes('\\')) {
+                  const matchRemote = (remoteFiles || []).find(f => f.is_dir && f.name.toLowerCase() === subName.toLowerCase());
+                  if (matchRemote) {
+                    addLog(`[Sync Browsing] Following folder '${subName}' on Remote Server`, 'info');
+                    await navigateRemote(matchRemote.path);
+                  }
+                }
+              } else if (prevLocal.toLowerCase().startsWith(newLocal.toLowerCase() + '\\')) {
+                const remSlash = prevLocal.substring(newLocal.length + 1);
+                if (remSlash && !remSlash.includes('\\') && !isRemoteRoot(currentRemotePath)) {
+                  addLog(`[Sync Browsing] Navigating up on Remote Server`, 'info');
+                  remoteNavigateUp();
+                }
+              }
+            } finally {
+              isSyncNavigating = false;
+            }
+          }
         }
       } catch (err) {
         addLog('Cannot open local folder: ' + err.message, 'error');
@@ -5416,6 +5526,15 @@
         }
       }
       try {
+        if (!isConnected && appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile) {
+          if (item.is_dir) {
+            await navigateRemote(item.path);
+            return;
+          } else {
+            const ok = await ensureSilentConnected(currentRemotePath);
+            if (!ok) return;
+          }
+        }
         if (item.is_dir) {
           await navigateRemote(item.path);
         } else {
@@ -5435,33 +5554,84 @@
     }
 
     async function navigateRemote(path) {
-      if (!isConnected) return;
+      if (!path) path = currentRemotePath || '/';
+      const prevRemote = (currentRemotePath || '').replace(/\/+$/, '') || '/';
+
+      if (!isConnected) {
+        if (appOptions && appOptions.autoReconnectOnClick !== false && (lastConnectedProfile || currentConnectedProfile)) {
+          const rec = await ensureSilentConnected(path);
+          if (!rec || !rec.ok) return;
+          if (rec.alreadyNavigated) {
+            await triggerRemoteToLocalSync(prevRemote, currentRemotePath);
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+
       try {
         addLog('CWD -> ' + path, 'cmd');
         const data = await sendRust('remote_cd', { path });
         currentRemotePath = data.pwd;
+        if (lastConnectedProfile) lastConnectedProfile.remote_dir = currentRemotePath;
+        if (currentConnectedProfile) currentConnectedProfile.remote_dir = currentRemotePath;
         document.getElementById('remotePathInput').value = currentRemotePath;
         if (data.remote_history) updateRemoteHistory(data.remote_history);
         if (data.list_error) {
           addLog('Remote directory notice: ' + data.list_error, 'error');
         }
         renderRemoteFiles(data.files, data.list_error);
+        await triggerRemoteToLocalSync(prevRemote, currentRemotePath);
       } catch (err) {
         addLog('Remote navigation error: ' + err.message, 'error');
-        renderRemoteFiles([], err.message);
+        if (!remoteFiles || remoteFiles.length === 0) {
+          renderRemoteFiles([], err.message);
+        }
+      }
+    }
+
+    async function triggerRemoteToLocalSync(prevRemote, newRemoteRaw) {
+      if (!(appOptions && appOptions.syncBrowsing && !isSyncNavigating && prevRemote)) return;
+      const newRemote = (newRemoteRaw || '').replace(/\/+$/, '') || '/';
+      if (newRemote === prevRemote) return;
+      isSyncNavigating = true;
+      try {
+        const prefix = prevRemote === '/' ? '/' : prevRemote + '/';
+        if (newRemote.startsWith(prefix)) {
+          const subName = newRemote.substring(prefix.length);
+          if (subName && !subName.includes('/')) {
+            const matchLocal = (localFiles || []).find(f => f.is_dir && f.name.toLowerCase() === subName.toLowerCase());
+            if (matchLocal) {
+              addLog(`[Sync Browsing] Following folder '${subName}' on Local Computer`, 'info');
+              await navigateLocal(matchLocal.path);
+            }
+          }
+        } else {
+          const revPrefix = newRemote === '/' ? '/' : newRemote + '/';
+          if (prevRemote.startsWith(revPrefix)) {
+            const remPart = prevRemote.substring(revPrefix.length);
+            if (remPart && !remPart.includes('/') && !isLocalRoot(currentLocalPath)) {
+              addLog(`[Sync Browsing] Navigating up on Local Computer`, 'info');
+              localNavigateUp();
+            }
+          }
+        }
+      } finally {
+        isSyncNavigating = false;
       }
     }
 
     function remoteNavigateUp() {
-      if (!isConnected) return;
-      let parent = currentRemotePath.replace(/\/[^\/]+$/, '');
+      if (!isConnected && !(appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile)) return;
+      let parent = (currentRemotePath || '/').replace(/\/[^\/]+$/, '');
       if (!parent) parent = '/';
       navigateRemote(parent);
     }
 
     function refreshRemote() {
-      if (!isConnected) return;
-      navigateRemote(currentRemotePath);
+      if (!isConnected && !(appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile)) return;
+      navigateRemote(currentRemotePath || '/');
     }
 
     // Connect & Disconnect Logic with Host Key Verification Support
@@ -5506,7 +5676,8 @@
         }
 
         isConnected = true;
-        currentConnectedProfile = { ...params };
+        currentConnectedProfile = { ...params, remote_dir: res.pwd };
+        lastConnectedProfile = { ...params, remote_dir: res.pwd };
         currentRemotePath = res.pwd;
         document.getElementById('remotePathInput').value = currentRemotePath;
         if (res.remote_history) updateRemoteHistory(res.remote_history);
@@ -5517,6 +5688,7 @@
 
         const label = params.site_name ? `${params.site_name} (${params.host})` : `${params.protocol.toUpperCase()}://${params.host}`;
         setConnectedState(true, label);
+        startKeepAliveTimer();
         addLog(`Connected successfully to ${params.host}! Remote directory: ${currentRemotePath}`, 'success');
         pendingConnection = null;
         finishConnectionSuccess(res.pwd);
@@ -5578,20 +5750,207 @@
       });
     }
 
-    async function handleDisconnect() {
+    async function handleDisconnect(isManual = true) {
+      if (isManual && isConnected && appOptions && appOptions.confirmDisconnect) {
+        if (!confirm('Are you sure you want to disconnect from the active server?')) {
+          return;
+        }
+      }
+      stopKeepAliveTimer();
+      const wipe = !!(appOptions && appOptions.wipeOnDisconnect);
+      if (!wipe && currentConnectedProfile) {
+        lastConnectedProfile = { ...currentConnectedProfile, remote_dir: currentRemotePath || currentConnectedProfile.remote_dir || '/' };
+      } else if (wipe) {
+        lastConnectedProfile = null;
+      }
       try {
-        await sendRust('disconnect');
+        await sendRust('disconnect', { wipe_credentials: wipe });
       } catch (e) {}
       isConnected = false;
       currentConnectedProfile = null;
       setConnectedState(false);
-      remoteFiles = [];
-      selectedRemoteFile = null;
-      document.getElementById('remotePathInput').value = 'Not connected';
-      document.getElementById('remoteFileList').innerHTML = `
-        <tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 50px;">Disconnected from server.</td></tr>
-      `;
-      addLog('Disconnected from server.', 'info');
+
+      const keepView = !wipe && (appOptions ? appOptions.keepViewOnDisconnect !== false : true);
+      if (keepView && remoteFiles && remoteFiles.length > 0) {
+        addLog('Disconnected from server. Folder view cached (click any folder or Reconnect to resume silently).', 'info');
+      } else {
+        remoteFiles = [];
+        selectedRemoteFile = null;
+        document.getElementById('remotePathInput').value = lastConnectedProfile ? (currentRemotePath || '/') : 'Not connected';
+        document.getElementById('remoteFileList').innerHTML = lastConnectedProfile
+          ? `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 45px;">
+               <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                 <span>Connection closed (${escapeHtml(lastConnectedProfile.host)}).</span>
+                 <button type="button" class="btn" onclick="handleReconnect(true)" style="background: rgba(34, 197, 94, 0.16); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.45); font-weight: 600; padding: 5px 14px;">
+                   ↻ Reconnect Now
+                 </button>
+               </div>
+             </td></tr>`
+          : `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 50px;">Disconnected from server.</td></tr>`;
+        addLog('Disconnected from server.', 'info');
+      }
+    }
+
+    function onBackendAutoReconnected(data) {
+      const profile = currentConnectedProfile || lastConnectedProfile || selectedQuickSite;
+      isConnected = true;
+      if (profile && !currentConnectedProfile) {
+        currentConnectedProfile = { ...profile };
+      }
+      if (data && data.pwd) {
+        currentRemotePath = data.pwd;
+        const inp = document.getElementById('remotePathInput');
+        if (inp) inp.value = currentRemotePath;
+      }
+      const host = (profile && profile.host) || (data && data.host) || 'Server';
+      const proto = ((profile && profile.protocol) || (data && data.protocol) || 'SFTP').toUpperCase();
+      const label = (profile && profile.site_name) ? `${profile.site_name} (${host})` : `${proto}://${host}`;
+      setConnectedState(true, label);
+      startKeepAliveTimer();
+      addLog(`Session automatically reconnected to ${host} in background.`, 'success');
+    }
+
+    async function ensureSilentConnected(targetPath = null) {
+      if (isConnected) return { ok: true, alreadyNavigated: false };
+      if (silentReconnectPromise) return silentReconnectPromise;
+
+      const profile = lastConnectedProfile || currentConnectedProfile || (selectedQuickSite ? {
+        protocol: selectedQuickSite.protocol,
+        host: selectedQuickSite.host,
+        port: selectedQuickSite.port,
+        username: selectedQuickSite.username,
+        password: selectedQuickSite.password,
+        auth_type: selectedQuickSite.auth_type || 'password',
+        key_path: selectedQuickSite.key_path,
+        passphrase: selectedQuickSite.passphrase,
+        remote_dir: selectedQuickSite.remote_dir,
+        site_name: selectedQuickSite.name
+      } : null);
+
+      if (!profile || !profile.host) {
+        return { ok: false, alreadyNavigated: false };
+      }
+
+      const desiredDir = targetPath || currentRemotePath || profile.remote_dir || '/';
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      const btnRec = document.getElementById('btnReconnect');
+      if (dot) dot.className = 'status-dot connecting';
+      if (text) text.innerText = `Reconnecting to ${profile.host}...`;
+      if (btnRec) btnRec.disabled = true;
+
+      silentReconnectPromise = (async () => {
+        try {
+          addLog(`Auto-reconnecting silently to ${profile.host} (${desiredDir})...`, 'info');
+          let res;
+          try {
+            res = await sendRust('reconnect', { path: desiredDir });
+          } catch (_) {
+            res = await sendRust('connect', {
+              ...profile,
+              remote_dir: desiredDir,
+              trust_host: true
+            });
+          }
+
+          isConnected = true;
+          currentConnectedProfile = { ...profile, remote_dir: res.pwd || desiredDir };
+          lastConnectedProfile = { ...currentConnectedProfile };
+          currentRemotePath = res.pwd || desiredDir;
+          const inp = document.getElementById('remotePathInput');
+          if (inp) inp.value = currentRemotePath;
+          if (res.remote_history) updateRemoteHistory(res.remote_history);
+          if (res.files) {
+            renderRemoteFiles(res.files || [], res.list_error);
+          }
+
+          const label = profile.site_name
+            ? `${profile.site_name} (${profile.host})`
+            : `${(profile.protocol || 'sftp').toUpperCase()}://${profile.host}`;
+          setConnectedState(true, label);
+          startKeepAliveTimer();
+          addLog(`Reconnected silently to ${profile.host} (${currentRemotePath})`, 'success');
+          return { ok: true, alreadyNavigated: true, data: res };
+        } catch (err) {
+          setConnectedState(false);
+          addLog(`Silent reconnect failed: ${err.message || err}`, 'error');
+          return { ok: false, alreadyNavigated: false };
+        } finally {
+          if (btnRec) btnRec.disabled = false;
+          silentReconnectPromise = null;
+        }
+      })();
+
+      return silentReconnectPromise;
+    }
+
+    async function handleReconnect(silent = true, targetPath = null) {
+      closeAllMenus();
+      if (silent && (lastConnectedProfile || currentConnectedProfile || selectedQuickSite)) {
+        const res = await ensureSilentConnected(targetPath || currentRemotePath);
+        if (res && res.ok) return;
+      }
+      handleConnectClick();
+    }
+
+    function stopKeepAliveTimer() {
+      if (keepAliveTimer) {
+        clearInterval(keepAliveTimer);
+        keepAliveTimer = null;
+      }
+    }
+
+    function startKeepAliveTimer() {
+      stopKeepAliveTimer();
+      if (appOptions && appOptions.keepAliveEnabled === false) return;
+      const sec = Math.max(10, parseInt((appOptions && appOptions.keepAliveInterval) || 25, 10) || 25);
+      keepAliveTimer = setInterval(async () => {
+        if (!isConnected) return;
+        try {
+          const res = await sendRust('ping_keepalive', {
+            auto_reconnect: !!(appOptions && appOptions.autoReconnectOnClick !== false)
+          });
+          if (res && res.reconnected && res.files) {
+            renderRemoteFiles(res.files);
+          }
+        } catch (err) {
+          console.warn('Keep-alive heartbeat notice:', err);
+          if (appOptions && appOptions.autoReconnectOnClick === false) {
+            isConnected = false;
+            setConnectedState(false);
+          }
+        }
+      }, sec * 1000);
+    }
+
+    function restartKeepAliveTimer() {
+      if (isConnected) {
+        startKeepAliveTimer();
+      } else {
+        stopKeepAliveTimer();
+      }
+    }
+
+    function toggleSyncBrowsingToolbar() {
+      if (!appOptions) return;
+      appOptions.syncBrowsing = !appOptions.syncBrowsing;
+      try {
+        appStorage.setItem('90ftp_options', JSON.stringify(appOptions));
+      } catch (_) {}
+      updateSyncBrowsingToolbarUI();
+      addLog(`Synchronized Browsing ${appOptions.syncBrowsing ? 'ENABLED (Local & Remote folders locked)' : 'DISABLED'}`, 'info');
+    }
+
+    function updateSyncBrowsingToolbarUI() {
+      const btn = document.getElementById('btnToolbarSyncBrowsing');
+      if (!btn) return;
+      const active = !!(appOptions && appOptions.syncBrowsing);
+      btn.style.color = active ? '#22c55e' : 'var(--text-dim)';
+      btn.style.borderColor = active ? 'rgba(34, 197, 94, 0.45)' : '';
+      btn.style.background = active ? 'rgba(34, 197, 94, 0.12)' : '';
+      btn.title = active
+        ? 'Synchronized Browsing: ACTIVE (Click to disable)'
+        : 'Toggle Synchronized Browsing (Lock Local & Remote folder navigation)';
     }
 
     function setConnectingState(isConnecting) {
@@ -5607,7 +5966,11 @@
       const dot = document.getElementById('statusDot');
       const text = document.getElementById('statusText');
       const btnConn = document.getElementById('btnConnect');
+      const btnRec = document.getElementById('btnReconnect');
       const btnDisc = document.getElementById('btnDisconnect');
+      const btnToolRec = document.getElementById('btnToolbarReconnect');
+      const menuRec = document.getElementById('menuItemReconnect');
+      const menuDisc = document.getElementById('menuItemDisconnect');
       const termBadge = document.getElementById('terminalBadge');
 
       if (termBadge) {
@@ -5621,12 +5984,29 @@
         dot.className = 'status-dot connected';
         text.innerText = 'Connected: ' + title;
         btnConn.style.display = 'none';
+        if (btnRec) btnRec.style.display = 'none';
         btnDisc.style.display = 'inline-flex';
+        if (btnToolRec) btnToolRec.style.display = 'none';
+        if (menuRec) menuRec.style.display = 'none';
+        if (menuDisc) menuDisc.style.display = 'flex';
       } else {
+        const hasPrev = !!(lastConnectedProfile && lastConnectedProfile.host);
         dot.className = 'status-dot';
-        text.innerText = 'Disconnected';
-        btnConn.style.display = 'inline-flex';
+        text.innerText = hasPrev ? `Disconnected (${lastConnectedProfile.host})` : 'Disconnected';
         btnDisc.style.display = 'none';
+        if (hasPrev) {
+          if (btnRec) btnRec.style.display = 'inline-flex';
+          btnConn.style.display = 'none';
+          if (btnToolRec) btnToolRec.style.display = 'inline-flex';
+          if (menuRec) menuRec.style.display = 'flex';
+          if (menuDisc) menuDisc.style.display = 'none';
+        } else {
+          if (btnRec) btnRec.style.display = 'none';
+          btnConn.style.display = 'inline-flex';
+          if (btnToolRec) btnToolRec.style.display = 'none';
+          if (menuRec) menuRec.style.display = 'none';
+          if (menuDisc) menuDisc.style.display = 'flex';
+        }
       }
     }
 
@@ -9391,6 +9771,13 @@
       confirmDisconnect: true,
       dblLocal: 'edit',
       dblRemote: 'edit',
+      autoReconnectOnClick: true,
+      keepViewOnDisconnect: true,
+      keepAliveEnabled: true,
+      keepAliveInterval: 25,
+      syncBrowsing: false,
+      autoRefreshOnFocus: false,
+      autoRefreshAfterTransfer: true,
       delFinished: false,
       autoSwitchTransfers: true,
       fileCollision: 'overwrite',
@@ -9414,6 +9801,7 @@
       showHiddenFilesState = !!appOptions.showHidden;
       const menuCheck = document.getElementById('menuCheckHidden');
       if (menuCheck) menuCheck.textContent = showHiddenFilesState ? '✓' : ' ';
+      updateSyncBrowsingToolbarUI();
     }
 
     function getCurrentFormOptions() {
@@ -9433,6 +9821,13 @@
         confirmDisconnect: getCheck('optConfirmDisconnect', true),
         dblLocal: getVal('optDblLocal', 'edit'),
         dblRemote: getVal('optDblRemote', 'edit'),
+        autoReconnectOnClick: getCheck('optAutoReconnectOnClick', true),
+        keepViewOnDisconnect: getCheck('optKeepViewOnDisconnect', true),
+        keepAliveEnabled: getCheck('optKeepAliveEnabled', true),
+        keepAliveInterval: parseInt(getVal('optKeepAliveInterval', '25'), 10) || 25,
+        syncBrowsing: getCheck('optSyncBrowsing', false),
+        autoRefreshOnFocus: getCheck('optAutoRefreshOnFocus', false),
+        autoRefreshAfterTransfer: getCheck('optAutoRefreshAfterTransfer', true),
         delFinished: getCheck('optDelFinished', false),
         autoSwitchTransfers: getCheck('optAutoSwitchTransfers', true),
         fileCollision: getVal('optFileCollision', 'overwrite'),
@@ -9487,6 +9882,15 @@
       setVal('optDblLocal', appOptions.dblLocal);
       setVal('optDblRemote', appOptions.dblRemote);
 
+      // Tab 1.5: Connection & Sync
+      setCheck('optAutoReconnectOnClick', appOptions.autoReconnectOnClick !== false);
+      setCheck('optKeepViewOnDisconnect', appOptions.keepViewOnDisconnect !== false);
+      setCheck('optKeepAliveEnabled', appOptions.keepAliveEnabled !== false);
+      setVal('optKeepAliveInterval', String(appOptions.keepAliveInterval || 25));
+      setCheck('optSyncBrowsing', !!appOptions.syncBrowsing);
+      setCheck('optAutoRefreshOnFocus', !!appOptions.autoRefreshOnFocus);
+      setCheck('optAutoRefreshAfterTransfer', appOptions.autoRefreshAfterTransfer !== false);
+
       // Tab 2: Transfers
       setCheck('optDelFinished', appOptions.delFinished);
       setCheck('optAutoSwitchTransfers', appOptions.autoSwitchTransfers);
@@ -9520,7 +9924,7 @@
     }
 
     function switchOptionsTab(tabName) {
-      const tabs = ['general', 'transfer', 'security', 'interface'];
+      const tabs = ['general', 'connection', 'transfer', 'security', 'interface'];
       tabs.forEach(t => {
         const btn = document.getElementById('tabOpt' + t.charAt(0).toUpperCase() + t.slice(1));
         const pane = document.getElementById('paneOpt' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -9557,6 +9961,10 @@
           pathInp.value = appOptions.showFullPath ? currentLocalPath : (currentLocalPath.split('\\').pop() || currentLocalPath);
         }
       }
+
+      // 3. Reactive Keep-Alive & Sync Browsing
+      restartKeepAliveTimer();
+      updateSyncBrowsingToolbarUI();
 
       // 3. Visual feedback on Apply button and status
       const statusEl = document.getElementById('optionsStatusMsg');
@@ -11253,6 +11661,9 @@
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         disconnect();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        handleReconnect(true);
       } else if ((e.ctrlKey || e.metaKey) && e.key === ',') {
         e.preventDefault();
         openOptionsModal('general');
@@ -11282,6 +11693,14 @@
         console.error('Fatal initialization error:', err);
       }
     }
+
+    // Auto-refresh directories on window focus if enabled in Connection & Sync options
+    window.addEventListener('focus', () => {
+      if (appOptions && appOptions.autoRefreshOnFocus) {
+        if (currentLocalPath) navigateLocal(currentLocalPath);
+        if (isConnected && currentRemotePath) navigateRemote(currentRemotePath);
+      }
+    });
 
     // Launch immediately and attach lifecycle fallbacks
     launchApp();
