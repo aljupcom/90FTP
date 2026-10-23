@@ -13,6 +13,8 @@ pub struct AppState {
     pub exec_script: Option<ScriptCallback>,
     pub open_terminal_window: Option<TerminalWindowCallback>,
     pub current_connection: Arc<Mutex<Option<serde_json::Value>>>,
+    pub active_tab_id: Arc<Mutex<String>>,
+    pub tab_sessions: Arc<Mutex<std::collections::HashMap<String, (Option<RemoteClient>, Option<serde_json::Value>)>>>,
     pub archive_cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -26,6 +28,8 @@ impl AppState {
             exec_script,
             open_terminal_window,
             current_connection: Arc::new(Mutex::new(None)),
+            active_tab_id: Arc::new(Mutex::new("rtab_1".to_string())),
+            tab_sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             archive_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
@@ -728,6 +732,54 @@ impl AppState {
                     *conn_lock = None;
                 }
                 IpcResponse::ok(id, action, json!({ "connected": false }))
+            }
+
+            "switch_remote_tab" => {
+                let new_tab_id = payload["tab_id"].as_str().unwrap_or("rtab_1").to_string();
+                let target_path = payload["path"].as_str().unwrap_or("");
+                let mut active_id_lock = self.active_tab_id.lock().unwrap();
+                let old_tab_id = active_id_lock.clone();
+                if old_tab_id != new_tab_id {
+                    let old_client = self.remote.lock().unwrap().take();
+                    let old_conn = self.current_connection.lock().unwrap().take();
+                    let mut sessions_lock = self.tab_sessions.lock().unwrap();
+                    sessions_lock.insert(old_tab_id, (old_client, old_conn));
+                    let (new_client, new_conn) = sessions_lock.remove(&new_tab_id).unwrap_or((None, None));
+                    *self.remote.lock().unwrap() = new_client;
+                    *self.current_connection.lock().unwrap() = new_conn;
+                    *active_id_lock = new_tab_id.clone();
+                }
+                let mut remote_lock = self.remote.lock().unwrap();
+                let is_connected = remote_lock.is_some();
+                if is_connected && !target_path.is_empty() {
+                    if let Some(client) = remote_lock.as_mut() {
+                        let _ = client.change_dir(target_path);
+                    }
+                }
+                let conn_info = self.current_connection.lock().unwrap().clone().unwrap_or_else(|| json!(null));
+                IpcResponse::ok(
+                    id,
+                    action,
+                    json!({
+                        "tab_id": new_tab_id,
+                        "connected": is_connected,
+                        "connection": conn_info,
+                    }),
+                )
+            }
+
+            "close_remote_tab" => {
+                let tab_id = payload["tab_id"].as_str().unwrap_or("");
+                if !tab_id.is_empty() {
+                    let active_id = self.active_tab_id.lock().unwrap().clone();
+                    if active_id == tab_id {
+                        *self.remote.lock().unwrap() = None;
+                        *self.current_connection.lock().unwrap() = None;
+                    } else {
+                        self.tab_sessions.lock().unwrap().remove(tab_id);
+                    }
+                }
+                IpcResponse::ok(id, action, json!({ "closed": true, "tab_id": tab_id }))
             }
 
             "reconnect" => {
