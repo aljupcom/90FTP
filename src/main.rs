@@ -7,6 +7,7 @@ mod local_fs;
 mod logger;
 mod models;
 mod remote;
+mod remote_transfer;
 mod sessions;
 mod sftp_client;
 

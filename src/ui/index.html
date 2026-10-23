@@ -2414,6 +2414,85 @@
       white-space: pre-wrap;
       user-select: text;
     }
+
+    /* Native Remote Transfer & Dispatcher Tool */
+    .rt-modal-dialog {
+      width: 680px;
+      max-width: 96vw;
+    }
+    .rt-header-hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%);
+      border-bottom: 1px solid var(--border-color);
+    }
+    .rt-source-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+    .rt-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+    .rt-status-pill.success {
+      background: rgba(34, 197, 94, 0.14);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .rt-status-pill.warning {
+      background: rgba(245, 158, 11, 0.14);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .rt-status-pill.error {
+      background: rgba(239, 68, 68, 0.14);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .rt-progress-track {
+      width: 100%;
+      height: 7px;
+      border-radius: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+      margin: 6px 0;
+    }
+    .rt-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #0284c7 0%, #38bdf8 100%);
+      transition: width 0.15s ease-out;
+    }
+    .rt-log-box {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.5;
+      background: #090d16;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 8px 10px;
+      height: 130px;
+      overflow-y: auto;
+      color: #94a3b8;
+      user-select: text;
+    }
   
     /* Floating Glassmorphic Notification Toast */
     .floating-update-toast {
@@ -3373,6 +3452,20 @@
       border-color: #dde3ea !important;
       color: #334155 !important;
     }
+    [data-theme="light"] .rt-header-hero {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, #f8fafc 100%) !important;
+      border-bottom-color: #dde3ea !important;
+    }
+    [data-theme="light"] .rt-log-box {
+      background: #f8fafc !important;
+      border-color: #dde3ea !important;
+      color: #334155 !important;
+    }
+    [data-theme="light"] .rt-source-chip {
+      background: rgba(220, 38, 38, 0.08) !important;
+      border-color: rgba(220, 38, 38, 0.25) !important;
+      color: #b91c1c !important;
+    }
   </style>
 </head>
 <body>
@@ -3437,7 +3530,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.56</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.57</span>
         </div>
       </div>
 
@@ -3616,6 +3709,10 @@
           <div class="dropdown-item" onclick="openRemoteTerminal()">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
             <span>Open Remote Terminal (SSH)...</span>
+          </div>
+          <div class="dropdown-item" onclick="openRemoteTransferModal()">
+            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
+            <span>Remote Transfer & Server Dispatcher...</span>
           </div>
           <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openToolsModal()">
@@ -5212,6 +5309,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           <span class="tool-tag ready">READY</span>
         </div>
 
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); openRemoteTransferModal();">
+          <span style="font-size: 14px;"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Remote Transfer & Server-to-Server Dispatcher</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Transfer files/folders between servers via direct SCP/Rsync or Stream Relay</div>
+          </div>
+          <span class="tool-tag ready">READY</span>
+        </div>
+
         <div style="display: flex; justify-content: flex-end; padding-top: 6px;">
           <button type="button" class="btn btn-secondary" onclick="closeToolsModal()" style="font-size: 11.5px; padding: 3px 18px; height: 26px;">Close</button>
         </div>
@@ -5324,6 +5430,209 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           <button type="button" class="btn btn-secondary btn-sm" onclick="refreshServerHealth()">↻ Refresh Telemetry</button>
           <button type="button" class="btn btn-secondary" onclick="closeServerHealthModal()">Close</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Remote Transfer & Server-to-Server Dispatcher -->
+  <div class="modal-overlay" id="remoteTransferModal" style="z-index: 1065;">
+    <div class="native-window-dialog rt-modal-dialog">
+      <!-- Titlebar -->
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          <span style="font-weight: 600;">Remote Transfer & Server-to-Server Dispatcher</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeRemoteTransferModal()" title="Close">✕</button>
+      </div>
+
+      <!-- Header Hero Banner with Source Specs -->
+      <div class="rt-header-hero">
+        <div>
+          <div style="font-size: 13px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+            <span>Source Payload</span>
+            <span id="rtSourceLocationBadge" class="rt-source-chip">Remote Server</span>
+          </div>
+          <div id="rtSourceSummary" style="font-size: 11px; color: var(--text-muted); margin-top: 3px; max-width: 440px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            No items selected
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <span id="rtItemsCountBadge" style="font-size: 11px; font-weight: 700; color: var(--accent); padding: 3px 9px; border-radius: 12px; background: rgba(56, 189, 248, 0.1);">0 Items</span>
+        </div>
+      </div>
+
+      <div class="native-dialog-body" style="padding: 12px 16px; gap: 10px; max-height: 75vh; overflow-y: auto;">
+        
+        <!-- Target Server Credentials & Host Box -->
+        <div class="options-groupbox">
+          <div class="options-groupbox-legend">1. Destination Server & Protocol</div>
+          
+          <div style="display: flex; gap: 10px; margin-bottom: 8px; align-items: center;">
+            <div style="flex: 1;">
+              <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px;">Saved Server Profile:</span>
+              <select id="rtTargetSiteSelect" onchange="onRtTargetSiteSelect(this.value)" style="width: 100%; height: 27px; font-weight: 600;">
+                <option value="manual">Custom Server (Manual Credentials)...</option>
+              </select>
+            </div>
+            <div style="width: 140px;">
+              <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px;">Protocol:</span>
+              <select id="rtProtocol" onchange="onRtProtocolChange(this.value)" style="width: 100%; height: 27px;">
+                <option value="sftp">SFTP (SSH)</option>
+                <option value="scp">SCP (Secure Copy)</option>
+                <option value="ftp">FTP</option>
+                <option value="ftps">FTPS (Explicit TLS)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1.5fr 1.5fr; gap: 8px; margin-bottom: 6px;">
+            <div>
+              <span style="font-size: 10.5px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 2px;">Host / IP:</span>
+              <input type="text" id="rtHost" placeholder="e.g. 192.168.1.100 or host.com" style="width: 100%; height: 26px; font-size: 11.5px;">
+            </div>
+            <div>
+              <span style="font-size: 10.5px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 2px;">Port:</span>
+              <input type="number" id="rtPort" value="22" style="width: 100%; height: 26px; font-size: 11.5px;">
+            </div>
+            <div>
+              <span style="font-size: 10.5px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 2px;">Username:</span>
+              <input type="text" id="rtUsername" placeholder="root / user" style="width: 100%; height: 26px; font-size: 11.5px;">
+            </div>
+            <div>
+              <span style="font-size: 10.5px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 2px;">Auth Type:</span>
+              <select id="rtAuthType" onchange="toggleRtAuthFields()" style="width: 100%; height: 26px; font-size: 11.5px;">
+                <option value="password">Password</option>
+                <option value="key">SSH Private Key</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="rtPassRow" style="margin-top: 4px;">
+            <span style="font-size: 10.5px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 2px;">Password:</span>
+            <input type="password" id="rtPassword" placeholder="Remote server user password" style="width: 100%; height: 26px; font-size: 11.5px;">
+          </div>
+
+          <div id="rtKeyRow" style="margin-top: 4px; display: none;">
+            <span style="font-size: 10.5px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 2px;">Private Key Path & Passphrase:</span>
+            <div style="display: flex; gap: 6px;">
+              <input type="text" id="rtKeyPath" placeholder="C:\Users\...\.ssh\id_rsa" style="flex: 1; height: 26px; font-size: 11.5px;">
+              <input type="password" id="rtPassphrase" placeholder="Passphrase (optional)" style="width: 150px; height: 26px; font-size: 11.5px;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Target Destination Path & Strategy Box -->
+        <div class="options-groupbox">
+          <div class="options-groupbox-legend">2. Remote Destination Path & Engine Strategy</div>
+
+          <div style="margin-bottom: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px;">Destination Directory Path:</span>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <input type="text" id="rtTargetPath" value="/var/www/html/" placeholder="/var/www/backup/ or /home/username/public_html" style="flex: 1; height: 28px; font-family: var(--font-mono); font-size: 12px; font-weight: 600;">
+              <button type="button" class="btn btn-secondary" id="btnVerifyRtPath" onclick="testRemoteTransferTarget()" style="padding: 0 10px; height: 28px; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Verify Path</span>
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="browseRemoteTransferTarget()" style="padding: 0 10px; height: 28px; font-size: 11px; white-space: nowrap;">Browse...</button>
+            </div>
+            <div id="rtTargetVerifyStatus" style="font-size: 11px; min-height: 18px; margin-top: 4px; display: flex; align-items: center; gap: 6px;">
+              <!-- Verification status populated dynamically -->
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 6px;">
+            <div style="flex: 1;">
+              <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px;">Transfer Engine Strategy:</span>
+              <select id="rtTransferMode" style="width: 100%; height: 27px; font-size: 11.5px;">
+                <option value="auto">Auto: Direct Server-to-Server with Stream Relay Fallback (Recommended)</option>
+                <option value="direct_scp">Direct SCP: Native SSH/SCP command between servers (Zero Local Bandwidth)</option>
+                <option value="direct_rsync">Direct Rsync: High-speed delta compression between servers</option>
+                <option value="stream_relay">Stream Relay Bridge: In-Memory Safe Stream via 90FTP Engine</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 16px; margin-top: 8px;">
+            <label class="options-checkbox-row" style="margin-bottom: 0;">
+              <input type="checkbox" id="rtOptRecursive" checked>
+              <span>Recursive directory transfer (preserve subdirectory structure)</span>
+            </label>
+            <label class="options-checkbox-row" style="margin-bottom: 0;">
+              <input type="checkbox" id="rtOptOverwrite" checked>
+              <span>Overwrite existing target files</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Real-Time Progress & Monitoring Console -->
+        <div class="options-groupbox" id="rtProgressSection" style="display: none;">
+          <div class="options-groupbox-legend">3. Transfer Execution & Real-Time Stream Log</div>
+
+          <div class="rt-progress-track">
+            <div id="rtProgressBar" class="rt-progress-bar"></div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">
+            <div>
+              <span>File: </span>
+              <strong id="rtCurrentFile" style="color: var(--accent); font-family: var(--font-mono);">Initializing...</strong>
+            </div>
+            <div style="display: flex; gap: 12px; font-weight: 600;">
+              <span id="rtPercentText" style="color: var(--text-main);">0%</span>
+              <span id="rtFilesRatio">0 / 0</span>
+              <span id="rtBytesRatio">0 B / 0 B</span>
+              <span id="rtSpeedText" style="color: #22c55e;">0 MB/s</span>
+            </div>
+          </div>
+
+          <div id="rtLogBox" class="rt-log-box"></div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: var(--bg-header); border-top: 1px solid var(--border-color);">
+        <button type="button" class="btn btn-danger" id="btnRtCancel" onclick="cancelRemoteTransfer()" style="padding: 4px 14px; font-size: 11px; display: none;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <span>Cancel Transfer</span>
+        </button>
+        <div id="rtFooterStatus" style="font-size: 11px; color: var(--text-muted);">
+          Ready to dispatch selected items
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary" onclick="closeRemoteTransferModal()" style="padding: 4px 14px; font-size: 11px;">Close</button>
+          <button type="button" class="btn btn-primary" id="btnRtStart" onclick="startRemoteTransfer()" style="padding: 4px 20px; font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>Start Remote Transfer</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Remote Target Directory Picker -->
+  <div class="modal-overlay" id="rtBrowseModal" style="z-index: 1070;">
+    <div class="native-window-dialog" style="width: 480px; max-width: 95vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span style="font-weight: 600;">Browse Destination Folders</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeRtBrowseModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 12px 14px; gap: 8px;">
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <input type="text" id="rtBrowsePathInput" style="flex: 1; height: 26px; font-family: var(--font-mono); font-size: 11px;" readonly>
+          <button type="button" class="btn btn-secondary" onclick="navigateRtBrowseUp()" style="height: 26px; padding: 0 8px;" title="Go Up (Parent Directory)">▲ Up</button>
+        </div>
+        <div id="rtBrowseListContainer" class="about-code-box" style="height: 240px; overflow-y: auto; padding: 4px; background: var(--bg-card);">
+          <div style="padding: 10px; text-align: center; color: var(--text-muted);">Loading destination folders...</div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 8px 14px; background: var(--bg-header); border-top: 1px solid var(--border-color);">
+        <button type="button" class="btn btn-secondary" onclick="closeRtBrowseModal()" style="font-size: 11px; padding: 4px 12px;">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="selectRtBrowseCurrentPath()" style="font-size: 11px; padding: 4px 16px; font-weight: 600;">Select This Folder</button>
       </div>
     </div>
   </div>
@@ -6422,7 +6731,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.56';
+    let APP_CURRENT_VERSION = '0.0.0.57';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -11350,6 +11659,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           <svg class="icon" viewBox="0 0 24 24" style="color: var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span style="font-weight: 600;">Transfer / Upload</span>
         </div>
+        <div class="context-menu-item" onclick="closeContextMenu(); openRemoteTransferModal('${escapeJsString(item.path)}', false)">
+          <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          <span style="font-weight: 600;">Remote Transfer / Dispatch...</span>
+        </div>
         <div class="context-menu-item" onclick="openLocalFileInEditor('${escapeJsString(item.path)}')">
           <svg class="icon" viewBox="0 0 24 24" style="color: var(--accent);"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           <span>Edit in Code Editor</span>
@@ -11549,6 +11862,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <div class="context-menu-item" onclick="${selCount > 1 ? `transferDownload()` : (item.is_dir ? `downloadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `downloadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`)}">
               <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               <span>${selCount > 1 ? `Download ${selCount} Selected Items to Local` : 'Download to Local'}</span>
+            </div>
+            <div class="context-menu-item" onclick="closeContextMenu(); openRemoteTransferModal('${escapeJsString(item.path)}', true)">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              <span style="font-weight: 600;">Remote Transfer / Dispatch...</span>
             </div>
           `;
         } else {
@@ -16570,6 +16887,396 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       }
     }
 
+    // ==========================================
+    // 5. Remote Transfer & Server-to-Server Dispatcher
+    // ==========================================
+    let currentRtSources = [];
+    let currentRtIsRemote = true;
+    let isRtTransferActive = false;
+
+    function openRemoteTransferModal(sourcePath = null, isRemote = null) {
+      closeAllMenus();
+
+      if (isRemote === null) {
+        isRemote = (currentActivePane === 'remote');
+      }
+      currentRtIsRemote = isRemote;
+
+      if (sourcePath) {
+        currentRtSources = [sourcePath];
+      } else {
+        const sel = isRemote ? getSelectedRemoteItems() : getSelectedLocalItems();
+        if (sel && sel.length > 0) {
+          currentRtSources = sel.map(item => item.path);
+        } else {
+          const curDir = isRemote ? currentRemoteDir : currentLocalDir;
+          currentRtSources = curDir ? [curDir] : [];
+        }
+      }
+
+      // Update Header info
+      const locBadge = document.getElementById('rtSourceLocationBadge');
+      if (locBadge) {
+        const hostName = currentConnectedProfile?.host || currentConnectedProfile?.name || 'Remote Host';
+        locBadge.textContent = isRemote ? `Remote Server (${hostName})` : 'Local PC';
+      }
+
+      const summaryEl = document.getElementById('rtSourceSummary');
+      if (summaryEl) {
+        if (currentRtSources.length === 0) {
+          summaryEl.textContent = 'No files or folders selected';
+        } else if (currentRtSources.length === 1) {
+          summaryEl.textContent = currentRtSources[0];
+          summaryEl.title = currentRtSources[0];
+        } else {
+          const names = currentRtSources.slice(0, 3).map(p => p.split(/[\\/]/).pop()).join(', ');
+          summaryEl.textContent = `${currentRtSources.length} items (${names}${currentRtSources.length > 3 ? '...' : ''})`;
+          summaryEl.title = currentRtSources.join('\n');
+        }
+      }
+
+      const countBadge = document.getElementById('rtItemsCountBadge');
+      if (countBadge) {
+        countBadge.textContent = `${currentRtSources.length} Item${currentRtSources.length === 1 ? '' : 's'}`;
+      }
+
+      populateRtSavedSitesDropdown();
+
+      // Reset verification & progress status
+      const statusEl = document.getElementById('rtTargetVerifyStatus');
+      if (statusEl) statusEl.innerHTML = '';
+      const progSec = document.getElementById('rtProgressSection');
+      if (progSec) progSec.style.display = 'none';
+      const cancelBtn = document.getElementById('btnRtCancel');
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      const startBtn = document.getElementById('btnRtStart');
+      if (startBtn) startBtn.disabled = false;
+      const logBox = document.getElementById('rtLogBox');
+      if (logBox) logBox.innerHTML = '';
+      const footerStatus = document.getElementById('rtFooterStatus');
+      if (footerStatus) footerStatus.textContent = 'Ready to dispatch selected items';
+
+      const modal = document.getElementById('remoteTransferModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeRemoteTransferModal() {
+      if (isRtTransferActive) {
+        if (!confirm('A remote transfer is currently running. Do you want to cancel the transfer?')) {
+          return;
+        }
+        cancelRemoteTransfer();
+      }
+      const modal = document.getElementById('remoteTransferModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function populateRtSavedSitesDropdown() {
+      const sel = document.getElementById('rtTargetSiteSelect');
+      if (!sel) return;
+      sel.innerHTML = '<option value="manual">Custom Server (Manual Credentials)...</option>';
+
+      if (savedSites && savedSites.length > 0) {
+        savedSites.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = `${s.name} (${s.protocol.toUpperCase()}://${s.username ? s.username + '@' : ''}${s.host}:${s.port})`;
+          sel.appendChild(opt);
+        });
+      }
+    }
+
+    function onRtTargetSiteSelect(val) {
+      if (val === 'manual') {
+        return;
+      }
+      const site = (savedSites || []).find(s => s.id === val);
+      if (!site) return;
+
+      const protoEl = document.getElementById('rtProtocol');
+      if (protoEl) protoEl.value = site.protocol || 'sftp';
+      const hostEl = document.getElementById('rtHost');
+      if (hostEl) hostEl.value = site.host || '';
+      const portEl = document.getElementById('rtPort');
+      if (portEl) portEl.value = site.port || (site.protocol === 'ftp' ? 21 : 22);
+      const userEl = document.getElementById('rtUsername');
+      if (userEl) userEl.value = site.username || '';
+
+      const authType = site.auth_type || (site.key_path ? 'key' : 'password');
+      const authEl = document.getElementById('rtAuthType');
+      if (authEl) authEl.value = authType;
+      toggleRtAuthFields();
+
+      const passEl = document.getElementById('rtPassword');
+      if (passEl) passEl.value = site.password || '';
+      const keyEl = document.getElementById('rtKeyPath');
+      if (keyEl) keyEl.value = site.key_path || '';
+      const phraseEl = document.getElementById('rtPassphrase');
+      if (phraseEl) phraseEl.value = site.passphrase || '';
+      const pathEl = document.getElementById('rtTargetPath');
+      if (pathEl && site.remote_dir) pathEl.value = site.remote_dir;
+    }
+
+    function onRtProtocolChange(proto) {
+      const portEl = document.getElementById('rtPort');
+      if (portEl) {
+        if (proto === 'ftp') portEl.value = 21;
+        else if (proto === 'ftps') portEl.value = 21;
+        else portEl.value = 22;
+      }
+    }
+
+    function toggleRtAuthFields() {
+      const auth = document.getElementById('rtAuthType')?.value || 'password';
+      const passRow = document.getElementById('rtPassRow');
+      const keyRow = document.getElementById('rtKeyRow');
+      if (passRow) passRow.style.display = (auth === 'password') ? 'block' : 'none';
+      if (keyRow) keyRow.style.display = (auth === 'key') ? 'block' : 'none';
+    }
+
+    function buildRtTaskPayload() {
+      const authType = document.getElementById('rtAuthType')?.value || 'password';
+      return {
+        source_is_remote: currentRtIsRemote,
+        sources: currentRtSources,
+        transfer_mode: document.getElementById('rtTransferMode')?.value || 'auto',
+        target_protocol: document.getElementById('rtProtocol')?.value || 'sftp',
+        target_host: (document.getElementById('rtHost')?.value || '').trim(),
+        target_port: parseInt(document.getElementById('rtPort')?.value || '22', 10) || 22,
+        target_user: (document.getElementById('rtUsername')?.value || '').trim(),
+        target_pass: document.getElementById('rtPassword')?.value || '',
+        target_auth_type: authType,
+        target_key_path: (authType === 'key') ? ((document.getElementById('rtKeyPath')?.value || '').trim() || null) : null,
+        target_passphrase: (authType === 'key') ? (document.getElementById('rtPassphrase')?.value || null) : null,
+        target_path: (document.getElementById('rtTargetPath')?.value || '').trim() || '/',
+        recursive: document.getElementById('rtOptRecursive')?.checked !== false,
+        overwrite: document.getElementById('rtOptOverwrite')?.checked ? 'overwrite' : 'skip'
+      };
+    }
+
+    async function testRemoteTransferTarget() {
+      const statusEl = document.getElementById('rtTargetVerifyStatus');
+      const btn = document.getElementById('btnVerifyRtPath');
+      if (!statusEl) return;
+
+      const task = buildRtTaskPayload();
+      if (!task.target_host || !task.target_user) {
+        statusEl.innerHTML = '<span class="rt-status-pill error">✕ Host and username are required</span>';
+        return;
+      }
+
+      statusEl.innerHTML = '<span class="rt-status-pill warning">Testing target connection & verifying path...</span>';
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await sendRust('remote_transfer_test_target', task);
+        if (res.connected) {
+          if (res.path_exists) {
+            statusEl.innerHTML = `<span class="rt-status-pill success">✓ ${escapeHtml(res.message || 'Target path verified')}</span>`;
+          } else {
+            statusEl.innerHTML = `<span class="rt-status-pill success">✓ Connected: ${escapeHtml(res.message || 'Target directory will be auto-created')}</span>`;
+          }
+          addLog(`Remote transfer target verified: ${task.target_host}:${task.target_path}`, 'info');
+        } else {
+          statusEl.innerHTML = `<span class="rt-status-pill error">✕ Verification failed: ${escapeHtml(res.message || 'Check credentials')}</span>`;
+        }
+      } catch (err) {
+        statusEl.innerHTML = `<span class="rt-status-pill error">✕ Connection error: ${escapeHtml(err.message || String(err))}</span>`;
+        addLog(`Remote transfer target check failed: ${err.message}`, 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function startRemoteTransfer() {
+      if (currentRtSources.length === 0) {
+        alert('Please select at least one source file or folder to transfer.');
+        return;
+      }
+
+      const task = buildRtTaskPayload();
+      if (!task.target_host || !task.target_user) {
+        alert('Destination Host and Username are required.');
+        return;
+      }
+
+      const confirmMsg = `Start remote transfer of ${currentRtSources.length} item(s) to:\n${task.target_user}@${task.target_host}:${task.target_path}\n\nTransfer Strategy: ${task.transfer_mode.toUpperCase()}`;
+      if (!confirm(confirmMsg)) return;
+
+      isRtTransferActive = true;
+      document.getElementById('rtProgressSection').style.display = 'block';
+      document.getElementById('btnRtCancel').style.display = 'inline-flex';
+      document.getElementById('btnRtStart').disabled = true;
+      document.getElementById('rtFooterStatus').textContent = 'Transfer running...';
+      document.getElementById('rtProgressBar').style.width = '0%';
+      document.getElementById('rtPercentText').textContent = '0%';
+      document.getElementById('rtCurrentFile').textContent = 'Initializing transfer session...';
+      document.getElementById('rtLogBox').innerHTML = '<div style="color: #38bdf8;">[INIT] Starting remote transfer engine...</div>';
+
+      try {
+        await sendRust('remote_transfer_start', task);
+        addLog(`Dispatched remote transfer to ${task.target_host}:${task.target_path}`, 'info');
+      } catch (err) {
+        isRtTransferActive = false;
+        document.getElementById('btnRtStart').disabled = false;
+        document.getElementById('btnRtCancel').style.display = 'none';
+        document.getElementById('rtFooterStatus').textContent = 'Error starting transfer: ' + err.message;
+        alert('Failed to start remote transfer: ' + err.message);
+      }
+    }
+
+    async function cancelRemoteTransfer() {
+      try {
+        await sendRust('remote_transfer_cancel', {});
+        addLog('Remote transfer cancellation requested', 'warning');
+        const curFile = document.getElementById('rtCurrentFile');
+        if (curFile) curFile.textContent = 'Cancelling transfer session...';
+      } catch (err) {
+        addLog('Failed to send cancel signal: ' + err.message, 'error');
+      }
+    }
+
+    // Target Folder Browser Dialog
+    async function browseRemoteTransferTarget(targetSubPath = null) {
+      const task = buildRtTaskPayload();
+      if (!task.target_host || !task.target_user) {
+        alert('Please specify destination Host and Username to browse remote folders.');
+        return;
+      }
+
+      const browseModal = document.getElementById('rtBrowseModal');
+      const pathInput = document.getElementById('rtBrowsePathInput');
+      const listContainer = document.getElementById('rtBrowseListContainer');
+      if (browseModal) browseModal.classList.add('active');
+
+      const reqPath = (targetSubPath !== null) ? targetSubPath : task.target_path;
+      if (pathInput) pathInput.value = reqPath || '/';
+      if (listContainer) listContainer.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--text-muted);">Connecting to destination server...</div>';
+
+      try {
+        const res = await sendRust('remote_transfer_list_target_dir', {
+          ...task,
+          sub_path: reqPath
+        });
+
+        if (pathInput) pathInput.value = res.current_dir || reqPath;
+
+        if (!res.items || res.items.length === 0) {
+          listContainer.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--text-dim);">(Empty directory)</div>';
+          return;
+        }
+
+        let html = '';
+        const dirs = res.items.filter(i => i.is_dir && i.name !== '.' && i.name !== '..');
+        dirs.sort((a, b) => a.name.localeCompare(b.name));
+
+        if (dirs.length === 0) {
+          html += '<div style="padding: 10px; color: var(--text-dim); font-size: 11px;">No subdirectories found. Click "Select This Folder" to choose current directory.</div>';
+        } else {
+          dirs.forEach(d => {
+            html += `
+              <div class="tool-native-row" style="padding: 6px 10px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px;" onclick="browseRemoteTransferTarget('${escapeJsString(d.path)}')">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span style="font-weight: 600; font-size: 11.5px; color: var(--text-main);">${escapeHtml(d.name)}</span>
+              </div>
+            `;
+          });
+        }
+        listContainer.innerHTML = html;
+      } catch (err) {
+        if (listContainer) {
+          listContainer.innerHTML = `<div style="padding: 12px; color: #ef4444; font-size: 11px;">✕ Error listing directory: ${escapeHtml(err.message || String(err))}</div>`;
+        }
+      }
+    }
+
+    function navigateRtBrowseUp() {
+      const pathInput = document.getElementById('rtBrowsePathInput');
+      if (!pathInput) return;
+      let cur = pathInput.value.trim().replace(/\\/g, '/');
+      if (cur.endsWith('/') && cur.length > 1) cur = cur.slice(0, -1);
+      const idx = cur.lastIndexOf('/');
+      const parent = idx > 0 ? cur.substring(0, idx) : (idx === 0 ? '/' : '');
+      browseRemoteTransferTarget(parent || '/');
+    }
+
+    function selectRtBrowseCurrentPath() {
+      const pathInput = document.getElementById('rtBrowsePathInput');
+      if (pathInput && pathInput.value) {
+        const targetInput = document.getElementById('rtTargetPath');
+        if (targetInput) targetInput.value = pathInput.value;
+        testRemoteTransferTarget();
+      }
+      closeRtBrowseModal();
+    }
+
+    function closeRtBrowseModal() {
+      const browseModal = document.getElementById('rtBrowseModal');
+      if (browseModal) browseModal.classList.remove('active');
+    }
+
+    // Global listener hooks called from Rust backend via exec_script
+    window.onRemoteTransferLog = function(data) {
+      const box = document.getElementById('rtLogBox');
+      if (!box) return;
+      const line = document.createElement('div');
+      line.style.padding = '1px 0';
+      if (data.kind === 'error') line.style.color = '#ef4444';
+      else if (data.kind === 'warning') line.style.color = '#f59e0b';
+      else if (data.kind === 'success') line.style.color = '#22c55e';
+      else line.style.color = '#94a3b8';
+
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${data.text}`;
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    };
+
+    window.onRemoteTransferProgress = function(data) {
+      const bar = document.getElementById('rtProgressBar');
+      if (bar) bar.style.width = `${data.percent}%`;
+      const pct = document.getElementById('rtPercentText');
+      if (pct) pct.textContent = `${Math.round(data.percent)}%`;
+      const cur = document.getElementById('rtCurrentFile');
+      if (cur) cur.textContent = data.current_file;
+      const files = document.getElementById('rtFilesRatio');
+      if (files) files.textContent = `${data.done_files} / ${data.total_files} files`;
+      const bytes = document.getElementById('rtBytesRatio');
+      if (bytes) bytes.textContent = `${formatBytes(data.done_bytes)} / ${formatBytes(data.total_bytes)}`;
+      const spd = document.getElementById('rtSpeedText');
+      if (spd) spd.textContent = data.speed;
+    };
+
+    window.onRemoteTransferComplete = function(data) {
+      isRtTransferActive = false;
+      const startBtn = document.getElementById('btnRtStart');
+      if (startBtn) startBtn.disabled = false;
+      const cancelBtn = document.getElementById('btnRtCancel');
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      const footerStatus = document.getElementById('rtFooterStatus');
+      if (footerStatus) footerStatus.textContent = data.success ? 'Transfer completed successfully' : 'Transfer ended';
+      if (data.success) {
+        const bar = document.getElementById('rtProgressBar');
+        if (bar) bar.style.width = '100%';
+        const pct = document.getElementById('rtPercentText');
+        if (pct) pct.textContent = '100%';
+        const cur = document.getElementById('rtCurrentFile');
+        if (cur) cur.textContent = 'Transfer Completed!';
+        addLog(`Remote transfer completed: ${data.count} items transferred in ${data.elapsed_secs}s`, 'success');
+      }
+    };
+
+    window.onRemoteTransferError = function(data) {
+      isRtTransferActive = false;
+      const startBtn = document.getElementById('btnRtStart');
+      if (startBtn) startBtn.disabled = false;
+      const cancelBtn = document.getElementById('btnRtCancel');
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      const footerStatus = document.getElementById('rtFooterStatus');
+      if (footerStatus) footerStatus.textContent = 'Error: ' + data.error;
+      addLog('Remote transfer error: ' + data.error, 'error');
+      alert('Remote transfer error:\n' + data.error);
+    };
+
     // 4. Side-by-Side File Content Diff Engine
     async function openFileDiffModal(localPath, remotePath, fileName) {
       const modal = document.getElementById('fileDiffModal');
@@ -17306,6 +18013,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       const items = [
         { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>', category: 'Tool', title: 'Find Files (Remote Server & Local Disk)', shortcut: 'Ctrl+F', run: () => openFindFilesModal() },
         { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>', category: 'Tool', title: 'Full-Text Content Grep (Search Inside Files)', shortcut: 'Ctrl+Shift+F', run: () => openContentGrepModal() },
+        { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>', category: 'Tool', title: 'Remote Transfer & Server-to-Server Dispatcher (SCP / SFTP / Rsync)', shortcut: '', run: () => openRemoteTransferModal() },
         { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>', category: 'Tool', title: 'Batch Multi-Rename Selected Items (Regex / Counter)', shortcut: 'Ctrl+M', run: () => openBatchRenameModal() },
         { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', category: 'Navigation', title: `Toggle Synchronized Browsing (Lock-Step: ${appOptions?.syncBrowsing ? 'ON' : 'OFF'})`, shortcut: 'Ctrl+Y', run: () => toggleSynchronizedBrowsing() },
         { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', category: 'Navigation', title: 'Path Bookmarks & Paired Workspace Favorites', shortcut: 'Ctrl+B', run: () => openBookmarksModal() },

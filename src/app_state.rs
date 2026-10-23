@@ -16,6 +16,7 @@ pub struct AppState {
     pub active_tab_id: Arc<Mutex<String>>,
     pub tab_sessions: Arc<Mutex<std::collections::HashMap<String, (Option<RemoteClient>, Option<serde_json::Value>)>>>,
     pub archive_cancelled: Arc<std::sync::atomic::AtomicBool>,
+    pub remote_transfer_cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl AppState {
@@ -31,6 +32,7 @@ impl AppState {
             active_tab_id: Arc::new(Mutex::new("rtab_1".to_string())),
             tab_sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             archive_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            remote_transfer_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 }
@@ -3142,6 +3144,74 @@ impl AppState {
                     })),
                     Err(e) => IpcResponse::err(id, action, &e),
                 }
+            }
+
+            "remote_transfer_test_target" => {
+                let task: crate::remote_transfer::RemoteTransferTask = match serde_json::from_value(payload) {
+                    Ok(t) => t,
+                    Err(e) => return IpcResponse::err(id, action, &format!("Invalid remote transfer payload: {}", e)),
+                };
+                match crate::remote_transfer::test_target_connection(&task) {
+                    Ok(res) => IpcResponse::ok(id, action, res),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "remote_transfer_list_target_dir" => {
+                let sub_path = payload.get("sub_path").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let task: crate::remote_transfer::RemoteTransferTask = match serde_json::from_value(payload) {
+                    Ok(t) => t,
+                    Err(e) => return IpcResponse::err(id, action, &format!("Invalid remote transfer payload: {}", e)),
+                };
+                match crate::remote_transfer::list_target_directory(&task, sub_path.as_deref()) {
+                    Ok(res) => IpcResponse::ok(id, action, res),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "remote_transfer_start" => {
+                let task: crate::remote_transfer::RemoteTransferTask = match serde_json::from_value(payload) {
+                    Ok(t) => t,
+                    Err(e) => return IpcResponse::err(id, action, &format!("Invalid remote transfer payload: {}", e)),
+                };
+
+                self.remote_transfer_cancelled.store(false, std::sync::atomic::Ordering::Relaxed);
+                let cancelled = self.remote_transfer_cancelled.clone();
+                let exec_script = self.exec_script.clone();
+
+                let source_client = if task.source_is_remote {
+                    let conn_info = self.current_connection.lock().unwrap().clone();
+                    if let Some(info) = conn_info {
+                        let protocol = info["protocol"].as_str().unwrap_or("sftp");
+                        let host = info["host"].as_str().unwrap_or("");
+                        let port = info["port"].as_u64().unwrap_or(22) as u16;
+                        let user = info["username"].as_str().unwrap_or("");
+                        let pass = info["password"].as_str().unwrap_or("");
+                        let auth_type = info["auth_type"].as_str().unwrap_or("password");
+                        let key_path = info["key_path"].as_str();
+                        let passphrase = info["passphrase"].as_str();
+
+                        match RemoteClient::connect(protocol, host, port, user, pass, auth_type, key_path, passphrase, true) {
+                            Ok(c) => Some(c),
+                            Err(e) => return IpcResponse::err(id, action, &format!("Failed to connect to source server: {}", e)),
+                        }
+                    } else {
+                        return IpcResponse::err(id, action, "No active source server connected in session");
+                    }
+                } else {
+                    None
+                };
+
+                std::thread::spawn(move || {
+                    crate::remote_transfer::execute_transfer_thread(source_client, task, cancelled, exec_script);
+                });
+
+                IpcResponse::ok(id, action, json!({ "started": true }))
+            }
+
+            "remote_transfer_cancel" => {
+                self.remote_transfer_cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+                IpcResponse::ok(id, action, json!({ "cancelling": true }))
             }
 
             unknown => IpcResponse::err(id, action, &format!("Unknown action: {}", unknown)),
