@@ -3103,6 +3103,127 @@
       background: rgba(239, 68, 68, 0.14);
       color: #f87171;
     }
+
+    /* Site Manager inline notice banner & save feedback */
+    .site-notice {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      margin: 0 0 8px 0;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid transparent;
+      animation: slideInToast 0.2s ease-out;
+    }
+    .site-notice.show { display: flex; }
+    .site-notice.success { background: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.45); color: #22c55e; }
+    .site-notice.error { background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.45); color: #ef4444; }
+    .site-notice.info { background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.4); color: #38bdf8; }
+    .btn.btn-saved { background: #16a34a !important; border-color: #22c55e !important; color: #fff !important; }
+    .pw-wrap { position: relative; display: flex; align-items: center; }
+    .pw-wrap input { width: 100%; padding-right: 30px; }
+    .pw-eye {
+      position: absolute; right: 4px; width: 24px; height: 22px; border: none; background: transparent;
+      color: var(--text-muted); cursor: pointer; font-size: 13px; border-radius: 3px;
+    }
+    .pw-eye:hover { color: var(--text-main); background: rgba(127,127,127,0.15); }
+    .site-proto-badge {
+      font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.3px;
+      background: rgba(127,127,127,0.2); color: var(--text-muted); flex-shrink: 0;
+    }
+    .site-tree-item.active .site-proto-badge { background: rgba(255,255,255,0.25); color: #fff; }
+
+    /* ===== Refined Light Mode: crisp surfaces, readable contrast ===== */
+    [data-theme="light"] .modal-overlay { background: rgba(15, 23, 42, 0.38); }
+    [data-theme="light"] .modal-content,
+    [data-theme="light"] .native-window-dialog {
+      background: #ffffff !important;
+      border: 1px solid #d5dbe3 !important;
+      box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22) !important;
+    }
+    [data-theme="light"] .modal-header,
+    [data-theme="light"] .modal-footer,
+    [data-theme="light"] .native-titlebar,
+    [data-theme="light"] .options-tab-bar {
+      background: #f1f5f9 !important;
+      border-color: #dde3ea !important;
+      color: #0f172a;
+    }
+    [data-theme="light"] .site-sidebar,
+    [data-theme="light"] .site-form-panel,
+    [data-theme="light"] .options-groupbox {
+      background: #f8fafc !important;
+      border-color: #dde3ea !important;
+    }
+    [data-theme="light"] .desktop-groupbox {
+      background: #ffffff !important;
+      border-color: #dde3ea !important;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+    [data-theme="light"] .site-sidebar-header { background: #eef2f7 !important; color: #475569 !important; }
+    [data-theme="light"] .site-sidebar-footer { background: #eef2f7 !important; }
+    [data-theme="light"] .site-tree-item { color: #0f172a; }
+    [data-theme="light"] .site-tree-item:hover { background: #e8edf3 !important; }
+    [data-theme="light"] .site-tree-item.active { background: #dc2626 !important; color: #fff !important; }
+    [data-theme="light"] .desktop-groupbox-legend,
+    [data-theme="light"] .options-groupbox-legend { color: #b91c1c; }
+    [data-theme="light"] input,
+    [data-theme="light"] select,
+    [data-theme="light"] textarea {
+      background: #ffffff !important;
+      border-color: #c8d1dc !important;
+      color: #0f172a !important;
+    }
+    [data-theme="light"] input:focus,
+    [data-theme="light"] select:focus,
+    [data-theme="light"] textarea:focus { border-color: #dc2626 !important; box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.14) !important; }
+    [data-theme="light"] .auth-tab-bar { background: #eef2f7 !important; border-color: #dde3ea !important; }
+    [data-theme="light"] .auth-tab-btn.active { background: #dc2626 !important; color: #fff !important; }
+    [data-theme="light"] .btn-danger { background: #fef2f2 !important; border-color: #fca5a5 !important; color: #b91c1c !important; }
+    [data-theme="light"] .btn-danger:hover { background: #fee2e2 !important; }
+    [data-theme="light"] .btn-tool:hover { background: #eef2f7 !important; }
+    [data-theme="light"] .commander-fkey-bar { background: #eef2f7 !important; border-top-color: #d5dbe3 !important; }
+    [data-theme="light"] .fkey-btn { background: #ffffff !important; border-color: #d5dbe3 !important; color: #334155 !important; }
+    [data-theme="light"] .fkey-btn:hover { border-color: #dc2626 !important; color: #b91c1c !important; }
+    [data-theme="light"] .fkey-btn kbd,
+    [data-theme="light"] .fkey-pane-pill { color: #b91c1c !important; }
+    [data-theme="light"] .fkey-pane-pill { background: rgba(220, 38, 38, 0.08) !important; border-color: rgba(220, 38, 38, 0.3) !important; }
+    [data-theme="light"] .tool-native-row { background: #ffffff !important; border-color: #dde3ea !important; }
+    [data-theme="light"] .tool-native-row:hover { background: #f8fafc !important; border-color: #fca5a5 !important; }
+    [data-theme="light"] .context-menu,
+    [data-theme="light"] .menu-dropdown {
+      background: #ffffff !important;
+      border-color: #d5dbe3 !important;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18) !important;
+    }
+    [data-theme="light"] .context-menu-item { color: #1e293b !important; }
+    [data-theme="light"] .context-menu-item:hover { color: #fff !important; }
+    [data-theme="light"] .desktop-menubar { background: #f1f5f9 !important; }
+    [data-theme="light"] .floating-update-toast,
+    [data-theme="light"] .interactive-action-toast { background: #ffffff !important; color: #0f172a !important; }
+    [data-theme="light"] .fut-desc { color: #475569 !important; }
+    [data-theme="light"] .diff-added { color: #15803d; background: rgba(34, 197, 94, 0.16); }
+    [data-theme="light"] .diff-removed { color: #b91c1c; background: rgba(239, 68, 68, 0.14); }
+    [data-theme="light"] .diff-line-num { background: #f1f5f9; }
+    [data-theme="light"] .site-notice.success { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+    [data-theme="light"] .site-notice.error { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
+    [data-theme="light"] .site-notice.info { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+    [data-theme="light"] #fileInspectorPre,
+    [data-theme="light"] #sshPubKeyOutput,
+    [data-theme="light"] #csHashBox { background: #f8fafc !important; color: #0f172a !important; border-color: #d5dbe3 !important; }
+    [data-theme="light"] #probeResultsContainer > div > div[style*="background: #090d16"],
+    [data-theme="light"] #probeResultsContainer div[style*="#090d16"] { background: #f8fafc !important; }
+    [data-theme="light"] #cmdPaletteList { background: #ffffff !important; }
+    [data-theme="light"] [style*="rgba(255,255,255,0.03)"],
+    [data-theme="light"] [style*="rgba(255, 255, 255, 0.03)"] { background: #f8fafc !important; }
+    [data-theme="light"] [style*="border-bottom: 1px solid rgba(255,255,255,0.04)"] { border-bottom-color: #e8edf3 !important; }
+    [data-theme="light"] [style*="background: rgba(0,0,0,0.2)"],
+    [data-theme="light"] [style*="background: rgba(0,0,0,0.3)"] { background: #f1f5f9 !important; }
+    [data-theme="light"] [style*="color: #fbbf24"] { color: #b45309 !important; }
+    [data-theme="light"] [style*="color: #10b981"] { color: #047857 !important; }
+    [data-theme="light"] [style*="color: #4ade80"] { color: #15803d !important; }
   </style>
 </head>
 <body>
@@ -3167,7 +3288,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.53</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.54</span>
         </div>
       </div>
 
@@ -4201,6 +4322,7 @@
           <div class="site-form-panel">
             <input type="hidden" id="siteId">
             <input type="hidden" id="siteAuthType" value="password">
+            <div class="site-notice" id="siteModalNotice" role="status"></div>
 
             <!-- Groupbox 1: Server Connection -->
             <div class="desktop-groupbox">
@@ -4235,7 +4357,7 @@
                 </div>
                 <div class="desktop-field" style="flex: 1;" id="sitePassField">
                   <label>Password:</label>
-                  <input type="password" id="sitePass" placeholder="••••••••••••">
+                  <div class="pw-wrap"><input type="password" id="sitePass" placeholder="••••••••••••"><button type="button" class="pw-eye" onclick="togglePwVisibility('sitePass', this)" title="Show / hide password">👁</button></div>
                 </div>
               </div>
             </div>
@@ -4263,13 +4385,16 @@
                     <div style="display: flex; gap: 4px;">
                       <input type="text" id="siteKeyPath" placeholder="C:\Users\...\.ssh\id_rsa" style="flex: 1;">
                       <button type="button" class="btn btn-secondary" onclick="browseSshKeyFile()" style="padding: 3px 8px; font-size: 11px;">Browse...</button>
+                      <select id="siteVaultKeySelect" onchange="useVaultKeyForSite(this.value)" style="width: 140px; font-size: 11px;" title="Pick a key generated in the 90FTP SSH Vault">
+                        <option value="">🔑 Vault keys...</option>
+                      </select>
                     </div>
                   </div>
                 </div>
                 <div class="desktop-row">
                   <div class="desktop-field" style="flex: 1;">
                     <label>Passphrase (Optional):</label>
-                    <input type="password" id="sitePassphrase" placeholder="Leave blank if unencrypted">
+                    <div class="pw-wrap"><input type="password" id="sitePassphrase" placeholder="Leave blank if unencrypted"><button type="button" class="pw-eye" onclick="togglePwVisibility('sitePassphrase', this)" title="Show / hide passphrase">👁</button></div>
                   </div>
                 </div>
               </div>
@@ -4308,7 +4433,10 @@
             <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             Login
           </button>
-          <button type="button" class="btn btn-secondary" onclick="saveSiteFromForm()" style="padding: 5px 12px;">
+          <button type="button" class="btn btn-secondary" onclick="testSiteFormConnection()" id="btnSiteTest" style="padding: 5px 12px;" title="Check that the host and port are reachable">
+            Test
+          </button>
+          <button type="button" class="btn btn-secondary" id="btnSiteSave" onclick="saveSiteFromForm()" style="padding: 5px 12px;">
             Save
           </button>
           <button type="button" class="btn btn-secondary" onclick="closeSitesModal()" style="padding: 5px 12px;">
@@ -4649,7 +4777,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.53 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.54 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -5994,7 +6122,7 @@
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.53';
+    let APP_CURRENT_VERSION = '0.0.0.54';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -11517,12 +11645,6 @@
       }
     }
 
-    function openChmodForItem(path, name, perms) {
-      closeContextMenu();
-      selectedRemoteFile = { path, name, permissions: perms };
-      openChmodModal();
-    }
-
     function showPropertiesModal(item, isRemote) {
       closeContextMenu();
       if (!item) return;
@@ -13057,6 +13179,9 @@
         // Site Manager Modal Logic
     function openSitesModal() {
       renderSitesList();
+      refreshVaultKeySelect();
+      const n = document.getElementById('siteModalNotice');
+      if (n) n.className = 'site-notice';
       document.getElementById('sitesModal').classList.add('active');
       sendRust('get_storage_info').then(info => {
         if (info && info.path) {
@@ -13141,6 +13266,7 @@
         item.innerHTML = `
           <svg class="icon icon-sm site-tree-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
           <span style="overflow:hidden; text-overflow:ellipsis; flex:1;">${escapeHtml(s.name)}</span>
+          <span class="site-proto-badge">${escapeHtml((s.protocol || 'sftp').toUpperCase())}</span>
         `;
         item.onclick = () => {
           selectedSiteId = s.id;
@@ -13230,23 +13356,87 @@
       executeConnect(siteConfig);
     }
 
+    let siteNoticeTimer = null;
+    function showSiteNotice(msg, kind = 'success', ms = 3500) {
+      const el = document.getElementById('siteModalNotice');
+      if (!el) return;
+      const icon = kind === 'success' ? '✓' : (kind === 'error' ? '✕' : 'ℹ');
+      el.className = 'site-notice show ' + kind;
+      el.textContent = `${icon} ${msg}`;
+      if (siteNoticeTimer) clearTimeout(siteNoticeTimer);
+      if (ms > 0) siteNoticeTimer = setTimeout(() => { el.className = 'site-notice'; }, ms);
+    }
+
+    function togglePwVisibility(inputId, btn) {
+      const inp = document.getElementById(inputId);
+      if (!inp) return;
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      if (btn) btn.textContent = show ? '🙈' : '👁';
+    }
+
+    async function refreshVaultKeySelect() {
+      const sel = document.getElementById('siteVaultKeySelect');
+      if (!sel) return;
+      try {
+        const res = await sendRust('ssh_list_keys', {});
+        const keys = res.keys || [];
+        window._cachedVaultKeys = keys;
+        sel.innerHTML = '<option value="">🔑 Vault keys...</option>' +
+          keys.map((k, i) => `<option value="${i}">${escapeHtml(k.name)}</option>`).join('');
+      } catch (_) {}
+    }
+
+    function useVaultKeyForSite(idx) {
+      if (idx === '' || idx === null) return;
+      const k = (window._cachedVaultKeys || [])[parseInt(idx, 10)];
+      if (!k) return;
+      document.getElementById('siteKeyPath').value = k.private_key_path || '';
+      showSiteNotice(`Using vault key '${k.name}'`, 'info');
+    }
+
+    async function testSiteFormConnection() {
+      const host = document.getElementById('siteHost').value.trim();
+      const port = parseInt(document.getElementById('sitePort').value, 10) || 22;
+      if (!host) {
+        showSiteNotice('Please enter a Host Name to test.', 'error');
+        return;
+      }
+      const btn = document.getElementById('btnSiteTest');
+      if (btn) { btn.disabled = true; btn.textContent = 'Testing...'; }
+      showSiteNotice(`Testing ${host}:${port}...`, 'info', 0);
+      try {
+        const res = await sendRust('network_probe', { host, port, count: 2 });
+        if (res.reachable) showSiteNotice(`${host}:${port} is reachable (${res.avg_ms} ms avg)`, 'success');
+        else showSiteNotice(`${host}:${port} is unreachable or port is closed`, 'error', 6000);
+      } catch (err) {
+        showSiteNotice('Test failed: ' + (err.message || err), 'error', 6000);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Test'; }
+      }
+    }
+
     async function saveSiteFromForm() {
       const name = document.getElementById('siteName').value.trim();
       const host = document.getElementById('siteHost').value.trim();
+      const btn = document.getElementById('btnSiteSave');
 
       if (!host) {
-        alert('Please enter a Host Name');
+        showSiteNotice('Please enter a Host Name before saving.', 'error', 5000);
+        document.getElementById('siteHost').focus();
         return;
       }
 
+      const user = document.getElementById('siteUser').value.trim();
       const id = document.getElementById('siteId').value || 'site_' + Date.now();
+      const isNew = !savedSites.some(s => s.id === id);
       const site = {
         id,
-        name: name || host,
+        name: name || (user ? `${user}@${host}` : host),
         protocol: document.getElementById('siteProtocol').value,
         host: host,
         port: parseInt(document.getElementById('sitePort').value) || 22,
-        username: document.getElementById('siteUser').value.trim(),
+        username: user,
         password: document.getElementById('sitePass').value,
         auth_type: document.getElementById('siteAuthType').value,
         key_path: document.getElementById('siteKeyPath').value.trim(),
@@ -13256,16 +13446,27 @@
         created_at: new Date().toISOString()
       };
 
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
       try {
         const res = await sendRust('save_site', site);
         savedSites = res.sites || [];
         selectedSiteId = site.id;
         document.getElementById('siteId').value = site.id;
+        if (!name) document.getElementById('siteName').value = site.name;
         updateQuickSiteSelect();
         renderSitesList();
+        showSiteNotice(`${isNew ? 'Site added' : 'Site updated'}: ${site.name}`, 'success');
         addLog(`Site configuration saved: ${site.name}`, 'success');
+        if (btn) {
+          btn.classList.add('btn-saved');
+          btn.textContent = '✓ Saved!';
+          setTimeout(() => { btn.classList.remove('btn-saved'); btn.textContent = 'Save'; }, 1600);
+        }
       } catch (err) {
-        alert('Failed to save site: ' + err.message);
+        showSiteNotice('Failed to save site: ' + (err.message || err), 'error', 7000);
+        if (btn) btn.textContent = 'Save';
+      } finally {
+        if (btn) btn.disabled = false;
       }
     }
 
@@ -13278,8 +13479,9 @@
         selectedSiteId = null;
         renderSitesList();
         resetSiteForm();
+        showSiteNotice('Site deleted.', 'success');
       } catch (err) {
-        alert('Failed to delete: ' + err.message);
+        showSiteNotice('Failed to delete: ' + (err.message || err), 'error', 6000);
       }
     }
 
@@ -16079,6 +16281,10 @@
       }
     }
 
+    function updateSyncBrowsingToolbarUI() {
+      updateSyncBrowsingButtonUI();
+    }
+
     function toggleSynchronizedBrowsing() {
       closeAllMenus();
       if (!appOptions) appOptions = {};
@@ -16949,8 +17155,12 @@
       } else if (key === 'F6') {
         openInteractiveMoveModal(isRem, 'move');
       } else if (key === 'F7') {
-        if (isRem) promptCreateFolder();
-        else promptCreateLocalFolder();
+        if (isRem) {
+          if (!isConnected) { alert('Please connect to a remote server first to create a remote folder (F7).'); return; }
+          promptNewRemoteFolder();
+        } else {
+          promptNewLocalFolder();
+        }
       } else if (key === 'F8') {
         const remoteSel = getSelectedRemoteItems();
         const localSel = getSelectedLocalItems();
