@@ -2635,8 +2635,496 @@ impl AppState {
                     let out = client.exec_command(cmd)?;
                     Ok(out)
                 }) {
-                    Ok((raw_output, reconnected)) => IpcResponse::ok(id, action, json!({
-                        "raw": raw_output,
+                    Ok((raw_output, reconnected)) => {
+                        let mut section = "";
+                        let mut uname = String::new();
+                        let mut uptime = String::new();
+                        let mut loadavg = String::new();
+                        let mut mem_total_mb: u64 = 0;
+                        let mut mem_used_mb: u64 = 0;
+                        let mut disks = Vec::new();
+
+                        for line in raw_output.lines() {
+                            let t = line.trim();
+                            if t.is_empty() {
+                                continue;
+                            }
+                            match t {
+                                "===UNAME===" => { section = "uname"; continue; }
+                                "===UPTIME===" => { section = "uptime"; continue; }
+                                "===LOAD===" => { section = "load"; continue; }
+                                "===MEM===" => { section = "mem"; continue; }
+                                "===DISK===" => { section = "disk"; continue; }
+                                _ => {}
+                            }
+                            match section {
+                                "uname" if uname.is_empty() => uname = t.to_string(),
+                                "uptime" if uptime.is_empty() => uptime = t.to_string(),
+                                "load" if loadavg.is_empty() => loadavg = t.to_string(),
+                                "mem" => {
+                                    if t.starts_with("Mem:") {
+                                        let parts: Vec<&str> = t.split_whitespace().collect();
+                                        if parts.len() >= 3 {
+                                            mem_total_mb = parts[1].parse::<u64>().unwrap_or(0);
+                                            mem_used_mb = parts[2].parse::<u64>().unwrap_or(0);
+                                        }
+                                    }
+                                }
+                                "disk" => {
+                                    if !t.starts_with("Filesystem") {
+                                        let parts: Vec<&str> = t.split_whitespace().collect();
+                                        if parts.len() >= 6 {
+                                            disks.push(json!({
+                                                "filesystem": parts[0],
+                                                "size": parts[1],
+                                                "used": parts[2],
+                                                "avail": parts[3],
+                                                "use_percent": parts[4],
+                                                "mount": parts[5..].join(" "),
+                                            }));
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        IpcResponse::ok(id, action, json!({
+                            "uname": uname,
+                            "uptime": uptime,
+                            "loadavg": loadavg,
+                            "mem_total_mb": mem_total_mb,
+                            "mem_used_mb": mem_used_mb,
+                            "disks": disks,
+                            "raw": raw_output,
+                            "reconnected": reconnected
+                        }))
+                    }
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "remote_grep_content" => {
+                let path = payload["path"].as_str().unwrap_or("/").trim();
+                let pattern = payload["pattern"].as_str().unwrap_or("").trim();
+                let file_mask = payload["file_mask"].as_str().unwrap_or("").trim();
+                let case_sensitive = payload["case_sensitive"].as_bool().unwrap_or(false);
+                let max_results = payload["max_results"].as_u64().unwrap_or(200) as usize;
+
+                if pattern.is_empty() {
+                    return IpcResponse::err(id, action, "Search text pattern is required");
+                }
+
+                match self.with_remote_retry(|client| {
+                    let esc_path = path.replace('\'', "'\\''");
+                    let esc_pat = pattern.replace('\'', "'\\''");
+                    let case_flag = if case_sensitive { "" } else { "-i" };
+                    let mut include_flags = String::new();
+                    if !file_mask.is_empty() {
+                        for m in file_mask.split(|c| c == ',' || c == ';' || c == ' ').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                            let safe_m = m.replace('\'', "");
+                            include_flags.push_str(&format!(" --include='{}'", safe_m));
+                        }
+                    }
+                    let cmd = format!(
+                        "grep -rnI {} {} --exclude-dir='.git' --exclude-dir='node_modules' --exclude-dir='vendor' -- '{}' '{}' 2>/dev/null | head -n {}",
+                        case_flag, include_flags, esc_pat, esc_path, max_results
+                    );
+                    let raw = client.exec_command(&cmd)?;
+                    let mut matches = Vec::new();
+                    for line in raw.lines() {
+                        let mut parts = line.splitn(3, ':');
+                        if let (Some(f_path), Some(line_no), Some(snippet)) = (parts.next(), parts.next(), parts.next()) {
+                            if let Ok(ln) = line_no.parse::<u64>() {
+                                let name = f_path.rsplit('/').next().unwrap_or(f_path).to_string();
+                                let dir = match f_path.rfind('/') {
+                                    Some(0) => "/".to_string(),
+                                    Some(idx) => f_path[..idx].to_string(),
+                                    None => "/".to_string(),
+                                };
+                                matches.push(json!({
+                                    "path": f_path,
+                                    "name": name,
+                                    "dir": dir,
+                                    "line": ln,
+                                    "snippet": snippet.chars().take(240).collect::<String>()
+                                }));
+                            }
+                        }
+                    }
+                    Ok(matches)
+                }) {
+                    Ok((matches, reconnected)) => IpcResponse::ok(id, action, json!({
+                        "matches": matches,
+                        "reconnected": reconnected
+                    })),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "local_grep_content" => {
+                let root_path = payload["path"].as_str().unwrap_or("").trim();
+                let pattern = payload["pattern"].as_str().unwrap_or("").trim();
+                let file_mask = payload["file_mask"].as_str().unwrap_or("").trim();
+                let case_sensitive = payload["case_sensitive"].as_bool().unwrap_or(false);
+                let max_results = payload["max_results"].as_u64().unwrap_or(200) as usize;
+
+                if root_path.is_empty() || pattern.is_empty() {
+                    return IpcResponse::err(id, action, "Both search path and text pattern are required");
+                }
+
+                let pat_cmp = if case_sensitive { pattern.to_string() } else { pattern.to_lowercase() };
+                let masks: Vec<String> = file_mask
+                    .split(|c| c == ',' || c == ';' || c == ' ')
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+
+                let mut matches = Vec::new();
+                let mut stack = vec![std::path::PathBuf::from(root_path)];
+                let mut scanned_files = 0usize;
+
+                while let Some(dir) = stack.pop() {
+                    if matches.len() >= max_results || scanned_files > 4000 {
+                        break;
+                    }
+                    let entries = match std::fs::read_dir(&dir) {
+                        Ok(rd) => rd,
+                        Err(_) => continue,
+                    };
+                    for entry in entries.flatten() {
+                        if matches.len() >= max_results {
+                            break;
+                        }
+                        let p = entry.path();
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                        if is_dir {
+                            if name != ".git" && name != "node_modules" && name != "target" && name != "vendor" && name != "__pycache__" {
+                                stack.push(p);
+                            }
+                            continue;
+                        }
+                        if !masks.is_empty() {
+                            let n_low = name.to_lowercase();
+                            let matched_mask = masks.iter().any(|m| {
+                                if let Some(ext) = m.strip_prefix("*.") {
+                                    n_low.ends_with(&format!(".{}", ext))
+                                } else {
+                                    n_low.contains(m)
+                                }
+                            });
+                            if !matched_mask {
+                                continue;
+                            }
+                        }
+                        let meta = match entry.metadata() {
+                            Ok(m) => m,
+                            Err(_) => continue,
+                        };
+                        if meta.len() > 2 * 1024 * 1024 {
+                            continue; // Skip files > 2MB during fast grep
+                        }
+                        scanned_files += 1;
+                        if let Ok(content) = std::fs::read_to_string(&p) {
+                            let full_p = p.to_string_lossy().to_string();
+                            let parent_dir = p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
+                            for (idx, line_str) in content.lines().enumerate() {
+                                let hit = if case_sensitive {
+                                    line_str.contains(&pat_cmp)
+                                } else {
+                                    line_str.to_lowercase().contains(&pat_cmp)
+                                };
+                                if hit {
+                                    matches.push(json!({
+                                        "path": full_p,
+                                        "name": name,
+                                        "dir": parent_dir,
+                                        "line": idx + 1,
+                                        "snippet": line_str.trim().chars().take(240).collect::<String>()
+                                    }));
+                                    if matches.len() >= max_results {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                IpcResponse::ok(id, action, json!({
+                    "matches": matches,
+                    "scanned_files": scanned_files
+                }))
+            }
+
+            "local_batch_rename" => {
+                let current_dir = payload["current_dir"].as_str().unwrap_or("");
+                let ops = payload["ops"].as_array().cloned().unwrap_or_default();
+                let mut renamed = 0usize;
+                let mut errors = Vec::new();
+                for op in ops {
+                    let old_p = op["old_path"].as_str().unwrap_or("");
+                    let new_p = op["new_path"].as_str().unwrap_or("");
+                    if !old_p.is_empty() && !new_p.is_empty() && old_p != new_p {
+                        match std::fs::rename(old_p, new_p) {
+                            Ok(_) => renamed += 1,
+                            Err(e) => errors.push(format!("{}: {}", old_p, e)),
+                        }
+                    }
+                }
+                let files = if !current_dir.is_empty() {
+                    crate::local_fs::list_dir(current_dir).unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                IpcResponse::ok(id, action, json!({
+                    "renamed": renamed,
+                    "errors": errors,
+                    "files": files
+                }))
+            }
+
+            "remote_batch_rename" => {
+                let current_dir = payload["current_dir"].as_str().unwrap_or("/").to_string();
+                let ops = payload["ops"].as_array().cloned().unwrap_or_default();
+                match self.with_remote_retry(|client| {
+                    let mut renamed = 0usize;
+                    let mut errors = Vec::new();
+                    for op in &ops {
+                        let old_p = op["old_path"].as_str().unwrap_or("");
+                        let new_p = op["new_path"].as_str().unwrap_or("");
+                        if !old_p.is_empty() && !new_p.is_empty() && old_p != new_p {
+                            match client.rename(old_p, new_p) {
+                                Ok(_) => renamed += 1,
+                                Err(e) => errors.push(format!("{}: {}", old_p, e)),
+                            }
+                        }
+                    }
+                    let files = client.list(Some(&current_dir)).unwrap_or_default();
+                    Ok((renamed, errors, files))
+                }) {
+                    Ok(((renamed, errors, files), reconnected)) => IpcResponse::ok(id, action, json!({
+                        "renamed": renamed,
+                        "errors": errors,
+                        "files": files,
+                        "reconnected": reconnected
+                    })),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "remote_process_manager" => {
+                match self.with_remote_retry(|client| {
+                    let cmd = "echo '===PROCS==='; ps aux --sort=-%cpu 2>/dev/null | head -n 40; echo '===PORTS==='; (ss -tulnp 2>/dev/null || netstat -tulnp 2>/dev/null) | head -n 45; echo '===SERVICES==='; systemctl list-units --type=service --state=running,failed --no-pager --no-legend 2>/dev/null | head -n 45";
+                    let raw = client.exec_command(cmd)?;
+                    Ok(raw)
+                }) {
+                    Ok((raw, reconnected)) => {
+                        let mut section = "";
+                        let mut processes = Vec::new();
+                        let mut ports = Vec::new();
+                        let mut services = Vec::new();
+
+                        for line in raw.lines() {
+                            let t = line.trim();
+                            if t.is_empty() { continue; }
+                            match t {
+                                "===PROCS===" => { section = "procs"; continue; }
+                                "===PORTS===" => { section = "ports"; continue; }
+                                "===SERVICES===" => { section = "services"; continue; }
+                                _ => {}
+                            }
+                            match section {
+                                "procs" => {
+                                    if t.starts_with("USER") { continue; }
+                                    let parts: Vec<&str> = t.split_whitespace().collect();
+                                    if parts.len() >= 11 {
+                                        processes.push(json!({
+                                            "user": parts[0],
+                                            "pid": parts[1],
+                                            "cpu": parts[2],
+                                            "mem": parts[3],
+                                            "rss": parts[5],
+                                            "stat": parts[7],
+                                            "time": parts[9],
+                                            "command": parts[10..].join(" ")
+                                        }));
+                                    }
+                                }
+                                "ports" => {
+                                    if t.starts_with("Netid") || t.starts_with("Active") || t.starts_with("Proto") {
+                                        continue;
+                                    }
+                                    let parts: Vec<&str> = t.split_whitespace().collect();
+                                    if parts.len() >= 5 {
+                                        ports.push(json!({
+                                            "proto": parts[0],
+                                            "state": parts[1],
+                                            "local_addr": parts.get(4).copied().unwrap_or(parts[3]),
+                                            "process": parts.last().copied().unwrap_or("-")
+                                        }));
+                                    }
+                                }
+                                "services" => {
+                                    let clean = t.trim_start_matches('●').trim();
+                                    let parts: Vec<&str> = clean.split_whitespace().collect();
+                                    if parts.len() >= 4 {
+                                        services.push(json!({
+                                            "unit": parts[0],
+                                            "load": parts[1],
+                                            "active": parts[2],
+                                            "sub": parts[3],
+                                            "description": if parts.len() > 4 { parts[4..].join(" ") } else { String::new() }
+                                        }));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        IpcResponse::ok(id, action, json!({
+                            "processes": processes,
+                            "ports": ports,
+                            "services": services,
+                            "reconnected": reconnected
+                        }))
+                    }
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "remote_kill_process" => {
+                let pid = payload["pid"].as_str().unwrap_or("").trim();
+                let signal = payload["signal"].as_str().unwrap_or("15").trim();
+                if pid.is_empty() || !pid.chars().all(|c| c.is_ascii_digit()) {
+                    return IpcResponse::err(id, action, "Valid numeric PID is required");
+                }
+                let sig_clean = if signal == "9" || signal.eq_ignore_ascii_case("SIGKILL") { "9" } else { "15" };
+                match self.with_remote_retry(|client| {
+                    let cmd = format!("kill -{} {} 2>&1 || sudo -n kill -{} {} 2>&1", sig_clean, pid, sig_clean, pid);
+                    let out = client.exec_command(&cmd)?;
+                    Ok(out)
+                }) {
+                    Ok((out, reconnected)) => IpcResponse::ok(id, action, json!({
+                        "pid": pid,
+                        "signal": sig_clean,
+                        "output": out.trim(),
+                        "reconnected": reconnected
+                    })),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "remote_service_action" => {
+                let unit = payload["unit"].as_str().unwrap_or("").trim();
+                let op = payload["op"].as_str().unwrap_or("restart").trim();
+                if unit.is_empty() || !unit.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' || c == '@') {
+                    return IpcResponse::err(id, action, "Valid systemd unit name is required");
+                }
+                let safe_op = match op {
+                    "start" | "stop" | "restart" | "reload" | "status" => op,
+                    _ => "restart",
+                };
+                match self.with_remote_retry(|client| {
+                    let cmd = format!("systemctl {} {} 2>&1 || sudo -n systemctl {} {} 2>&1", safe_op, unit, safe_op, unit);
+                    let out = client.exec_command(&cmd)?;
+                    Ok(out)
+                }) {
+                    Ok((out, reconnected)) => IpcResponse::ok(id, action, json!({
+                        "unit": unit,
+                        "op": safe_op,
+                        "output": out.trim(),
+                        "reconnected": reconnected
+                    })),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "local_file_inspect" => {
+                let path = payload["path"].as_str().unwrap_or("").trim();
+                let mode = payload["mode"].as_str().unwrap_or("tail");
+                let lines_count = payload["lines"].as_u64().unwrap_or(120) as usize;
+                let max_bytes = payload["max_bytes"].as_u64().unwrap_or(4096) as usize;
+
+                if path.is_empty() {
+                    return IpcResponse::err(id, action, "File path is required");
+                }
+
+                let meta = match std::fs::metadata(path) {
+                    Ok(m) => m,
+                    Err(e) => return IpcResponse::err(id, action, &format!("Failed to stat file: {}", e)),
+                };
+
+                if mode == "hex" {
+                    use std::io::Read;
+                    let mut f = match std::fs::File::open(path) {
+                        Ok(file) => file,
+                        Err(e) => return IpcResponse::err(id, action, &format!("Failed to open file: {}", e)),
+                    };
+                    let mut buf = vec![0u8; max_bytes.min(16384)];
+                    let n = f.read(&mut buf).unwrap_or(0);
+                    buf.truncate(n);
+                    let hex_dump = format_hex_dump(&buf);
+                    IpcResponse::ok(id, action, json!({
+                        "path": path,
+                        "size": meta.len(),
+                        "mode": "hex",
+                        "content": hex_dump
+                    }))
+                } else {
+                    let raw = std::fs::read_to_string(path).unwrap_or_else(|_| {
+                        let bytes = std::fs::read(path).unwrap_or_default();
+                        String::from_utf8_lossy(&bytes).to_string()
+                    });
+                    let all_lines: Vec<&str> = raw.lines().collect();
+                    let start = all_lines.len().saturating_sub(lines_count);
+                    let tail_str = all_lines[start..].join("\n");
+                    IpcResponse::ok(id, action, json!({
+                        "path": path,
+                        "size": meta.len(),
+                        "total_lines": all_lines.len(),
+                        "mode": "tail",
+                        "content": tail_str
+                    }))
+                }
+            }
+
+            "remote_file_inspect" => {
+                let path = payload["path"].as_str().unwrap_or("").trim();
+                let mode = payload["mode"].as_str().unwrap_or("tail").to_string();
+                let lines_count = payload["lines"].as_u64().unwrap_or(120) as usize;
+                let max_bytes = payload["max_bytes"].as_u64().unwrap_or(4096) as usize;
+
+                if path.is_empty() {
+                    return IpcResponse::err(id, action, "Remote file path is required");
+                }
+
+                match self.with_remote_retry(|client| {
+                    let esc_p = path.replace('\'', "'\\''");
+                    if mode == "hex" {
+                        let data = client.download_file(path)?;
+                        let slice = &data[..data.len().min(max_bytes.min(16384))];
+                        Ok((format_hex_dump(slice), data.len() as u64))
+                    } else {
+                        let cmd = format!("tail -n {} '{}' 2>/dev/null", lines_count, esc_p);
+                        if let Ok(out) = client.exec_command(&cmd) {
+                            if !out.is_empty() {
+                                return Ok((out, 0u64));
+                            }
+                        }
+                        let data = client.download_file(path)?;
+                        let raw = String::from_utf8_lossy(&data);
+                        let all_lines: Vec<&str> = raw.lines().collect();
+                        let start = all_lines.len().saturating_sub(lines_count);
+                        Ok((all_lines[start..].join("\n"), data.len() as u64))
+                    }
+                }) {
+                    Ok(((content, size), reconnected)) => IpcResponse::ok(id, action, json!({
+                        "path": path,
+                        "size": size,
+                        "mode": mode,
+                        "content": content,
                         "reconnected": reconnected
                     })),
                     Err(e) => IpcResponse::err(id, action, &e),
@@ -2645,5 +3133,34 @@ impl AppState {
 
             unknown => IpcResponse::err(id, action, &format!("Unknown action: {}", unknown)),
         }
+    }
+}
+
+fn format_hex_dump(bytes: &[u8]) -> String {
+    let mut out = String::new();
+    for (chunk_idx, chunk) in bytes.chunks(16).enumerate() {
+        let offset = chunk_idx * 16;
+        out.push_str(&format!("{:08X}  ", offset));
+        for i in 0..16 {
+            if i < chunk.len() {
+                out.push_str(&format!("{:02X} ", chunk[i]));
+            } else {
+                out.push_str("   ");
+            }
+            if i == 7 {
+                out.push(' ');
+            }
+        }
+        out.push_str(" |");
+        for &b in chunk {
+            let c = if (0x20..=0x7E).contains(&b) { b as char } else { '.' };
+            out.push(c);
+        }
+        out.push_str("|\n");
+    }
+    if out.is_empty() {
+        "(Empty file - 0 bytes)".to_string()
+    } else {
+        out
     }
 }

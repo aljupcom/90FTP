@@ -3167,7 +3167,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.52</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.53</span>
         </div>
       </div>
 
@@ -3302,10 +3302,36 @@
       <div class="menu-item" onclick="toggleMenu(event, 'toolsMenu')">
         <span>Tools</span>
         <div class="menu-dropdown" id="toolsMenu">
+          <div class="dropdown-item" onclick="openCommandPalette()">
+            <span class="menu-icon">⚡</span>
+            <span style="font-weight: 600; color: var(--accent);">Command Palette (Omni-Launcher)...</span>
+            <span class="shortcut">Ctrl+K</span>
+          </div>
+          <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openFindFilesModal()">
             <span class="menu-icon">🔍</span>
-            <span>Find Files on Server...</span>
+            <span>Find Files (Remote & Local)...</span>
             <span class="shortcut">Ctrl+F</span>
+          </div>
+          <div class="dropdown-item" onclick="openContentGrepModal()">
+            <span class="menu-icon">🧬</span>
+            <span>Search Text Inside Files (Grep)...</span>
+            <span class="shortcut">Ctrl+Shift+F</span>
+          </div>
+          <div class="dropdown-item" onclick="openBatchRenameModal()">
+            <span class="menu-icon">✏️</span>
+            <span>Batch Multi-Rename Tool (Regex/Seq)...</span>
+            <span class="shortcut">Ctrl+M</span>
+          </div>
+          <div class="dropdown-item" onclick="toggleSynchronizedBrowsing()">
+            <span class="menu-icon">🔗</span>
+            <span>Synchronized Browsing (Lock-Step)</span>
+            <span class="shortcut">Ctrl+Y</span>
+          </div>
+          <div class="dropdown-item" onclick="openBookmarksModal()">
+            <span class="menu-icon">⭐</span>
+            <span>Path Bookmarks & Quick-Jump...</span>
+            <span class="shortcut">Ctrl+B</span>
           </div>
           <div class="dropdown-item" onclick="toggleCompareDirectories()">
             <span class="menu-icon">⚖️</span>
@@ -3325,6 +3351,10 @@
           <div class="dropdown-item" onclick="openToolsModal()">
             <span class="menu-icon">🛠️</span>
             <span>Power Tools & Diagnostics Suite...</span>
+          </div>
+          <div class="dropdown-item" onclick="openProcessManagerModal()">
+            <span class="menu-icon">⚙️</span>
+            <span>Remote Process, Port & Service Manager...</span>
           </div>
           <div class="dropdown-item" onclick="openNetworkProbeModal()">
             <span class="menu-icon">🌐</span>
@@ -3436,6 +3466,25 @@
         <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         <span>Disconnect</span>
       </button>
+
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 5px;">
+        <button type="button" class="btn btn-secondary btn-sm" id="btnSyncBrowsing" onclick="toggleSynchronizedBrowsing()" style="height: 26px; padding: 0 9px; font-size: 11px; gap: 4px;" title="Synchronized Browsing (Ctrl+Y): Lock-step folder navigation between Local and Remote panes">
+          <span>🔗</span>
+          <span>Sync Nav</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="openBookmarksModal()" style="height: 26px; padding: 0 9px; font-size: 11px; gap: 4px;" title="Path Bookmarks & Quick-Jump Favorites (Ctrl+B)">
+          <span>⭐</span>
+          <span>Bookmarks</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="openContentGrepModal()" style="height: 26px; padding: 0 9px; font-size: 11px; gap: 4px;" title="Search Text Inside Files - Remote & Local Grep (Ctrl+Shift+F)">
+          <span>🧬</span>
+          <span>Grep</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="openCommandPalette()" style="height: 26px; padding: 0 10px; font-size: 11px; gap: 5px; border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;" title="Open Omni Command Palette (Ctrl+K)">
+          <span>⚡</span>
+          <span style="font-weight: 700;">Ctrl+K</span>
+        </button>
+      </div>
     </div>
   </header>
   <!-- Floating Glassmorphic Update Toast -->
@@ -4600,7 +4649,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.52 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.53 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -4663,6 +4712,42 @@
 
         <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;">Power Tools & Server Utilities</div>
 
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); openCommandPalette();">
+          <span style="font-size: 14px;">⚡</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Omni Command Palette (Ctrl+K)</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Instant search across Sites, Files, Bookmarks & All System Actions</div>
+          </div>
+          <span class="tool-tag ready">READY</span>
+        </div>
+
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); openProcessManagerModal();">
+          <span style="font-size: 14px;">⚙️</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Remote Process, Port & Service Manager</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Live htop processes (Kill PID), TCP/UDP ports & Systemd service control</div>
+          </div>
+          <span class="tool-tag ready">READY</span>
+        </div>
+
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); openContentGrepModal();">
+          <span style="font-size: 14px;">🧬</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Full-Text Content Grep (Search Inside Files)</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Fast code/text grep across Remote Server or Local Disk (Ctrl+Shift+F)</div>
+          </div>
+          <span class="tool-tag ready">READY</span>
+        </div>
+
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); openBatchRenameModal();">
+          <span style="font-size: 14px;">✏️</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Batch Multi-Rename Engine (Regex & Counter)</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Find/Replace, Regex, Prefix/Suffix, Case & Numbering with Live Preview (Ctrl+M)</div>
+          </div>
+          <span class="tool-tag ready">READY</span>
+        </div>
+
         <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); openServerHealthModal();">
           <span style="font-size: 14px;">📊</span>
           <div style="flex: 1; min-width: 0;">
@@ -4673,7 +4758,7 @@
         </div>
 
         <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); toggleCompareDirectories(true);">
-          <span style="font-size: 14px;">⚡</span>
+          <span style="font-size: 14px;">⚖️</span>
           <div style="flex: 1; min-width: 0;">
             <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Directory Synchronization Engine</div>
             <div style="font-size: 10.5px; color: var(--text-dim);">Fast bi-directional mirror & diff synchronization (Shift+F1)</div>
@@ -4830,6 +4915,279 @@
         <div id="fileDiffContainer" style="flex: 1; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px;"></div>
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
           <button type="button" class="btn btn-secondary" onclick="closeFileDiffModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Omni Command Palette (Ctrl+K / Ctrl+P) -->
+  <div class="modal-overlay" id="commandPaletteModal" style="z-index: 1200; align-items: flex-start; padding-top: 9vh;" onclick="if(event.target===this) closeCommandPalette();">
+    <div class="native-window-dialog" style="width: 640px; max-width: 94vw; box-shadow: 0 24px 60px rgba(0,0,0,0.65); border: 1px solid rgba(56, 189, 248, 0.35);">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border-color); background: var(--bg-panel);">
+        <span style="font-size: 16px; color: #38bdf8;">⚡</span>
+        <input type="text" id="cmdPaletteInput" class="path-input" style="flex: 1; height: 32px; font-size: 13px; border: none; background: transparent; outline: none;" placeholder="Type a command, saved server site, bookmark, or file name... (↑↓ to navigate, Enter to run)" oninput="renderCommandPaletteItems()" onkeydown="handleCommandPaletteKey(event)">
+        <span style="font-size: 10.5px; color: var(--text-dim); padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 4px; font-family: monospace;">ESC</span>
+      </div>
+      <div id="cmdPaletteList" style="max-height: 390px; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; background: var(--bg-card);"></div>
+      <div style="padding: 6px 12px; border-top: 1px solid var(--border-color); background: var(--bg-panel); display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-dim);">
+        <span><strong>↑↓</strong> Select &nbsp;•&nbsp; <strong>Enter</strong> Execute &nbsp;•&nbsp; Prefix <strong>&gt;</strong> Commands, <strong>@</strong> Sites, <strong>#</strong> Files</span>
+        <span>90FTP Omni-Launcher</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Full-Text Content Grep (Search Inside Files - Remote & Local) -->
+  <div class="modal-overlay" id="contentGrepModal" style="z-index: 1070;">
+    <div class="native-window-dialog" style="width: 820px; max-width: 96vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="font-size: 14px;">🧬</span>
+          <span style="font-weight: 600;">Full-Text Content Grep — Search Inside Files (Remote & Local)</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeContentGrepModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 14px; gap: 10px;">
+        <div style="display: grid; grid-template-columns: 150px 1fr 180px; gap: 8px; align-items: end;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Target Scope:</label>
+            <select id="grepScopeSelect" class="path-input" style="height: 28px; font-weight: 600;" onchange="onGrepScopeChange()">
+              <option value="remote">🌐 Remote Server</option>
+              <option value="local">💻 Local Computer</option>
+            </select>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Directory Path:</label>
+            <input type="text" id="grepPathInput" class="path-input" placeholder="/var/www/html or C:\Projects">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">File Mask (optional):</label>
+            <input type="text" id="grepFileMaskInput" class="path-input" placeholder="e.g. *.php, *.js, *.env">
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: flex-end;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Text / Code Pattern to Find Inside Files:</label>
+            <input type="text" id="grepPatternInput" class="path-input" placeholder="e.g. DB_PASSWORD, api_key, function connect, TODO..." onkeydown="if(event.key==='Enter') executeContentGrep();">
+          </div>
+          <label style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; height: 28px; cursor: pointer; padding: 0 6px;">
+            <input type="checkbox" id="grepCaseCheckbox"> Case sensitive
+          </label>
+          <button type="button" class="btn btn-primary" id="btnRunGrep" onclick="executeContentGrep()" style="height: 28px; padding: 0 16px;">Search Content</button>
+        </div>
+        <div id="grepStatusSummary" style="font-size: 11px; color: var(--text-dim);">Enter a text string or code snippet to search across files.</div>
+        <div style="height: 310px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px;">
+          <table class="file-table" style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: var(--bg-panel); z-index: 2;">
+              <tr>
+                <th style="width: 28%; padding: 6px 10px;">File</th>
+                <th style="width: 65px; padding: 6px 8px; text-align: right;">Line #</th>
+                <th style="padding: 6px 10px;">Matched Code / Text Snippet</th>
+                <th style="width: 100px; padding: 6px 8px; text-align: center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="grepResultsBody">
+              <tr><td colspan="4" style="text-align: center; padding: 45px; color: var(--text-dim); font-style: italic;">No content search executed yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <button type="button" class="btn btn-secondary" onclick="closeContentGrepModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Batch Multi-Rename Tool (Regex, Case, Prefix/Suffix, Numbering) -->
+  <div class="modal-overlay" id="batchRenameModal" style="z-index: 1070;">
+    <div class="native-window-dialog" style="width: 780px; max-width: 96vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="font-size: 14px;">✏️</span>
+          <span style="font-weight: 600;" id="batchRenameTitle">Batch Multi-Rename Tool (Total Commander Style)</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeBatchRenameModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 14px; gap: 10px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 110px; gap: 8px; align-items: end;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Find Text / Pattern:</label>
+            <input type="text" id="brFindInput" class="path-input" placeholder="Text or Regex to find" oninput="updateBatchRenamePreview()">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Replace With:</label>
+            <input type="text" id="brReplaceInput" class="path-input" placeholder="Replacement text" oninput="updateBatchRenamePreview()">
+          </div>
+          <label style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; height: 28px; cursor: pointer;">
+            <input type="checkbox" id="brRegexCheckbox" onchange="updateBatchRenamePreview()"> Use Regex
+          </label>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 150px 140px; gap: 8px; align-items: end;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Prefix (Before Name):</label>
+            <input type="text" id="brPrefixInput" class="path-input" placeholder="e.g. backup_" oninput="updateBatchRenamePreview()">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Suffix (Before Ext):</label>
+            <input type="text" id="brSuffixInput" class="path-input" placeholder="e.g. _v2 or [N]" oninput="updateBatchRenamePreview()">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Case Transform:</label>
+            <select id="brCaseSelect" class="path-input" style="height: 28px;" onchange="updateBatchRenamePreview()">
+              <option value="none">Keep Original Case</option>
+              <option value="lower">lowercase</option>
+              <option value="upper">UPPERCASE</option>
+              <option value="title">Title Case</option>
+            </select>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Counter [N] Start/Pad:</label>
+            <div style="display: flex; gap: 4px;">
+              <input type="number" id="brCounterStart" class="path-input" value="1" min="0" style="width: 50%;" title="Start number" oninput="updateBatchRenamePreview()">
+              <select id="brCounterPad" class="path-input" style="width: 50%; height: 28px;" title="Zero padding digits" onchange="updateBatchRenamePreview()">
+                <option value="0">No Pad</option>
+                <option value="2">01</option>
+                <option value="3" selected>001</option>
+                <option value="4">0001</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 10.5px; color: var(--text-dim);">Tip: Use <code>[N]</code> in Prefix, Suffix, or Replace With to insert the sequential counter (e.g., <code>_001</code>).</div>
+        <div style="height: 250px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px;">
+          <table class="file-table" style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: var(--bg-panel); z-index: 2;">
+              <tr>
+                <th style="width: 48%; padding: 6px 10px;">Original Name</th>
+                <th style="width: 48%; padding: 6px 10px;">New Name Preview</th>
+                <th style="width: 60px; padding: 6px 8px; text-align: center;">State</th>
+              </tr>
+            </thead>
+            <tbody id="batchRenamePreviewBody"></tbody>
+          </table>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span id="batchRenameSummaryText" style="font-size: 11.5px; color: var(--text-muted);"></span>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-secondary" onclick="closeBatchRenameModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="executeBatchRename()">Apply Batch Rename</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Path Bookmarks & Paired Workspace Favorites (Ctrl+B) -->
+  <div class="modal-overlay" id="bookmarksModal" style="z-index: 1070;">
+    <div class="native-window-dialog" style="width: 640px; max-width: 95vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="font-size: 14px;">⭐</span>
+          <span style="font-weight: 600;">Path Bookmarks & Paired Workspace Favorites</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeBookmarksModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 14px; gap: 10px;">
+        <div style="display: flex; gap: 8px; align-items: flex-end; background: var(--bg-card); padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Bookmark Label:</label>
+            <input type="text" id="bmLabelInput" class="path-input" placeholder="e.g. Production Web Root + Local Dist">
+          </div>
+          <div style="width: 170px; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Save Scope:</label>
+            <select id="bmScopeSelect" class="path-input" style="height: 28px;">
+              <option value="both">🔗 Both Local & Remote</option>
+              <option value="remote">🌐 Remote Path Only</option>
+              <option value="local">💻 Local Path Only</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn-primary" onclick="saveCurrentBookmark()" style="height: 28px; padding: 0 14px;">⭐ Save Current</button>
+        </div>
+        <div style="height: 260px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px;">
+          <table class="file-table" style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: var(--bg-panel); z-index: 2;">
+              <tr>
+                <th style="width: 28%; padding: 6px 10px;">Label</th>
+                <th style="padding: 6px 10px;">Saved Path(s)</th>
+                <th style="width: 110px; padding: 6px 8px; text-align: center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bookmarksTableBody"></tbody>
+          </table>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <button type="button" class="btn btn-secondary" onclick="closeBookmarksModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Remote Process, Listening Ports & Systemd Service Manager -->
+  <div class="modal-overlay" id="processManagerModal" style="z-index: 1070;">
+    <div class="native-window-dialog" style="width: 860px; max-width: 96vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="font-size: 14px;">⚙️</span>
+          <span style="font-weight: 600;">Remote Server Process, Port & Systemd Service Manager</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeProcessManagerModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 14px; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-primary btn-sm" id="pmTabProcs" onclick="switchProcessManagerTab('procs')">🔥 Top Processes (CPU/RAM)</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="pmTabPorts" onclick="switchProcessManagerTab('ports')">🔌 Listening TCP/UDP Ports</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="pmTabServices" onclick="switchProcessManagerTab('services')">🛡️ Systemd Services</button>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <input type="text" id="pmFilterInput" class="path-input" style="width: 190px; height: 26px; font-size: 11.5px;" placeholder="Filter processes / ports / services..." oninput="renderProcessManagerActiveTab()">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="refreshProcessManagerData()">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="processManagerContentBox" style="height: 350px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px;">
+          <div style="text-align: center; padding: 50px; color: var(--text-dim);">Loading remote server processes, ports, and services...</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span id="pmFooterStatus" style="font-size: 11px; color: var(--text-dim);">Requires SSH/SFTP connection with shell execution privileges.</span>
+          <button type="button" class="btn btn-secondary" onclick="closeProcessManagerModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Live Log Tail Streamer & Binary Hex Inspector -->
+  <div class="modal-overlay" id="fileInspectorModal" style="z-index: 1072;">
+    <div class="native-window-dialog" style="width: 880px; max-width: 96vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="font-size: 14px;">🔬</span>
+          <span style="font-weight: 600;" id="fileInspectorTitle">Live Log Tail & Binary Hex Inspector</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeFileInspectorModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 12px 14px; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button type="button" class="btn btn-primary btn-sm" id="inspBtnTail" onclick="setFileInspectorMode('tail')">📜 Live Tail Mode</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="inspBtnHex" onclick="setFileInspectorMode('hex')">🔢 Hex + ASCII Dump</button>
+            <select id="inspLinesSelect" class="path-input" style="width: 110px; height: 26px; font-size: 11px;" onchange="refreshFileInspector()">
+              <option value="80">Last 80 lines</option>
+              <option value="150" selected>Last 150 lines</option>
+              <option value="300">Last 300 lines</option>
+              <option value="600">Last 600 lines</option>
+            </select>
+            <label id="inspFollowLabel" style="display: flex; align-items: center; gap: 4px; font-size: 11.5px; cursor: pointer; color: #10b981; font-weight: 600;">
+              <input type="checkbox" id="inspAutoFollowCheck" onchange="toggleInspectorAutoFollow()"> Live Follow (2s)
+            </label>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <input type="text" id="inspFilterInput" class="path-input" style="width: 170px; height: 26px; font-size: 11px;" placeholder="Highlight / filter lines..." oninput="renderFileInspectorOutput()">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="refreshFileInspector()">↻ Refresh</button>
+          </div>
+        </div>
+        <pre id="fileInspectorPre" style="height: 380px; overflow: auto; margin: 0; padding: 10px; background: #090d16; color: #e2e8f0; border: 1px solid var(--border-color); border-radius: 5px; font-family: 'Consolas', 'Courier New', monospace; font-size: 11.5px; line-height: 1.45; white-space: pre-wrap; word-break: break-all;"></pre>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span id="fileInspectorMeta" style="font-size: 11px; color: var(--text-dim); font-family: monospace;"></span>
+          <button type="button" class="btn btn-secondary" onclick="closeFileInspectorModal()">Close</button>
         </div>
       </div>
     </div>
@@ -5636,7 +5994,7 @@
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.52';
+    let APP_CURRENT_VERSION = '0.0.0.53';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -10727,6 +11085,14 @@
               <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
               <span>Calculate Folder Size...</span>
             </div>
+            <div class="context-menu-item" onclick="closeContextMenu(); openContentGrepAtPath('${escapeJsString(item.path)}', ${isRemote})">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>Search Text Inside Folder (Grep)...</span>
+            </div>
+            <div class="context-menu-item" onclick="closeContextMenu(); quickBookmarkFolder('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #fbbf24;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span>Bookmark This Folder</span>
+            </div>
           `;
           if (isRemote) {
             html += `
@@ -10742,6 +11108,10 @@
               <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
               <span>Edit in Code Editor</span>
               <span class="shortcut">F4</span>
+            </div>
+            <div class="context-menu-item" onclick="closeContextMenu(); openFileInspectorModal('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span>Live Log Tail / Hex Inspector...</span>
             </div>
           `;
         }
@@ -10863,6 +11233,11 @@
             <svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             <span>Rename...</span>
             <span class="shortcut">F2</span>
+          </div>
+          <div class="context-menu-item" onclick="closeContextMenu(); openBatchRenameModal(${isRemote})">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <span>Batch Multi-Rename (${selCount > 1 ? selCount + ' Selected' : 'Pattern/Regex'})...</span>
+            <span class="shortcut">Ctrl+M</span>
           </div>
         `;
 
@@ -15390,30 +15765,52 @@
         btn.disabled = true;
         btn.innerText = 'Probing...';
       }
-      if (box) box.style.display = 'block';
-      document.getElementById('probeBannerBox').innerText = 'Running 4-sample TCP handshake & service banner inspection...';
+      if (box) {
+        box.innerHTML = `<div style="color: #38bdf8; text-align: center; padding: 30px 10px;">Running 4-sample TCP handshake & service banner inspection on <strong>${escapeHtml(host)}:${port}</strong>...</div>`;
+      }
 
       try {
         const res = await sendRust('network_probe', { host, port, count: 4 });
         const ips = (res.resolved_ips || []).join(', ') || 'Unresolved';
-        document.getElementById('probeMetricIp').innerText = `${ips} (${res.dns_ms || 0}ms DNS)`;
-        document.getElementById('probeMetricRtt').innerText = res.avg_ms != null ? `${res.avg_ms} ms (min ${res.min_ms} / max ${res.max_ms})` : 'Timeout';
-        document.getElementById('probeMetricJitter').innerText = res.jitter_ms != null ? `${res.jitter_ms} ms` : '—';
-        const statusEl = document.getElementById('probeMetricStatus');
-        if (statusEl) {
-          statusEl.innerText = res.reachable ? `OPEN (${res.loss_percent}% loss)` : `CLOSED / UNREACHABLE`;
-          statusEl.style.color = res.reachable ? '#10b981' : '#ef4444';
-        }
-        const sampleLines = (res.samples || []).map(s =>
+        const statusColor = res.reachable ? '#10b981' : '#ef4444';
+        const statusLabel = res.reachable ? `OPEN (${res.loss_percent || 0}% loss)` : 'CLOSED / UNREACHABLE';
+        const rttText = res.avg_ms != null ? `${res.avg_ms} ms (min ${res.min_ms} / max ${res.max_ms})` : 'Timeout';
+        const jitterText = res.jitter_ms != null ? `${res.jitter_ms} ms` : '—';
+        const sampleRows = (res.samples || []).map(s =>
           s.connected
-            ? `Sample #${s.seq}: Connected to ${s.ip} in ${s.rtt_ms} ms`
-            : `Sample #${s.seq}: FAILED (${s.error || 'Timeout'})`
-        ).join('\n');
-        document.getElementById('probeBannerBox').innerText =
-          `Service Banner: ${res.banner || '(No greeting banner returned)'}\n\n${sampleLines}`;
+            ? `<div style="color: #10b981;">✓ Sample #${s.seq}: Connected to ${escapeHtml(s.ip || host)} in <strong>${s.rtt_ms} ms</strong></div>`
+            : `<div style="color: #ef4444;">✕ Sample #${s.seq}: FAILED (${escapeHtml(s.error || 'Timeout')})</div>`
+        ).join('');
+
+        if (box) {
+          box.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;">
+              <div style="background: rgba(255,255,255,0.03); padding: 7px; border-radius: 5px; border: 1px solid var(--border-color);">
+                <div style="font-size: 10px; color: var(--text-dim);">PORT STATUS</div>
+                <div style="font-weight: 700; color: ${statusColor}; font-size: 12px; margin-top: 2px;">${statusLabel}</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.03); padding: 7px; border-radius: 5px; border: 1px solid var(--border-color);">
+                <div style="font-size: 10px; color: var(--text-dim);">RESOLVED IP & DNS</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 11px; margin-top: 2px;">${escapeHtml(ips)} (${res.dns_ms || 0}ms)</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.03); padding: 7px; border-radius: 5px; border: 1px solid var(--border-color);">
+                <div style="font-size: 10px; color: var(--text-dim);">TCP RTT LATENCY</div>
+                <div style="font-weight: 700; color: #38bdf8; font-family: monospace; font-size: 11.5px; margin-top: 2px;">${escapeHtml(rttText)}</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.03); padding: 7px; border-radius: 5px; border: 1px solid var(--border-color);">
+                <div style="font-size: 10px; color: var(--text-dim);">JITTER</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 11.5px; margin-top: 2px;">${escapeHtml(jitterText)}</div>
+              </div>
+            </div>
+            <div style="background: #090d16; border: 1px solid var(--border-color); border-radius: 5px; padding: 8px 10px; font-family: monospace; font-size: 11px; line-height: 1.45;">
+              <div style="color: #fbbf24; margin-bottom: 6px; font-weight: 600;">Banner: ${escapeHtml(res.banner || '(No service greeting banner returned)')}</div>
+              ${sampleRows}
+            </div>
+          `;
+        }
         addLog(`Network Probe [${host}:${port}]: ${res.reachable ? 'OPEN (' + res.avg_ms + ' ms avg)' : 'UNREACHABLE'}`, res.reachable ? 'success' : 'warning');
       } catch (err) {
-        document.getElementById('probeBannerBox').innerText = 'Probe Error: ' + (err.message || err);
+        if (box) box.innerHTML = `<div style="color: #ef4444; padding: 20px;">Probe Error: ${escapeHtml(err.message || String(err))}</div>`;
       } finally {
         if (btn) {
           btn.disabled = false;
@@ -15436,27 +15833,27 @@
     }
 
     async function refreshSshKeyVault() {
-      const tbody = document.getElementById('sshVaultListBody');
-      if (!tbody) return;
+      const container = document.getElementById('sshKeysListContainer');
+      if (!container) return;
       try {
         const res = await sendRust('ssh_list_keys', {});
         const keys = res.keys || [];
+        window._cachedVaultKeys = keys;
         if (keys.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="3" style="padding: 14px; text-align: center; color: var(--text-dim);">No SSH keys generated yet in %APPDATA%\\90FTP\\ssh_keys</td></tr>`;
+          container.innerHTML = `<div style="padding: 14px; text-align: center; color: var(--text-dim); font-size: 11.5px;">No SSH keys generated yet in <code>%APPDATA%\\90FTP\\ssh_keys</code></div>`;
           return;
         }
-        tbody.innerHTML = keys.map((k, idx) => `
-          <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
-            <td style="padding: 6px 10px; font-weight: 600; color: var(--text-main);">${escapeHtml(k.name)}</td>
-            <td style="padding: 6px 10px; font-family: monospace; font-size: 10.5px; color: var(--text-dim); word-break: break-all;">${escapeHtml(k.private_key_path)}</td>
-            <td style="padding: 6px 10px; text-align: right; white-space: nowrap;">
-              <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 10px;" onclick="selectVaultSshKey(${idx})">View / Use</button>
-            </td>
-          </tr>
+        container.innerHTML = keys.map((k, idx) => `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); gap: 8px;">
+            <div style="min-width: 0; flex: 1;">
+              <div style="font-weight: 600; font-size: 11.5px; color: var(--text-main);">🔑 ${escapeHtml(k.name)}</div>
+              <div style="font-family: monospace; font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(k.private_key_path)}</div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 10.5px;" onclick="selectVaultSshKey(${idx})">Select Key</button>
+          </div>
         `).join('');
-        window._cachedVaultKeys = keys;
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="3" style="padding: 14px; text-align: center; color: #ef4444;">Failed to load SSH key vault</td></tr>`;
+        container.innerHTML = `<div style="padding: 14px; text-align: center; color: #ef4444;">Failed to load SSH key vault</div>`;
       }
     }
 
@@ -15464,25 +15861,23 @@
       const k = (window._cachedVaultKeys || [])[idx];
       if (!k) return;
       lastGeneratedSshKey = k;
-      const card = document.getElementById('sshKeyOutputCard');
-      if (card) card.style.display = 'block';
-      document.getElementById('sshKeyFingerprintBadge').innerText = k.name;
-      document.getElementById('sshPublicKeyTextarea').value = k.public_key || '';
-      document.getElementById('sshPrivateKeyPathLabel').innerText = 'Private Key: ' + k.private_key_path;
+      const out = document.getElementById('sshPubKeyOutput');
+      if (out) out.value = k.public_key || '';
+      const meta = document.getElementById('sshKeyMetaInfo');
+      if (meta) meta.innerText = `Selected Key: ${k.name} | Private Key Path: ${k.private_key_path}`;
     }
 
     async function generateNewSshKeypair() {
       const name = (document.getElementById('sshKeyNameInput')?.value || 'id_ed25519_90ftp').trim();
       const algorithm = document.getElementById('sshKeyAlgoSelect')?.value || 'ed25519';
-      const comment = (document.getElementById('sshKeyCommentInput')?.value || '90ftp-client').trim();
+      const comment = (document.getElementById('sshKeyCommentInput')?.value || '90ftp-admin').trim();
       try {
         const res = await sendRust('ssh_keygen', { name, algorithm, comment });
         lastGeneratedSshKey = res;
-        const card = document.getElementById('sshKeyOutputCard');
-        if (card) card.style.display = 'block';
-        document.getElementById('sshKeyFingerprintBadge').innerText = res.fingerprint || '';
-        document.getElementById('sshPublicKeyTextarea').value = res.public_key || '';
-        document.getElementById('sshPrivateKeyPathLabel').innerText = 'Private Key saved: ' + (res.private_key_path || '');
+        const out = document.getElementById('sshPubKeyOutput');
+        if (out) out.value = res.public_key || '';
+        const meta = document.getElementById('sshKeyMetaInfo');
+        if (meta) meta.innerText = `✓ Fingerprint: ${res.fingerprint || ''} | Saved to: ${res.private_key_path || ''}`;
         addLog(`Generated ${algorithm.toUpperCase()} SSH keypair '${name}' (${res.fingerprint})`, 'success');
         await refreshSshKeyVault();
       } catch (err) {
@@ -15490,16 +15885,19 @@
       }
     }
 
-    function copySshPubKeyToClipboard() {
-      const pub = document.getElementById('sshPublicKeyTextarea')?.value || '';
-      if (!pub) return;
+    function copyGeneratedSshPubKey() {
+      const pub = document.getElementById('sshPubKeyOutput')?.value || '';
+      if (!pub) {
+        alert('Please generate or select an SSH key first.');
+        return;
+      }
       navigator.clipboard.writeText(pub).then(() => {
         addLog('Public SSH key copied to clipboard', 'success');
       });
     }
 
     async function deployGeneratedSshKeyToServer() {
-      const pub = document.getElementById('sshPublicKeyTextarea')?.value?.trim() || '';
+      const pub = document.getElementById('sshPubKeyOutput')?.value?.trim() || '';
       if (!pub) {
         alert('Please generate or select a public key first.');
         return;
@@ -15509,9 +15907,9 @@
         return;
       }
       try {
-        const res = await sendRust('ssh_deploy_key', { public_key: pub });
-        addLog(res.message || 'Public key deployed to ~/.ssh/authorized_keys', 'success');
-        alert(res.message || 'Public key deployed to ~/.ssh/authorized_keys!');
+        await sendRust('ssh_deploy_key', { public_key: pub });
+        addLog('Public key deployed to remote ~/.ssh/authorized_keys', 'success');
+        alert('Public key successfully appended to remote ~/.ssh/authorized_keys!');
       } catch (err) {
         alert('Key Deployment Error:\n' + (err.message || err));
       }
@@ -15533,48 +15931,77 @@
     }
 
     async function refreshServerHealth() {
-      const tbody = document.getElementById('healthDisksTableBody');
-      if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="padding: 20px; text-align: center; color: var(--text-dim);">Querying remote server telemetry...</td></tr>`;
+      const body = document.getElementById('serverHealthBody');
+      if (body) body.innerHTML = `<div style="padding: 35px; text-align: center; color: var(--text-dim);">Querying live remote server telemetry...</div>`;
       try {
         const res = await sendRust('remote_server_health', {});
-        document.getElementById('healthKernelVal').innerText = res.uname || 'Linux Server';
-        document.getElementById('healthUptimeVal').innerText = `${res.uptime || '—'} ${res.loadavg ? '(Load: ' + res.loadavg.split(' ').slice(0, 3).join(' ') + ')' : ''}`;
         const memPct = res.mem_total_mb > 0 ? Math.round((res.mem_used_mb / res.mem_total_mb) * 100) : 0;
-        document.getElementById('healthRamText').innerText = res.mem_total_mb > 0
+        const ramStr = res.mem_total_mb > 0
           ? `${res.mem_used_mb} MB / ${res.mem_total_mb} MB (${memPct}%)`
           : 'N/A';
-        const bar = document.getElementById('healthRamBar');
-        if (bar) bar.style.width = `${Math.min(100, memPct)}%`;
-
         const disks = res.disks || [];
-        if (tbody) {
-          if (disks.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" style="padding: 16px; text-align: center; color: var(--text-dim);">No mount points reported</td></tr>`;
-          } else {
-            tbody.innerHTML = disks.map(d => {
-              const pctNum = parseInt((d.use_percent || '0').replace('%', ''), 10) || 0;
-              const barColor = pctNum > 85 ? '#ef4444' : (pctNum > 70 ? '#f59e0b' : '#10b981');
-              return `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
-                  <td style="padding: 7px 10px; font-weight: 600; font-family: monospace; color: var(--text-main);">${escapeHtml(d.mount)}</td>
-                  <td style="padding: 7px 10px; font-family: monospace; color: var(--text-dim); font-size: 11px;">${escapeHtml(d.filesystem)}</td>
-                  <td style="padding: 7px 10px; text-align: right; font-family: monospace;">${escapeHtml(d.used)} / ${escapeHtml(d.size)}</td>
-                  <td style="padding: 7px 10px; text-align: right; font-family: monospace; color: #10b981;">${escapeHtml(d.avail)}</td>
-                  <td style="padding: 7px 10px;">
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                      <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
-                        <div style="height: 100%; width: ${Math.min(100, pctNum)}%; background: ${barColor};"></div>
-                      </div>
-                      <span style="font-family: monospace; font-size: 10.5px; min-width: 32px; text-align: right;">${escapeHtml(d.use_percent)}</span>
-                    </div>
-                  </td>
-                </tr>
-              `;
-            }).join('');
-          }
+        const diskRows = disks.map(d => {
+          const pctNum = parseInt((d.use_percent || '0').replace('%', ''), 10) || 0;
+          const barColor = pctNum > 85 ? '#ef4444' : (pctNum > 70 ? '#f59e0b' : '#10b981');
+          return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 6px 10px; font-weight: 600; font-family: monospace; color: var(--text-main);">${escapeHtml(d.mount)}</td>
+              <td style="padding: 6px 10px; font-family: monospace; color: var(--text-dim); font-size: 11px;">${escapeHtml(d.filesystem)}</td>
+              <td style="padding: 6px 10px; text-align: right; font-family: monospace;">${escapeHtml(d.used)} / ${escapeHtml(d.size)}</td>
+              <td style="padding: 6px 10px; text-align: right; font-family: monospace; color: #10b981;">${escapeHtml(d.avail)}</td>
+              <td style="padding: 6px 10px; width: 140px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+                    <div style="height: 100%; width: ${Math.min(100, pctNum)}%; background: ${barColor};"></div>
+                  </div>
+                  <span style="font-family: monospace; font-size: 10.5px; min-width: 32px; text-align: right;">${escapeHtml(d.use_percent)}</span>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        if (body) {
+          body.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;">
+                <div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Kernel & Host</div>
+                <div style="font-weight: 700; font-family: monospace; font-size: 12px; color: #38bdf8; margin-top: 3px;">${escapeHtml(res.uname || 'Linux Server')}</div>
+              </div>
+              <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;">
+                <div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Uptime & Load Average</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 12px; color: #10b981; margin-top: 3px;">${escapeHtml(res.uptime || '—')} ${res.loadavg ? '(Load: ' + escapeHtml(res.loadavg.split(' ').slice(0, 3).join(' ')) + ')' : ''}</div>
+              </div>
+            </div>
+            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;">
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px;">
+                <span style="color: var(--text-dim); font-weight: 600;">Physical RAM Utilization</span>
+                <span style="font-family: monospace; font-weight: 700;">${escapeHtml(ramStr)}</span>
+              </div>
+              <div style="height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden;">
+                <div style="height: 100%; width: ${Math.min(100, memPct)}%; background: linear-gradient(90deg, #38bdf8, #818cf8);"></div>
+              </div>
+            </div>
+            <div style="max-height: 220px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px;">
+              <table class="file-table" style="width: 100%; border-collapse: collapse;">
+                <thead style="position: sticky; top: 0; background: var(--bg-panel);">
+                  <tr>
+                    <th style="padding: 6px 10px;">Mount</th>
+                    <th style="padding: 6px 10px;">Filesystem</th>
+                    <th style="padding: 6px 10px; text-align: right;">Used / Total</th>
+                    <th style="padding: 6px 10px; text-align: right;">Available</th>
+                    <th style="padding: 6px 10px;">Usage %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${diskRows || `<tr><td colspan="5" style="padding: 16px; text-align: center; color: var(--text-dim);">No mount points reported</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          `;
         }
       } catch (err) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="padding: 16px; text-align: center; color: #ef4444;">${escapeHtml(err.message || String(err))}</td></tr>`;
+        if (body) body.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;">${escapeHtml(err.message || String(err))}</div>`;
       }
     }
 
@@ -15582,10 +16009,12 @@
     async function openFileDiffModal(localPath, remotePath, fileName) {
       const modal = document.getElementById('fileDiffModal');
       if (!modal) return;
-      document.getElementById('diffLeftTitle').innerText = `LOCAL: ${localPath}`;
-      document.getElementById('diffRightTitle').innerText = `REMOTE: ${remotePath}`;
-      document.getElementById('diffLeftPane').innerHTML = `<div style="padding: 20px; color: var(--text-dim);">Reading local file...</div>`;
-      document.getElementById('diffRightPane').innerHTML = `<div style="padding: 20px; color: var(--text-dim);">Reading remote file...</div>`;
+      const titleEl = document.getElementById('fileDiffTitle');
+      const summaryEl = document.getElementById('fileDiffSummaryBar');
+      const containerEl = document.getElementById('fileDiffContainer');
+      if (titleEl) titleEl.innerText = `Side-by-Side Diff: ${fileName || ''}`;
+      if (summaryEl) summaryEl.innerHTML = `<span>Reading Local (<code>${escapeHtml(localPath)}</code>) & Remote (<code>${escapeHtml(remotePath)}</code>)...</span>`;
+      if (containerEl) containerEl.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-dim);">Loading file contents for comparison...</div>`;
       modal.classList.add('active');
 
       try {
@@ -15597,43 +16026,867 @@
         const rightLines = (remRes.content || '').replace(/\r\n/g, '\n').split('\n');
         const maxLen = Math.max(leftLines.length, rightLines.length);
 
-        let leftHtml = '';
-        let rightHtml = '';
+        let rowsHtml = '';
         let diffCount = 0;
 
         for (let i = 0; i < maxLen; i++) {
           const l = leftLines[i];
           const r = rightLines[i];
           const lNum = i + 1;
-          if (l === r) {
-            leftHtml += `<div class="diff-line"><span class="diff-ln">${lNum}</span><span class="diff-txt">${escapeHtml(l ?? '')}</span></div>`;
-            rightHtml += `<div class="diff-line"><span class="diff-ln">${lNum}</span><span class="diff-txt">${escapeHtml(r ?? '')}</span></div>`;
-          } else {
-            diffCount++;
-            leftHtml += `<div class="diff-line ${l === undefined ? '' : 'diff-del'}"><span class="diff-ln">${l === undefined ? '' : lNum}</span><span class="diff-txt">${escapeHtml(l ?? '')}</span></div>`;
-            rightHtml += `<div class="diff-line ${r === undefined ? '' : 'diff-add'}"><span class="diff-ln">${r === undefined ? '' : lNum}</span><span class="diff-txt">${escapeHtml(r ?? '')}</span></div>`;
-          }
+          const isSame = (l === r);
+          if (!isSame) diffCount++;
+          const leftBg = isSame ? 'transparent' : (l === undefined ? 'rgba(255,255,255,0.02)' : 'rgba(239, 68, 68, 0.14)');
+          const rightBg = isSame ? 'transparent' : (r === undefined ? 'rgba(255,255,255,0.02)' : 'rgba(16, 185, 129, 0.14)');
+          rowsHtml += `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-family: 'Consolas', monospace; font-size: 11.5px;">
+              <td style="width: 42px; padding: 2px 6px; text-align: right; color: var(--text-dim); user-select: none; border-right: 1px solid var(--border-color);">${l === undefined ? '' : lNum}</td>
+              <td style="width: 50%; padding: 2px 8px; background: ${leftBg}; white-space: pre-wrap; word-break: break-all;">${escapeHtml(l ?? '')}</td>
+              <td style="width: 42px; padding: 2px 6px; text-align: right; color: var(--text-dim); user-select: none; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">${r === undefined ? '' : lNum}</td>
+              <td style="width: 50%; padding: 2px 8px; background: ${rightBg}; white-space: pre-wrap; word-break: break-all;">${escapeHtml(r ?? '')}</td>
+            </tr>
+          `;
         }
 
-        const lPane = document.getElementById('diffLeftPane');
-        const rPane = document.getElementById('diffRightPane');
-        lPane.innerHTML = leftHtml;
-        rPane.innerHTML = rightHtml;
-
-        // Synchronized scrolling
-        lPane.onscroll = () => { rPane.scrollTop = lPane.scrollTop; };
-        rPane.onscroll = () => { lPane.scrollTop = rPane.scrollTop; };
-
-        document.getElementById('diffStatsBadge').innerText = diffCount === 0
-          ? `✓ Identical (${maxLen} lines)`
-          : `${diffCount} line difference(s) across ${maxLen} lines`;
+        if (summaryEl) {
+          summaryEl.innerHTML = `
+            <span>💻 <strong>Local:</strong> <code>${escapeHtml(localPath)}</code> (${leftLines.length} lines)</span>
+            <span style="font-weight: 700; color: ${diffCount === 0 ? '#10b981' : '#fbbf24'};">${diffCount === 0 ? '✓ Identical Content' : diffCount + ' Line Difference(s)'}</span>
+            <span>🌐 <strong>Remote:</strong> <code>${escapeHtml(remotePath)}</code> (${rightLines.length} lines)</span>
+          `;
+        }
+        if (containerEl) {
+          containerEl.innerHTML = `<table style="width: 100%; border-collapse: collapse; table-layout: fixed;"><tbody>${rowsHtml}</tbody></table>`;
+        }
       } catch (err) {
-        document.getElementById('diffLeftPane').innerHTML = `<div style="padding: 20px; color: #ef4444;">Diff Error: ${escapeHtml(err.message || String(err))}</div>`;
+        if (containerEl) containerEl.innerHTML = `<div style="padding: 25px; color: #ef4444;">Diff Error: ${escapeHtml(err.message || String(err))}</div>`;
       }
     }
 
     function closeFileDiffModal() {
       document.getElementById('fileDiffModal')?.classList.remove('active');
+    }
+
+    // ==========================================
+    // 5. SYNCHRONIZED BROWSING LOCK-STEP (Ctrl+Y)
+    // ==========================================
+    function updateSyncBrowsingButtonUI() {
+      const btn = document.getElementById('btnSyncBrowsing');
+      const active = !!(appOptions && appOptions.syncBrowsing);
+      if (btn) {
+        btn.style.background = active ? 'rgba(16, 185, 129, 0.18)' : '';
+        btn.style.borderColor = active ? '#10b981' : '';
+        btn.style.color = active ? '#10b981' : '';
+      }
+    }
+
+    function toggleSynchronizedBrowsing() {
+      closeAllMenus();
+      if (!appOptions) appOptions = {};
+      appOptions.syncBrowsing = !appOptions.syncBrowsing;
+      const optChk = document.getElementById('optSyncBrowsing');
+      if (optChk) optChk.checked = appOptions.syncBrowsing;
+      updateSyncBrowsingButtonUI();
+      saveOptions(false);
+      addLog(`Synchronized Browsing (Lock-Step Navigation): ${appOptions.syncBrowsing ? 'ENABLED' : 'DISABLED'}`, appOptions.syncBrowsing ? 'success' : 'info');
+    }
+
+    // ==========================================
+    // 6. PATH BOOKMARKS & PAIRED WORKSPACE FAVORITES (Ctrl+B)
+    // ==========================================
+    function getWorkspaceBookmarks() {
+      try {
+        const raw = localStorage.getItem('90ftp_workspace_bookmarks');
+        return raw ? JSON.parse(raw) : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function setWorkspaceBookmarks(list) {
+      try {
+        localStorage.setItem('90ftp_workspace_bookmarks', JSON.stringify(list));
+      } catch (_) {}
+    }
+
+    function openBookmarksModal() {
+      closeAllMenus();
+      const lbl = document.getElementById('bmLabelInput');
+      if (lbl && !lbl.value) {
+        const remName = (currentRemotePath || '/').split('/').filter(Boolean).pop() || 'Root';
+        const locName = (currentLocalPath || 'C:\\').split('\\').filter(Boolean).pop() || 'Local';
+        lbl.value = `${locName} ⇄ ${remName}`;
+      }
+      renderBookmarksModalTable();
+      document.getElementById('bookmarksModal')?.classList.add('active');
+    }
+
+    function closeBookmarksModal() {
+      document.getElementById('bookmarksModal')?.classList.remove('active');
+    }
+
+    function saveCurrentBookmark() {
+      const label = (document.getElementById('bmLabelInput')?.value || '').trim() || 'Saved Workspace';
+      const scope = document.getElementById('bmScopeSelect')?.value || 'both';
+      const bm = {
+        id: 'bm_' + Date.now(),
+        label,
+        scope,
+        local_path: (scope === 'both' || scope === 'local') ? (currentLocalPath || '') : '',
+        remote_path: (scope === 'both' || scope === 'remote') ? (currentRemotePath || '') : '',
+      };
+      const list = getWorkspaceBookmarks();
+      list.unshift(bm);
+      setWorkspaceBookmarks(list.slice(0, 50));
+      renderBookmarksModalTable();
+      addLog(`Saved bookmark '${label}'`, 'success');
+    }
+
+    function quickBookmarkFolder(path, name, isRemote) {
+      const list = getWorkspaceBookmarks();
+      list.unshift({
+        id: 'bm_' + Date.now(),
+        label: name || path,
+        scope: isRemote ? 'remote' : 'local',
+        local_path: isRemote ? '' : path,
+        remote_path: isRemote ? path : ''
+      });
+      setWorkspaceBookmarks(list.slice(0, 50));
+      addLog(`Bookmarked ${isRemote ? 'remote' : 'local'} folder '${name}'`, 'success');
+    }
+
+    function renderBookmarksModalTable() {
+      const tbody = document.getElementById('bookmarksTableBody');
+      if (!tbody) return;
+      const list = getWorkspaceBookmarks();
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="padding: 35px; text-align: center; color: var(--text-dim); font-style: italic;">No saved workspace bookmarks yet. Click "⭐ Save Current" above to pin your active folders.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = list.map((b, idx) => `
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+          <td style="padding: 7px 10px; font-weight: 600; color: var(--text-main);">⭐ ${escapeHtml(b.label)}</td>
+          <td style="padding: 7px 10px; font-family: monospace; font-size: 11px; color: var(--text-dim);">
+            ${b.local_path ? `<div>💻 ${escapeHtml(b.local_path)}</div>` : ''}
+            ${b.remote_path ? `<div>🌐 ${escapeHtml(b.remote_path)}</div>` : ''}
+          </td>
+          <td style="padding: 7px 8px; text-align: center; white-space: nowrap;">
+            <button type="button" class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 10.5px;" onclick="jumpToSavedWorkspaceBookmark(${idx})">Go</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 10.5px; color: #ef4444;" onclick="deleteSavedWorkspaceBookmark(${idx})">✕</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function jumpToSavedWorkspaceBookmark(idx) {
+      const list = getWorkspaceBookmarks();
+      const b = list[idx];
+      if (!b) return;
+      closeBookmarksModal();
+      if (b.local_path) await navigateLocal(b.local_path);
+      if (b.remote_path && isConnected) await navigateRemote(b.remote_path);
+      addLog(`Jumped to bookmark '${b.label}'`, 'info');
+    }
+
+    function deleteSavedWorkspaceBookmark(idx) {
+      const list = getWorkspaceBookmarks();
+      list.splice(idx, 1);
+      setWorkspaceBookmarks(list);
+      renderBookmarksModalTable();
+    }
+
+    // ==========================================
+    // 7. FULL-TEXT CONTENT GREP INSIDE FILES (Ctrl+Shift+F)
+    // ==========================================
+    let currentGrepMatches = [];
+
+    function openContentGrepModal() {
+      closeAllMenus();
+      const scopeSel = document.getElementById('grepScopeSelect');
+      if (scopeSel) scopeSel.value = isConnected ? 'remote' : 'local';
+      onGrepScopeChange();
+      document.getElementById('contentGrepModal')?.classList.add('active');
+      setTimeout(() => document.getElementById('grepPatternInput')?.focus(), 60);
+    }
+
+    function openContentGrepAtPath(path, isRemote) {
+      closeAllMenus();
+      const scopeSel = document.getElementById('grepScopeSelect');
+      if (scopeSel) scopeSel.value = isRemote ? 'remote' : 'local';
+      const pathInp = document.getElementById('grepPathInput');
+      if (pathInp) pathInp.value = path;
+      document.getElementById('contentGrepModal')?.classList.add('active');
+      setTimeout(() => document.getElementById('grepPatternInput')?.focus(), 60);
+    }
+
+    function closeContentGrepModal() {
+      document.getElementById('contentGrepModal')?.classList.remove('active');
+    }
+
+    function onGrepScopeChange() {
+      const scope = document.getElementById('grepScopeSelect')?.value || 'remote';
+      const pathInp = document.getElementById('grepPathInput');
+      if (pathInp) {
+        pathInp.value = scope === 'local' ? (currentLocalPath || 'C:\\') : (currentRemotePath || '/');
+      }
+    }
+
+    async function executeContentGrep() {
+      const scope = document.getElementById('grepScopeSelect')?.value || 'remote';
+      if (scope === 'remote' && !isConnected) {
+        alert('Not connected to a remote server. Switch Scope to "Local Computer" or connect to a server first.');
+        return;
+      }
+      const path = (document.getElementById('grepPathInput')?.value || '').trim();
+      const pattern = (document.getElementById('grepPatternInput')?.value || '').trim();
+      const file_mask = (document.getElementById('grepFileMaskInput')?.value || '').trim();
+      const case_sensitive = !!document.getElementById('grepCaseCheckbox')?.checked;
+
+      if (!pattern) {
+        alert('Please enter a text or code pattern to search inside files.');
+        return;
+      }
+
+      const btn = document.getElementById('btnRunGrep');
+      const status = document.getElementById('grepStatusSummary');
+      const tbody = document.getElementById('grepResultsBody');
+      if (btn) { btn.disabled = true; btn.innerText = 'Searching...'; }
+      if (status) status.innerText = `Scanning files in ${path} for "${pattern}"...`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: #38bdf8;">Scanning file contents...</td></tr>`;
+
+      try {
+        const cmd = scope === 'local' ? 'local_grep_content' : 'remote_grep_content';
+        const res = await sendRust(cmd, { path, pattern, file_mask, case_sensitive, max_results: 200 });
+        currentGrepMatches = (res.matches || []).map(m => ({ ...m, _scope: scope }));
+        if (status) status.innerText = `Found ${currentGrepMatches.length} content match(es) for "${pattern}".`;
+        renderContentGrepResults();
+      } catch (err) {
+        if (status) status.innerText = 'Grep error: ' + (err.message || err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 30px; color: #ef4444;">${escapeHtml(err.message || String(err))}</td></tr>`;
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = 'Search Content'; }
+      }
+    }
+
+    function renderContentGrepResults() {
+      const tbody = document.getElementById('grepResultsBody');
+      if (!tbody) return;
+      if (currentGrepMatches.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-dim); font-style: italic;">No matching lines found inside files.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = currentGrepMatches.map((m, idx) => `
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer;" ondblclick="openGrepMatchInEditor(${idx})">
+          <td style="padding: 6px 10px;">
+            <div style="font-weight: 600; color: var(--text-main); font-size: 11.5px;">${escapeHtml(m.name)}</div>
+            <div style="font-family: monospace; font-size: 10px; color: var(--text-dim); word-break: break-all;">${escapeHtml(m.dir)}</div>
+          </td>
+          <td style="padding: 6px 8px; text-align: right; font-family: monospace; color: #fbbf24; font-weight: 700;">:${m.line}</td>
+          <td style="padding: 6px 10px; font-family: monospace; font-size: 11px; color: #38bdf8; word-break: break-all;">${escapeHtml(m.snippet)}</td>
+          <td style="padding: 6px 8px; text-align: center; white-space: nowrap;">
+            <button type="button" class="btn btn-primary btn-sm" style="padding: 2px 7px; font-size: 10px;" onclick="openGrepMatchInEditor(${idx})">✏ Edit</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 10px;" onclick="jumpToGrepMatchFolder(${idx})">📂 Go</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function openGrepMatchInEditor(idx) {
+      const m = currentGrepMatches[idx];
+      if (!m) return;
+      closeContentGrepModal();
+      if (m._scope === 'local') openLocalFileInEditor(m.path);
+      else openRemoteFileInEditor(m.path);
+    }
+
+    async function jumpToGrepMatchFolder(idx) {
+      const m = currentGrepMatches[idx];
+      if (!m) return;
+      closeContentGrepModal();
+      if (m._scope === 'local') await navigateLocal(m.dir);
+      else await navigateRemote(m.dir);
+    }
+
+    // ==========================================
+    // 8. BATCH MULTI-RENAME ENGINE (Ctrl+M)
+    // ==========================================
+    let batchRenameTargetItems = [];
+    let batchRenameIsRemote = false;
+
+    function openBatchRenameModal(forceRemote = null) {
+      closeAllMenus();
+      const useRem = forceRemote !== null ? !!forceRemote : lastActivePaneIsRemote;
+      let items = useRem ? getSelectedRemoteItems() : getSelectedLocalItems();
+      if (items.length === 0) {
+        items = useRem ? (remoteFiles || []) : (localFiles || []);
+      }
+      if (items.length === 0) {
+        alert(`No ${useRem ? 'remote' : 'local'} items available to batch rename.`);
+        return;
+      }
+      batchRenameIsRemote = useRem;
+      batchRenameTargetItems = items.map(it => ({ ...it }));
+      document.getElementById('batchRenameTitle').innerText = `Batch Multi-Rename (${batchRenameTargetItems.length} ${useRem ? 'Remote' : 'Local'} Items)`;
+      document.getElementById('brFindInput').value = '';
+      document.getElementById('brReplaceInput').value = '';
+      document.getElementById('brPrefixInput').value = '';
+      document.getElementById('brSuffixInput').value = '';
+      document.getElementById('brCaseSelect').value = 'none';
+      updateBatchRenamePreview();
+      document.getElementById('batchRenameModal')?.classList.add('active');
+    }
+
+    function closeBatchRenameModal() {
+      document.getElementById('batchRenameModal')?.classList.remove('active');
+    }
+
+    function computeBatchRenamedFilename(origName, idx, isDir) {
+      const findStr = document.getElementById('brFindInput')?.value || '';
+      const repStr = document.getElementById('brReplaceInput')?.value || '';
+      const useRegex = !!document.getElementById('brRegexCheckbox')?.checked;
+      const prefix = document.getElementById('brPrefixInput')?.value || '';
+      const suffix = document.getElementById('brSuffixInput')?.value || '';
+      const caseMode = document.getElementById('brCaseSelect')?.value || 'none';
+      const startNum = parseInt(document.getElementById('brCounterStart')?.value || '1', 10) || 1;
+      const padDigits = parseInt(document.getElementById('brCounterPad')?.value || '3', 10) || 0;
+
+      const counterVal = startNum + idx;
+      const counterStr = padDigits > 0 ? String(counterVal).padStart(padDigits, '0') : String(counterVal);
+      const injectCounter = (s) => s.replace(/\[N\]/gi, counterStr);
+
+      let stem = origName;
+      let ext = '';
+      if (!isDir) {
+        const lastDot = origName.lastIndexOf('.');
+        if (lastDot > 0) {
+          stem = origName.substring(0, lastDot);
+          ext = origName.substring(lastDot);
+        }
+      }
+
+      if (findStr) {
+        try {
+          if (useRegex) {
+            const rx = new RegExp(findStr, 'g');
+            stem = stem.replace(rx, injectCounter(repStr));
+          } else {
+            stem = stem.split(findStr).join(injectCounter(repStr));
+          }
+        } catch (_) {}
+      }
+
+      stem = injectCounter(prefix) + stem + injectCounter(suffix);
+
+      if (caseMode === 'lower') {
+        stem = stem.toLowerCase();
+        ext = ext.toLowerCase();
+      } else if (caseMode === 'upper') {
+        stem = stem.toUpperCase();
+        ext = ext.toUpperCase();
+      } else if (caseMode === 'title') {
+        stem = stem.replace(/\b\w/g, c => c.toUpperCase());
+      }
+
+      return stem + ext;
+    }
+
+    function updateBatchRenamePreview() {
+      const tbody = document.getElementById('batchRenamePreviewBody');
+      if (!tbody) return;
+      let changedCount = 0;
+      tbody.innerHTML = batchRenameTargetItems.map((it, idx) => {
+        const newName = computeBatchRenamedFilename(it.name, idx, it.is_dir);
+        const changed = newName !== it.name && newName.trim().length > 0;
+        if (changed) changedCount++;
+        return `
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+            <td style="padding: 5px 10px; font-family: monospace; color: var(--text-muted);">${escapeHtml(it.name)}</td>
+            <td style="padding: 5px 10px; font-family: monospace; font-weight: ${changed ? '700' : '400'}; color: ${changed ? '#10b981' : 'var(--text-dim)'};">${escapeHtml(newName)}</td>
+            <td style="padding: 5px 8px; text-align: center; font-size: 10.5px;">${changed ? '<span style="color:#10b981;">RENAME</span>' : '<span style="color:var(--text-dim);">—</span>'}</td>
+          </tr>
+        `;
+      }).join('');
+      const sum = document.getElementById('batchRenameSummaryText');
+      if (sum) sum.innerText = `${changedCount} of ${batchRenameTargetItems.length} item(s) will be renamed.`;
+    }
+
+    async function executeBatchRename() {
+      const ops = [];
+      const sep = batchRenameIsRemote ? '/' : '\\';
+      const baseDir = (batchRenameIsRemote ? currentRemotePath : currentLocalPath).replace(/[\\/]+$/, '');
+
+      batchRenameTargetItems.forEach((it, idx) => {
+        const newName = computeBatchRenamedFilename(it.name, idx, it.is_dir).trim();
+        if (newName && newName !== it.name) {
+          const newPath = baseDir ? `${baseDir}${sep}${newName}` : `${sep}${newName}`;
+          ops.push({ old_path: it.path, new_path: newPath });
+        }
+      });
+
+      if (ops.length === 0) {
+        alert('No filenames have changed yet. Adjust the rename rules above.');
+        return;
+      }
+
+      try {
+        const cmd = batchRenameIsRemote ? 'remote_batch_rename' : 'local_batch_rename';
+        const res = await sendRust(cmd, {
+          current_dir: batchRenameIsRemote ? currentRemotePath : currentLocalPath,
+          ops
+        });
+        if (batchRenameIsRemote) renderRemoteFiles(res.files || []);
+        else renderLocalFiles(res.files || []);
+        addLog(`Batch renamed ${res.renamed || ops.length} item(s) successfully`, 'success');
+        closeBatchRenameModal();
+      } catch (err) {
+        alert('Batch Rename Failed:\n' + (err.message || err));
+      }
+    }
+
+    // ==========================================
+    // 9. REMOTE LIVE PROCESS, PORT & SERVICE MANAGER
+    // ==========================================
+    let pmActiveTab = 'procs';
+    let pmCachedData = { processes: [], ports: [], services: [] };
+
+    async function openProcessManagerModal() {
+      closeAllMenus();
+      if (!isConnected) {
+        alert('Please connect to a remote SFTP/SSH server first.');
+        return;
+      }
+      document.getElementById('processManagerModal')?.classList.add('active');
+      await refreshProcessManagerData();
+    }
+
+    function closeProcessManagerModal() {
+      document.getElementById('processManagerModal')?.classList.remove('active');
+    }
+
+    function switchProcessManagerTab(tab) {
+      pmActiveTab = tab;
+      ['procs', 'ports', 'services'].forEach(t => {
+        const btn = document.getElementById(t === 'procs' ? 'pmTabProcs' : (t === 'ports' ? 'pmTabPorts' : 'pmTabServices'));
+        if (btn) {
+          btn.className = t === tab ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+        }
+      });
+      renderProcessManagerActiveTab();
+    }
+
+    async function refreshProcessManagerData() {
+      const box = document.getElementById('processManagerContentBox');
+      if (box) box.innerHTML = `<div style="text-align: center; padding: 50px; color: #38bdf8;">Querying live processes, listening ports, and systemd services...</div>`;
+      try {
+        const res = await sendRust('remote_process_manager', {});
+        pmCachedData = {
+          processes: res.processes || [],
+          ports: res.ports || [],
+          services: res.services || []
+        };
+        renderProcessManagerActiveTab();
+      } catch (err) {
+        if (box) box.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">${escapeHtml(err.message || String(err))}</div>`;
+      }
+    }
+
+    function renderProcessManagerActiveTab() {
+      const box = document.getElementById('processManagerContentBox');
+      if (!box) return;
+      const filter = (document.getElementById('pmFilterInput')?.value || '').trim().toLowerCase();
+
+      if (pmActiveTab === 'procs') {
+        const list = (pmCachedData.processes || []).filter(p =>
+          !filter || p.command.toLowerCase().includes(filter) || p.user.toLowerCase().includes(filter) || p.pid.includes(filter)
+        );
+        box.innerHTML = `
+          <table class="file-table" style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: var(--bg-panel);">
+              <tr>
+                <th style="width: 70px; padding: 6px 8px;">PID</th>
+                <th style="width: 90px; padding: 6px 8px;">User</th>
+                <th style="width: 65px; padding: 6px 8px; text-align: right;">CPU %</th>
+                <th style="width: 65px; padding: 6px 8px; text-align: right;">MEM %</th>
+                <th style="padding: 6px 10px;">Command</th>
+                <th style="width: 120px; padding: 6px 8px; text-align: center;">Signal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(p => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                  <td style="padding: 5px 8px; font-family: monospace; color: #fbbf24; font-weight: 700;">${escapeHtml(p.pid)}</td>
+                  <td style="padding: 5px 8px; font-family: monospace;">${escapeHtml(p.user)}</td>
+                  <td style="padding: 5px 8px; text-align: right; font-family: monospace; color: ${parseFloat(p.cpu) > 25 ? '#ef4444' : '#10b981'}; font-weight: 600;">${escapeHtml(p.cpu)}%</td>
+                  <td style="padding: 5px 8px; text-align: right; font-family: monospace;">${escapeHtml(p.mem)}%</td>
+                  <td style="padding: 5px 10px; font-family: monospace; font-size: 11px; color: var(--text-main); word-break: break-all;">${escapeHtml(p.command)}</td>
+                  <td style="padding: 5px 8px; text-align: center; white-space: nowrap;">
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 10px;" onclick="killRemoteProcessByPid('${escapeJsString(p.pid)}', '15')">TERM</button>
+                    <button type="button" class="btn btn-danger btn-sm" style="padding: 1px 6px; font-size: 10px;" onclick="killRemoteProcessByPid('${escapeJsString(p.pid)}', '9')">KILL</button>
+                  </td>
+                </tr>
+              `).join('') || `<tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text-dim);">No processes match filter</td></tr>`}
+            </tbody>
+          </table>
+        `;
+      } else if (pmActiveTab === 'ports') {
+        const list = (pmCachedData.ports || []).filter(p =>
+          !filter || p.local_addr.toLowerCase().includes(filter) || p.process.toLowerCase().includes(filter) || p.proto.toLowerCase().includes(filter)
+        );
+        box.innerHTML = `
+          <table class="file-table" style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: var(--bg-panel);">
+              <tr>
+                <th style="width: 80px; padding: 6px 10px;">Proto</th>
+                <th style="width: 100px; padding: 6px 10px;">State</th>
+                <th style="width: 220px; padding: 6px 10px;">Local Address : Port</th>
+                <th style="padding: 6px 10px;">Process / Socket Owner</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(p => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                  <td style="padding: 6px 10px; font-family: monospace; font-weight: 700; color: #38bdf8;">${escapeHtml(p.proto.toUpperCase())}</td>
+                  <td style="padding: 6px 10px; font-family: monospace; color: #10b981;">${escapeHtml(p.state)}</td>
+                  <td style="padding: 6px 10px; font-family: monospace; font-weight: 600; color: var(--text-main);">${escapeHtml(p.local_addr)}</td>
+                  <td style="padding: 6px 10px; font-family: monospace; font-size: 11px; color: var(--text-muted);">${escapeHtml(p.process)}</td>
+                </tr>
+              `).join('') || `<tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-dim);">No listening sockets match filter</td></tr>`}
+            </tbody>
+          </table>
+        `;
+      } else {
+        const list = (pmCachedData.services || []).filter(s =>
+          !filter || s.unit.toLowerCase().includes(filter) || s.description.toLowerCase().includes(filter)
+        );
+        box.innerHTML = `
+          <table class="file-table" style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: var(--bg-panel);">
+              <tr>
+                <th style="width: 220px; padding: 6px 10px;">Service Unit</th>
+                <th style="width: 90px; padding: 6px 8px;">State</th>
+                <th style="padding: 6px 10px;">Description</th>
+                <th style="width: 165px; padding: 6px 8px; text-align: center;">Control</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(s => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                  <td style="padding: 6px 10px; font-family: monospace; font-weight: 600; color: var(--text-main);">${escapeHtml(s.unit)}</td>
+                  <td style="padding: 6px 8px; font-family: monospace; color: ${s.sub === 'running' ? '#10b981' : '#ef4444'}; font-weight: 700;">${escapeHtml(s.sub)}</td>
+                  <td style="padding: 6px 10px; font-size: 11px; color: var(--text-muted);">${escapeHtml(s.description)}</td>
+                  <td style="padding: 6px 8px; text-align: center; white-space: nowrap;">
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 10px;" onclick="controlRemoteSystemdService('${escapeJsString(s.unit)}', 'restart')">↻ Restart</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 10px;" onclick="controlRemoteSystemdService('${escapeJsString(s.unit)}', 'reload')">Reload</button>
+                  </td>
+                </tr>
+              `).join('') || `<tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-dim);">No systemd services reported</td></tr>`}
+            </tbody>
+          </table>
+        `;
+      }
+    }
+
+    async function killRemoteProcessByPid(pid, signal) {
+      if (!confirm(`Send signal -${signal} to remote process PID ${pid}?`)) return;
+      try {
+        await sendRust('remote_kill_process', { pid, signal });
+        addLog(`Sent signal -${signal} to remote PID ${pid}`, 'success');
+        await refreshProcessManagerData();
+      } catch (err) {
+        alert('Kill Process Failed:\n' + (err.message || err));
+      }
+    }
+
+    async function controlRemoteSystemdService(unit, op) {
+      if (!confirm(`Execute 'systemctl ${op} ${unit}' on remote server?`)) return;
+      try {
+        await sendRust('remote_service_action', { unit, op });
+        addLog(`Executed systemctl ${op} ${unit}`, 'success');
+        await refreshProcessManagerData();
+      } catch (err) {
+        alert('Service Action Failed:\n' + (err.message || err));
+      }
+    }
+
+    // ==========================================
+    // 10. LIVE LOG TAIL STREAMER & BINARY HEX INSPECTOR
+    // ==========================================
+    let inspectorState = { path: '', name: '', isRemote: false, mode: 'tail', rawContent: '', timer: null };
+
+    async function openFileInspectorModal(path, name, isRemote) {
+      closeAllMenus();
+      if (inspectorState.timer) {
+        clearInterval(inspectorState.timer);
+        inspectorState.timer = null;
+      }
+      inspectorState = { path, name, isRemote: !!isRemote, mode: 'tail', rawContent: '', timer: null };
+      document.getElementById('fileInspectorTitle').innerText = `Live Tail & Hex Inspector — ${name}`;
+      const followChk = document.getElementById('inspAutoFollowCheck');
+      if (followChk) followChk.checked = false;
+      setFileInspectorMode('tail', false);
+      document.getElementById('fileInspectorModal')?.classList.add('active');
+      await refreshFileInspector();
+    }
+
+    function closeFileInspectorModal() {
+      if (inspectorState.timer) {
+        clearInterval(inspectorState.timer);
+        inspectorState.timer = null;
+      }
+      const followChk = document.getElementById('inspAutoFollowCheck');
+      if (followChk) followChk.checked = false;
+      document.getElementById('fileInspectorModal')?.classList.remove('active');
+    }
+
+    function setFileInspectorMode(mode, shouldRefresh = true) {
+      inspectorState.mode = mode;
+      const btnTail = document.getElementById('inspBtnTail');
+      const btnHex = document.getElementById('inspBtnHex');
+      if (btnTail) btnTail.className = mode === 'tail' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+      if (btnHex) btnHex.className = mode === 'hex' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+      const linesSel = document.getElementById('inspLinesSelect');
+      const followLbl = document.getElementById('inspFollowLabel');
+      if (linesSel) linesSel.style.display = mode === 'tail' ? '' : 'none';
+      if (followLbl) followLbl.style.display = mode === 'tail' ? 'flex' : 'none';
+      if (shouldRefresh) refreshFileInspector();
+    }
+
+    function toggleInspectorAutoFollow() {
+      const checked = !!document.getElementById('inspAutoFollowCheck')?.checked;
+      if (inspectorState.timer) {
+        clearInterval(inspectorState.timer);
+        inspectorState.timer = null;
+      }
+      if (checked && inspectorState.mode === 'tail') {
+        inspectorState.timer = setInterval(() => {
+          refreshFileInspector(true);
+        }, 2000);
+      }
+    }
+
+    async function refreshFileInspector(silent = false) {
+      if (!inspectorState.path) return;
+      const pre = document.getElementById('fileInspectorPre');
+      const meta = document.getElementById('fileInspectorMeta');
+      const lines = parseInt(document.getElementById('inspLinesSelect')?.value || '150', 10) || 150;
+      if (!silent && pre) pre.innerText = 'Loading file stream...';
+      try {
+        const cmd = inspectorState.isRemote ? 'remote_file_inspect' : 'local_file_inspect';
+        const res = await sendRust(cmd, {
+          path: inspectorState.path,
+          mode: inspectorState.mode,
+          lines,
+          max_bytes: 4096
+        });
+        inspectorState.rawContent = res.content || '';
+        if (meta) {
+          meta.innerText = `${inspectorState.isRemote ? 'REMOTE' : 'LOCAL'}: ${inspectorState.path} ${res.size ? '(' + formatBytes(res.size) + ')' : ''} | Updated ${new Date().toLocaleTimeString()}`;
+        }
+        renderFileInspectorOutput();
+      } catch (err) {
+        if (pre) pre.innerText = 'Error inspecting file: ' + (err.message || err);
+      }
+    }
+
+    function renderFileInspectorOutput() {
+      const pre = document.getElementById('fileInspectorPre');
+      if (!pre) return;
+      const filter = (document.getElementById('inspFilterInput')?.value || '').trim().toLowerCase();
+      const raw = inspectorState.rawContent || '';
+      if (inspectorState.mode === 'hex') {
+        pre.innerText = raw;
+        return;
+      }
+      const lines = raw.split('\n').filter(l => !filter || l.toLowerCase().includes(filter));
+      pre.innerHTML = lines.map(line => {
+        const up = line.toUpperCase();
+        if (up.includes('ERROR') || up.includes('FATAL') || up.includes('CRITICAL') || up.includes('EXCEPTION')) {
+          return `<span style="color: #f87171;">${escapeHtml(line)}</span>`;
+        } else if (up.includes('WARN') || up.includes('WARNING')) {
+          return `<span style="color: #fbbf24;">${escapeHtml(line)}</span>`;
+        } else if (up.includes('INFO') || up.includes('SUCCESS')) {
+          return `<span style="color: #38bdf8;">${escapeHtml(line)}</span>`;
+        }
+        return escapeHtml(line);
+      }).join('\n');
+      pre.scrollTop = pre.scrollHeight;
+    }
+
+    // ==========================================
+    // 11. OMNI COMMAND PALETTE (Ctrl+K / Ctrl+P)
+    // ==========================================
+    let cmdPaletteFiltered = [];
+    let cmdPaletteSelectedIndex = 0;
+
+    function openCommandPalette() {
+      closeAllMenus();
+      const modal = document.getElementById('commandPaletteModal');
+      if (!modal) return;
+      const inp = document.getElementById('cmdPaletteInput');
+      if (inp) inp.value = '';
+      cmdPaletteSelectedIndex = 0;
+      renderCommandPaletteItems();
+      modal.classList.add('active');
+      setTimeout(() => inp?.focus(), 40);
+    }
+
+    function closeCommandPalette() {
+      document.getElementById('commandPaletteModal')?.classList.remove('active');
+    }
+
+    function buildCommandPaletteCatalog() {
+      const items = [
+        { icon: '🔍', category: 'Tool', title: 'Find Files (Remote Server & Local Disk)', shortcut: 'Ctrl+F', run: () => openFindFilesModal() },
+        { icon: '🧬', category: 'Tool', title: 'Full-Text Content Grep (Search Inside Files)', shortcut: 'Ctrl+Shift+F', run: () => openContentGrepModal() },
+        { icon: '✏️', category: 'Tool', title: 'Batch Multi-Rename Selected Items (Regex / Counter)', shortcut: 'Ctrl+M', run: () => openBatchRenameModal() },
+        { icon: '🔗', category: 'Navigation', title: `Toggle Synchronized Browsing (Lock-Step: ${appOptions?.syncBrowsing ? 'ON' : 'OFF'})`, shortcut: 'Ctrl+Y', run: () => toggleSynchronizedBrowsing() },
+        { icon: '⭐', category: 'Navigation', title: 'Path Bookmarks & Paired Workspace Favorites', shortcut: 'Ctrl+B', run: () => openBookmarksModal() },
+        { icon: '⚖️', category: 'Sync', title: 'Compare & Synchronize Directories', shortcut: 'Shift+F1', run: () => toggleCompareDirectories() },
+        { icon: '⚙️', category: 'Server', title: 'Remote Process, Listening Port & Systemd Service Manager', shortcut: '', run: () => openProcessManagerModal() },
+        { icon: '📊', category: 'Server', title: 'Remote Server Health & Disk Space Analyzer', shortcut: '', run: () => openServerHealthModal() },
+        { icon: '🌐', category: 'Network', title: 'Network Ping, TCP Port Probe & Service Banner Inspector', shortcut: '', run: () => openNetworkProbeModal() },
+        { icon: '🔑', category: 'Security', title: 'SSH Keypair Generator & Public Key Vault', shortcut: '', run: () => openSshKeygenModal() },
+        { icon: '🖥️', category: 'Server', title: 'Open Interactive SSH Terminal', shortcut: '', run: () => openRemoteTerminal() },
+        { icon: '🛡️', category: 'Transfer', title: 'Configure Transfer Exclusion Mask Rules', shortcut: '', run: () => openExclusionMaskModal() },
+        { icon: '🖧', category: 'Connections', title: 'Open Site Manager', shortcut: 'Ctrl+S', run: () => openSitesModal() },
+        { icon: '👁️', category: 'View', title: 'Toggle Hidden Dotfiles (.env, .htaccess)', shortcut: 'Ctrl+H', run: () => toggleHiddenFiles() },
+        { icon: '🎨', category: 'View', title: 'Switch Application Theme (Dark / Light)', shortcut: 'Ctrl+T', run: () => toggleTheme() },
+        { icon: '🚀', category: 'Updates', title: 'Check for Application Updates', shortcut: 'Ctrl+U', run: () => openUpdateModal(true) },
+      ];
+
+      // Add Saved Server Sites
+      (savedSites || []).forEach(s => {
+        items.push({
+          icon: '🌐',
+          category: 'Saved Server',
+          title: `Connect to ${s.name} (${s.username || ''}@${s.host}:${s.port || 22})`,
+          shortcut: (s.protocol || 'SFTP').toUpperCase(),
+          run: () => {
+            const sel = document.getElementById('quickSiteSelect');
+            if (sel) {
+              sel.value = s.id;
+              onQuickSiteSelect(s.id, true);
+            }
+          }
+        });
+      });
+
+      // Add Saved Workspace Bookmarks
+      getWorkspaceBookmarks().forEach((b, idx) => {
+        items.push({
+          icon: '⭐',
+          category: 'Bookmark',
+          title: `Bookmark: ${b.label}`,
+          shortcut: b.remote_path || b.local_path || '',
+          run: () => jumpToSavedWorkspaceBookmark(idx)
+        });
+      });
+
+      // Add Current Remote Files (up to 40)
+      (remoteFiles || []).slice(0, 40).forEach(f => {
+        items.push({
+          icon: f.is_dir ? '📁' : '📄',
+          category: 'Remote Item',
+          title: `Remote: ${f.name}`,
+          shortcut: f.path,
+          run: () => {
+            if (f.is_dir) navigateRemote(f.path);
+            else openRemoteFileInEditor(f.path);
+          }
+        });
+      });
+
+      // Add Current Local Files (up to 40)
+      (localFiles || []).slice(0, 40).forEach(f => {
+        items.push({
+          icon: f.is_dir ? '📁' : '📄',
+          category: 'Local Item',
+          title: `Local: ${f.name}`,
+          shortcut: f.path,
+          run: () => {
+            if (f.is_dir) navigateLocal(f.path);
+            else openLocalFileInEditor(f.path);
+          }
+        });
+      });
+
+      return items;
+    }
+
+    function renderCommandPaletteItems() {
+      const listEl = document.getElementById('cmdPaletteList');
+      if (!listEl) return;
+      const rawQ = (document.getElementById('cmdPaletteInput')?.value || '').trim().toLowerCase();
+      const all = buildCommandPaletteCatalog();
+
+      cmdPaletteFiltered = all.filter(it => {
+        if (!rawQ) return true;
+        if (rawQ.startsWith('>')) {
+          const q = rawQ.substring(1).trim();
+          return ['Tool', 'Navigation', 'Sync', 'Server', 'Network', 'Security', 'Transfer', 'View'].includes(it.category) &&
+                 (!q || it.title.toLowerCase().includes(q));
+        }
+        if (rawQ.startsWith('@')) {
+          const q = rawQ.substring(1).trim();
+          return it.category === 'Saved Server' && (!q || it.title.toLowerCase().includes(q));
+        }
+        if (rawQ.startsWith('#')) {
+          const q = rawQ.substring(1).trim();
+          return (it.category === 'Remote Item' || it.category === 'Local Item') && (!q || it.title.toLowerCase().includes(q));
+        }
+        return it.title.toLowerCase().includes(rawQ) ||
+               it.category.toLowerCase().includes(rawQ) ||
+               (it.shortcut && it.shortcut.toLowerCase().includes(rawQ));
+      }).slice(0, 35);
+
+      if (cmdPaletteSelectedIndex >= cmdPaletteFiltered.length) {
+        cmdPaletteSelectedIndex = 0;
+      }
+
+      if (cmdPaletteFiltered.length === 0) {
+        listEl.innerHTML = `<div style="padding: 28px; text-align: center; color: var(--text-dim); font-style: italic;">No matching commands, servers, bookmarks, or files.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = cmdPaletteFiltered.map((it, idx) => {
+        const isSel = idx === cmdPaletteSelectedIndex;
+        return `
+          <div onclick="executeCommandPaletteItem(${idx})" onmouseenter="cmdPaletteSelectedIndex=${idx}; renderCommandPaletteItems();" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 5px; cursor: pointer; background: ${isSel ? 'rgba(56, 189, 248, 0.16)' : 'transparent'}; border: 1px solid ${isSel ? 'rgba(56, 189, 248, 0.35)' : 'transparent'};">
+            <span style="font-size: 14px; width: 20px; text-align: center;">${it.icon}</span>
+            <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: #38bdf8;">${escapeHtml(it.category)}</span>
+            <span style="flex: 1; font-size: 12px; font-weight: ${isSel ? '600' : '500'}; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(it.title)}</span>
+            ${it.shortcut ? `<span style="font-family: monospace; font-size: 10.5px; color: var(--text-dim); max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(it.shortcut)}</span>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function handleCommandPaletteKey(e) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (cmdPaletteFiltered.length > 0) {
+          cmdPaletteSelectedIndex = (cmdPaletteSelectedIndex + 1) % cmdPaletteFiltered.length;
+          renderCommandPaletteItems();
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (cmdPaletteFiltered.length > 0) {
+          cmdPaletteSelectedIndex = (cmdPaletteSelectedIndex - 1 + cmdPaletteFiltered.length) % cmdPaletteFiltered.length;
+          renderCommandPaletteItems();
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        executeCommandPaletteItem(cmdPaletteSelectedIndex);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeCommandPalette();
+      }
+    }
+
+    function executeCommandPaletteItem(idx) {
+      const item = cmdPaletteFiltered[idx];
+      if (!item) return;
+      closeCommandPalette();
+      item.run();
     }
 
     function copyAllLogs() {
@@ -15785,10 +17038,40 @@
         closeSshKeygenModal();
         closeServerHealthModal();
         closeFileDiffModal();
+        closeCommandPalette();
+        closeContentGrepModal();
+        closeBatchRenameModal();
+        closeBookmarksModal();
+        closeProcessManagerModal();
+        closeFileInspectorModal();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'k' || e.key.toLowerCase() === 'p')) {
+        e.preventDefault();
+        openCommandPalette();
         return;
       }
 
       if (isInput) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        openContentGrepModal();
+        return;
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        openBatchRenameModal();
+        return;
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        toggleSynchronizedBrowsing();
+        return;
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        openBookmarksModal();
+        return;
+      }
 
       const anyModalOpen = !!document.querySelector('.modal-overlay.active');
 
