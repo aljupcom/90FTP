@@ -3,7 +3,7 @@
 
 #define MyAppName "90FTP"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.0.0.54"
+  #define MyAppVersion "0.0.0.55"
 #endif
 #define MyAppPublisher "aljailane"
 #define MyAppURL "https://github.com/aljupcom/90FTP"
