@@ -3267,6 +3267,26 @@ impl AppState {
             }
 
             "remote_install_sshpass" => {
+                // Quick pre-check: if sshpass is already installed, return immediately without running package manager
+                if let Ok(((code, out), reconnected)) = self.with_remote_retry(|client| {
+                    client.exec_command_clean("command -v sshpass || which sshpass")
+                }) {
+                    let path = out.lines().rev().find(|l| l.contains("sshpass") && !l.contains("not found")).map(|s| s.trim().to_string()).unwrap_or_default();
+                    if code == 0 && !path.is_empty() {
+                        let mut res = json!({
+                            "success": true,
+                            "installed": true,
+                            "already_installed": true,
+                            "path": path,
+                            "message": "sshpass is already installed and ready on the remote server!"
+                        });
+                        if reconnected {
+                            res["reconnected"] = json!(true);
+                        }
+                        return IpcResponse::ok(id, action, res);
+                    }
+                }
+
                 let install_script = r#"
 SUDO=""
 if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
