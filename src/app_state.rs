@@ -3214,6 +3214,107 @@ impl AppState {
                 IpcResponse::ok(id, action, json!({ "cancelling": true }))
             }
 
+            "remote_check_sshpass" => {
+                match self.with_remote_retry(|client| {
+                    let cmd = "echo '===OS==='; (cat /etc/os-release 2>/dev/null || cat /etc/issue 2>/dev/null || uname -s); echo '===SSHPASS==='; (command -v sshpass || which sshpass || echo 'NOT_FOUND')";
+                    client.exec_command_clean(cmd)
+                }) {
+                    Ok(((_code, out), reconnected)) => {
+                        let mut os_name = String::new();
+                        let mut sshpass_path = String::new();
+                        let mut section = "";
+
+                        for line in out.lines() {
+                            let t = line.trim();
+                            if t == "===OS===" {
+                                section = "os";
+                                continue;
+                            } else if t == "===SSHPASS===" {
+                                section = "sshpass";
+                                continue;
+                            }
+
+                            if section == "os" {
+                                if t.starts_with("PRETTY_NAME=") {
+                                    os_name = t.trim_start_matches("PRETTY_NAME=").trim_matches('"').to_string();
+                                } else if os_name.is_empty() && !t.contains('=') && !t.is_empty() {
+                                    os_name = t.to_string();
+                                }
+                            } else if section == "sshpass" {
+                                if !t.is_empty() && t != "NOT_FOUND" && !t.contains("not found") {
+                                    sshpass_path = t.to_string();
+                                }
+                            }
+                        }
+
+                        if os_name.is_empty() {
+                            os_name = "Linux Server".to_string();
+                        }
+
+                        let installed = !sshpass_path.is_empty();
+                        let mut res = json!({
+                            "installed": installed,
+                            "path": sshpass_path,
+                            "os_name": os_name
+                        });
+                        if reconnected {
+                            res["reconnected"] = json!(true);
+                        }
+                        IpcResponse::ok(id, action, res)
+                    }
+                    Err(e) => IpcResponse::err(id, action, &format!("Failed to query remote server: {}", e)),
+                }
+            }
+
+            "remote_install_sshpass" => {
+                let install_script = r#"
+SUDO=""
+if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+fi
+
+if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    $SUDO apt-get update -qq && $SUDO apt-get install -y sshpass
+elif command -v dnf >/dev/null 2>&1; then
+    ($SUDO dnf install -y epel-release || true) && $SUDO dnf install -y sshpass
+elif command -v yum >/dev/null 2>&1; then
+    ($SUDO yum install -y epel-release || true) && $SUDO yum install -y sshpass
+elif command -v apk >/dev/null 2>&1; then
+    $SUDO apk add --no-cache sshpass
+elif command -v pacman >/dev/null 2>&1; then
+    $SUDO pacman -Sy --noconfirm sshpass
+elif command -v zypper >/dev/null 2>&1; then
+    $SUDO zypper --non-interactive install sshpass
+else
+    echo "No supported package manager found (apt, dnf, yum, apk, pacman, zypper)"
+    exit 1
+fi
+"#;
+                match self.with_remote_retry(|client| {
+                    let cmd = format!("{}\ncommand -v sshpass || which sshpass", install_script);
+                    client.exec_command_clean(&cmd)
+                }) {
+                    Ok(((code, out), reconnected)) => {
+                        let path = out.lines().rev().find(|l| l.contains("sshpass") && !l.contains("install") && !l.contains("not found")).map(|s| s.trim().to_string()).unwrap_or_default();
+                        let installed = !path.is_empty() || (code == 0 && !out.contains("not found") && !out.contains("command not found"));
+
+                        let mut res = json!({
+                            "success": installed,
+                            "installed": installed,
+                            "path": path,
+                            "output": out,
+                            "message": if installed { "sshpass installed successfully!" } else { "Failed to install sshpass" }
+                        });
+                        if reconnected {
+                            res["reconnected"] = json!(true);
+                        }
+                        IpcResponse::ok(id, action, res)
+                    }
+                    Err(e) => IpcResponse::err(id, action, &format!("Failed to execute installation: {}", e)),
+                }
+            }
+
             unknown => IpcResponse::err(id, action, &format!("Unknown action: {}", unknown)),
         }
     }

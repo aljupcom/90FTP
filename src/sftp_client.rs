@@ -809,6 +809,7 @@ impl SftpClient {
 
             let mut all_output = String::new();
             let mut exit_code = 0i32;
+            let mut got_exit_status = false;
 
             loop {
                 tokio::select! {
@@ -824,9 +825,15 @@ impl SftpClient {
                                     }
                                     russh::ChannelMsg::ExitStatus { exit_status } => {
                                         exit_code = exit_status as i32;
+                                        got_exit_status = true;
                                     }
-                                    russh::ChannelMsg::Eof | russh::ChannelMsg::Close => {
+                                    russh::ChannelMsg::Close => {
                                         break;
+                                    }
+                                    russh::ChannelMsg::Eof => {
+                                        if got_exit_status {
+                                            break;
+                                        }
                                     }
                                     _ => {}
                                 }
@@ -835,6 +842,11 @@ impl SftpClient {
                         }
                     }
                 }
+            }
+
+            // Fallback check: if exit code wasn't updated or server didn't emit ExitStatus on early EOF
+            if exit_code == 0 && (all_output.contains("command not found") || all_output.contains("not found: sshpass") || all_output.contains(": not found")) {
+                exit_code = 127;
             }
 
             Ok((exit_code, all_output))

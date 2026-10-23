@@ -410,42 +410,80 @@ pub fn execute_transfer_thread(
         if let Some(ref src) = source_client {
             if task.transfer_mode == "direct_scp" || task.transfer_mode == "direct_rsync" || task.transfer_mode == "auto" {
                 emit_log("Attempting direct Server-to-Server transfer via native remote command...", "info");
-                let sources_joined = task.sources.iter().map(|s| format!("'{}'", s.replace('\'', "'\\''"))).collect::<Vec<_>>().join(" ");
-                let target_dest = format!("{}@{}:'{}'", task.target_user, task.target_host, task.target_path.replace('\'', "'\\''"));
 
-                let direct_cmd = if task.transfer_mode == "direct_rsync" {
-                    format!("rsync -avz -e 'ssh -p {} -o BatchMode=yes -o StrictHostKeyChecking=no' {} {}", task.target_port, sources_joined, target_dest)
-                } else if !task.target_pass.is_empty() {
-                    let esc_pass = task.target_pass.replace('\'', "'\\''");
-                    format!("sshpass -p '{}' scp -P {} -r -o StrictHostKeyChecking=no {} {}", esc_pass, task.target_port, sources_joined, target_dest)
-                } else {
-                    format!("scp -P {} -r -o BatchMode=yes -o StrictHostKeyChecking=no {} {}", task.target_port, sources_joined, target_dest)
-                };
+                // If password authentication is required for direct SCP, check for sshpass first
+                let mut can_try_direct = true;
+                if task.transfer_mode != "direct_rsync" && !task.target_pass.is_empty() {
+                    let has_sshpass = match src.exec_command_clean("command -v sshpass || which sshpass") {
+                        Ok((0, out)) => !out.trim().is_empty() && !out.contains("not found"),
+                        _ => false,
+                    };
 
-                emit_log(&format!("Executing: {}", direct_cmd), "info");
-                match src.exec_command_clean(&direct_cmd) {
-                    Ok((0, out)) => {
-                        emit_log("Direct Server-to-Server command finished successfully!", "success");
-                        if !out.trim().is_empty() {
-                            emit_log(&format!("Output:\n{}", out.trim()), "info");
-                        }
-                        emit_complete(true, "Direct Server-to-Server transfer completed successfully", task.sources.len(), 0, 0.0);
-                        return;
-                    }
-                    Ok((code, out)) => {
-                        let err_msg = format!("Direct command exited with code {}: {}", code, out.trim());
-                        emit_log(&err_msg, "warning");
-                        if task.transfer_mode != "auto" {
-                            emit_error(&err_msg);
+                    if !has_sshpass {
+                        can_try_direct = false;
+                        emit_log("Notice: 'sshpass' utility is not installed on the source server.", "warning");
+                        if task.transfer_mode == "auto" {
+                            emit_log("Direct password SCP requires sshpass. Falling back smoothly to Universal Stream Relay Bridge...", "info");
+                        } else {
+                            let err_msg = "Direct Server-to-Server transfer with password requires 'sshpass' on the source server. Please click 'Install sshpass' in the Remote Transfer dialog or switch strategy to 'Stream Relay Bridge'.";
+                            emit_log(err_msg, "error");
+                            emit_error(err_msg);
                             return;
                         }
-                        emit_log("Direct Server-to-Server execution failed or required interactive auth. Falling back to Universal Stream Relay Bridge...", "info");
                     }
-                    Err(e) => {
-                        emit_log(&format!("Could not execute direct command: {}. Falling back to Stream Relay...", e), "warning");
-                        if task.transfer_mode != "auto" {
-                            emit_error(&e);
-                            return;
+                }
+
+                if can_try_direct {
+                    let sources_joined = task.sources.iter().map(|s| format!("'{}'", s.replace('\'', "'\\''"))).collect::<Vec<_>>().join(" ");
+                    let target_dest = format!("{}@{}:'{}'", task.target_user, task.target_host, task.target_path.replace('\'', "'\\''"));
+
+                    let direct_cmd = if task.transfer_mode == "direct_rsync" {
+                        format!("rsync -avz -e 'ssh -p {} -o BatchMode=yes -o StrictHostKeyChecking=no' {} {}", task.target_port, sources_joined, target_dest)
+                    } else if !task.target_pass.is_empty() {
+                        let esc_pass = task.target_pass.replace('\'', "'\\''");
+                        format!("sshpass -p '{}' scp -P {} -r -o StrictHostKeyChecking=no {} {}", esc_pass, task.target_port, sources_joined, target_dest)
+                    } else {
+                        format!("scp -P {} -r -o BatchMode=yes -o StrictHostKeyChecking=no {} {}", task.target_port, sources_joined, target_dest)
+                    };
+
+                    emit_log(&format!("Executing: {}", direct_cmd), "info");
+                    match src.exec_command_clean(&direct_cmd) {
+                        Ok((code, out)) => {
+                            let is_clean_success = code == 0
+                                && !out.to_lowercase().contains("command not found")
+                                && !out.to_lowercase().contains("not found")
+                                && !out.to_lowercase().contains("permission denied")
+                                && !out.to_lowercase().contains("connection refused")
+                                && !out.to_lowercase().contains("no such file");
+
+                            if is_clean_success {
+                                emit_log("Direct Server-to-Server command finished successfully!", "success");
+                                if !out.trim().is_empty() {
+                                    emit_log(&format!("Output:\n{}", out.trim()), "info");
+                                }
+                                emit_complete(true, "Direct Server-to-Server transfer completed successfully", task.sources.len(), 0, 0.0);
+                                return;
+                            }
+
+                            let err_msg = if code != 0 {
+                                format!("Direct command exited with code {}: {}", code, out.trim())
+                            } else {
+                                format!("Direct command failed: {}", out.trim())
+                            };
+
+                            emit_log(&err_msg, "warning");
+                            if task.transfer_mode != "auto" {
+                                emit_error(&err_msg);
+                                return;
+                            }
+                            emit_log("Direct Server-to-Server execution failed. Falling back to Universal Stream Relay Bridge...", "info");
+                        }
+                        Err(e) => {
+                            emit_log(&format!("Could not execute direct command: {}. Falling back to Stream Relay...", e), "warning");
+                            if task.transfer_mode != "auto" {
+                                emit_error(&e);
+                                return;
+                            }
                         }
                     }
                 }

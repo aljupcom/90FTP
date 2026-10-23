@@ -3540,7 +3540,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.59</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.60</span>
         </div>
       </div>
 
@@ -5344,6 +5344,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           <span class="tool-tag ready">READY</span>
         </div>
 
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); promptInstallSshpassOnServer();">
+          <span style="font-size: 14px;"><svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Install sshpass on Remote Server</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Auto-detect Linux OS (Ubuntu, Debian, RHEL, CentOS, Alma, Alpine, Arch) and install sshpass</div>
+          </div>
+          <span class="tool-tag ready">READY</span>
+        </div>
+
         <div style="display: flex; justify-content: flex-end; padding-top: 6px;">
           <button type="button" class="btn btn-secondary" onclick="closeToolsModal()" style="font-size: 11.5px; padding: 3px 18px; height: 26px;">Close</button>
         </div>
@@ -5576,6 +5585,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 <option value="direct_rsync">Direct Rsync: High-speed delta compression between servers</option>
                 <option value="stream_relay">Stream Relay Bridge: In-Memory Safe Stream via 90FTP Engine</option>
               </select>
+            </div>
+          </div>
+
+          <!-- Source Server Direct Transfer Prerequisite (sshpass) -->
+          <div id="rtSshpassRow" style="margin-top: 4px; padding: 7px 10px; background: rgba(56, 189, 248, 0.05); border: 1px dashed rgba(56, 189, 248, 0.25); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <div style="font-size: 11px; display: flex; align-items: center; gap: 6px; min-width: 0;">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" style="color: #38bdf8; flex-shrink: 0;"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <span>Source Direct SCP Prerequisite: </span>
+                <strong id="rtSshpassStatusText" style="color: var(--text-muted);">Checking sshpass...</strong>
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+              <button type="button" class="btn btn-secondary" id="btnCheckSshpass" onclick="checkRemoteSshpass()" style="padding: 2px 8px; font-size: 10.5px; height: 24px;" title="Check if sshpass is installed on source server">Check Status</button>
+              <button type="button" class="btn btn-primary" id="btnInstallSshpass" onclick="installRemoteSshpass()" style="padding: 2px 10px; font-size: 10.5px; height: 24px; display: inline-flex; align-items: center; gap: 4px;" title="Auto-detect Linux OS (Ubuntu, Debian, RHEL, CentOS, Alma, Rocky, Alpine, Arch, SUSE) and install sshpass">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Install sshpass</span>
+              </button>
             </div>
           </div>
 
@@ -6775,7 +6802,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.59';
+    let APP_CURRENT_VERSION = '0.0.0.60';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -17328,6 +17355,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       const footerStatus = document.getElementById('rtFooterStatus');
       if (footerStatus) footerStatus.textContent = 'Ready to dispatch selected items';
 
+      const sshpassRow = document.getElementById('rtSshpassRow');
+      if (sshpassRow) {
+        sshpassRow.style.display = isRemote ? 'flex' : 'none';
+        if (isRemote) {
+          checkRemoteSshpass(true);
+        }
+      }
+
       const modal = document.getElementById('remoteTransferModal');
       if (modal) modal.classList.add('active');
     }
@@ -17458,6 +17493,102 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       } finally {
         if (btn) btn.disabled = false;
       }
+    }
+
+    async function checkRemoteSshpass(quiet = false) {
+      const statusText = document.getElementById('rtSshpassStatusText');
+      const btnCheck = document.getElementById('btnCheckSshpass');
+      if (statusText) statusText.innerHTML = '<span style="color: var(--accent);">Checking status...</span>';
+      if (btnCheck) btnCheck.disabled = true;
+
+      try {
+        const res = await sendRust('remote_check_sshpass', {});
+        if (res.installed) {
+          if (statusText) {
+            statusText.innerHTML = `<span style="color: #22c55e; font-weight: 700;">✓ Installed (${escapeHtml(res.path || 'sshpass')})</span>`;
+          }
+          if (!quiet) {
+            addLog(`sshpass utility verified on remote server: ${res.path} (${res.os_name})`, 'success');
+          }
+        } else {
+          if (statusText) {
+            statusText.innerHTML = `<span style="color: #f59e0b; font-weight: 700;">✕ Not Installed (${escapeHtml(res.os_name || 'Linux')})</span>`;
+          }
+          if (!quiet) {
+            addLog(`sshpass is not installed on remote server (${res.os_name}). Click 'Install sshpass' to install automatically.`, 'warning');
+          }
+        }
+        return res;
+      } catch (err) {
+        if (statusText) {
+          statusText.innerHTML = `<span style="color: #ef4444;">✕ Query error: ${escapeHtml(err.message || String(err))}</span>`;
+        }
+        if (!quiet) {
+          addLog(`Failed to query sshpass status: ${err.message || err}`, 'error');
+        }
+        return null;
+      } finally {
+        if (btnCheck) btnCheck.disabled = false;
+      }
+    }
+
+    async function installRemoteSshpass() {
+      const statusText = document.getElementById('rtSshpassStatusText');
+      const btnInstall = document.getElementById('btnInstallSshpass');
+      const btnCheck = document.getElementById('btnCheckSshpass');
+
+      if (!confirm('Install sshpass on the remote source server?\n\n90FTP will automatically detect the Linux distribution (Ubuntu, Debian, CentOS, AlmaLinux, Rocky, Alpine, Arch, openSUSE) and install sshpass via the system package manager.')) {
+        return;
+      }
+
+      if (statusText) statusText.innerHTML = '<span style="color: var(--accent);"><span class="spin-icon">↻</span> Auto-detecting OS & installing sshpass...</span>';
+      if (btnInstall) {
+        btnInstall.disabled = true;
+        btnInstall.innerHTML = '<span>Installing...</span>';
+      }
+      if (btnCheck) btnCheck.disabled = true;
+
+      addLog('Detecting Linux OS and installing sshpass on remote server...', 'info');
+
+      try {
+        const res = await sendRust('remote_install_sshpass', {});
+        if (res.success || res.installed) {
+          if (statusText) {
+            statusText.innerHTML = `<span style="color: #22c55e; font-weight: 700;">✓ Installed successfully! (${escapeHtml(res.path || 'sshpass')})</span>`;
+          }
+          addLog(`sshpass installed successfully on remote server: ${res.path || 'ready'}`, 'success');
+          alert(`sshpass was successfully installed on the server!\n\nLocation: ${res.path || '/usr/bin/sshpass'}\nDirect Server-to-Server SCP is now fully enabled.`);
+        } else {
+          if (statusText) {
+            statusText.innerHTML = `<span style="color: #ef4444; font-weight: 700;">✕ Installation failed</span>`;
+          }
+          const errDetail = res.output ? `\nOutput:\n${res.output}` : '';
+          addLog(`Failed to install sshpass: ${res.message || 'Unknown error'}${errDetail}`, 'error');
+          alert(`Failed to install sshpass automatically:${errDetail}\n\nNote: You can still transfer files using 'Stream Relay Bridge' strategy without needing sshpass.`);
+        }
+      } catch (err) {
+        if (statusText) {
+          statusText.innerHTML = `<span style="color: #ef4444; font-weight: 700;">✕ ${escapeHtml(err.message || String(err))}</span>`;
+        }
+        addLog(`sshpass installation error: ${err.message || err}`, 'error');
+        alert(`Error installing sshpass: ${err.message || err}\n\nNote: Stream Relay mode works reliably without sshpass.`);
+      } finally {
+        if (btnInstall) {
+          btnInstall.disabled = false;
+          btnInstall.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Install sshpass</span>`;
+        }
+        if (btnCheck) btnCheck.disabled = false;
+      }
+    }
+
+    async function promptInstallSshpassOnServer() {
+      if (!currentConnectedProfile) {
+        alert('Please connect to a remote server first.');
+        return;
+      }
+      openRemoteTransferModal();
+      await checkRemoteSshpass();
+      installRemoteSshpass();
     }
 
     async function startRemoteTransfer() {
