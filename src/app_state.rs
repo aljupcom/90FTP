@@ -1503,6 +1503,19 @@ impl AppState {
                 IpcResponse::ok(id, action, json!({ "opened": true }))
             }
 
+            "open_external_url" => {
+                let url = payload.get("url").and_then(|v| v.as_str()).unwrap_or("https://github.com/aljupcom/90FTP");
+                if url.starts_with("https://") || url.starts_with("http://") {
+                    #[cfg(target_os = "windows")]
+                    {
+                        let _ = std::process::Command::new("rundll32")
+                            .args(&["url.dll,FileProtocolHandler", url])
+                            .spawn();
+                    }
+                }
+                IpcResponse::ok(id, action, json!({ "opened": true }))
+            }
+
             "clear_known_hosts" => {
                 match sessions::clear_known_hosts() {
                     Ok(_) => IpcResponse::ok(id, action, json!({ "status": "cleared" })),
