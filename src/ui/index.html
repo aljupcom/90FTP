@@ -2973,6 +2973,136 @@
       background: rgba(220, 38, 38, 0.08);
       color: #dc2626;
     }
+
+    /* Interactive Sortable Table Headers */
+    th.sortable-col {
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.12s ease, color 0.12s ease;
+      position: sticky;
+      top: 0;
+    }
+    th.sortable-col:hover {
+      background: var(--bg-card-hover) !important;
+      color: var(--accent) !important;
+    }
+    .sort-indicator {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 9.5px;
+      color: var(--accent);
+      opacity: 0.9;
+    }
+
+    /* Active Pane Focus Highlight */
+    .file-pane-wrapper.pane-focused {
+      box-shadow: inset 0 2px 0 0 var(--accent);
+    }
+
+    /* Native Commander Function Key & Live Status Footer Bar */
+    .commander-fkey-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 26px;
+      padding: 0 8px;
+      background: var(--bg-header);
+      border-top: 1px solid var(--border-color);
+      font-size: 11px;
+      user-select: none;
+      gap: 8px;
+      flex-shrink: 0;
+      z-index: 20;
+    }
+    .fkey-status-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .fkey-pane-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 7px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      background: rgba(56, 189, 248, 0.14);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .fkey-actions-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .fkey-actions-group::-webkit-scrollbar {
+      display: none;
+    }
+    .fkey-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 20px;
+      padding: 0 7px;
+      border-radius: 3px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-muted);
+      font-size: 10.5px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.1s ease;
+    }
+    .fkey-btn:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-main);
+      border-color: var(--accent);
+    }
+    .fkey-btn kbd {
+      font-family: var(--font-mono, monospace);
+      font-weight: 700;
+      font-size: 10px;
+      color: var(--accent);
+    }
+
+    /* Diff Viewer & Health Bars */
+    .diff-line-row {
+      display: flex;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 11.5px;
+      line-height: 1.45;
+      border-bottom: 1px solid rgba(127, 127, 127, 0.08);
+    }
+    .diff-line-num {
+      width: 44px;
+      text-align: right;
+      padding: 1px 6px;
+      color: var(--text-dim);
+      background: rgba(0, 0, 0, 0.18);
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .diff-line-code {
+      flex: 1;
+      padding: 1px 8px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .diff-added {
+      background: rgba(34, 197, 94, 0.14);
+      color: #4ade80;
+    }
+    .diff-removed {
+      background: rgba(239, 68, 68, 0.14);
+      color: #f87171;
+    }
   </style>
 </head>
 <body>
@@ -3037,7 +3167,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.51</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.52</span>
         </div>
       </div>
 
@@ -3194,7 +3324,19 @@
           <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openToolsModal()">
             <span class="menu-icon">🛠️</span>
-            <span>Tools Suite (SOON)...</span>
+            <span>Power Tools & Diagnostics Suite...</span>
+          </div>
+          <div class="dropdown-item" onclick="openNetworkProbeModal()">
+            <span class="menu-icon">🌐</span>
+            <span>Network Ping & Port Probe...</span>
+          </div>
+          <div class="dropdown-item" onclick="openSshKeygenModal()">
+            <span class="menu-icon">🔑</span>
+            <span>SSH Keypair Generator & Vault...</span>
+          </div>
+          <div class="dropdown-item" onclick="openServerHealthModal()">
+            <span class="menu-icon">📊</span>
+            <span>Remote Server Health & Disk Usage...</span>
           </div>
           <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openOptionsModal('security')">
@@ -3469,10 +3611,10 @@
         <table>
           <thead>
             <tr>
-              <th style="width: 50%;">Name</th>
-              <th style="width: 15%;">Size</th>
-              <th style="width: 20%;">Modified</th>
-              <th style="width: 15%;">Type</th>
+              <th class="sortable-col" style="width: 50%;" onclick="sortFilePane(false, 'name')" title="Click to sort by Name">Name <span class="sort-indicator" id="localSort_name">▲</span></th>
+              <th class="sortable-col" style="width: 15%;" onclick="sortFilePane(false, 'size')" title="Click to sort by Size">Size <span class="sort-indicator" id="localSort_size"></span></th>
+              <th class="sortable-col" style="width: 20%;" onclick="sortFilePane(false, 'modified')" title="Click to sort by Modified Date">Modified <span class="sort-indicator" id="localSort_modified"></span></th>
+              <th class="sortable-col" style="width: 15%;" onclick="sortFilePane(false, 'type')" title="Click to sort by File Type">Type <span class="sort-indicator" id="localSort_type"></span></th>
             </tr>
           </thead>
           <tbody id="localFileList">
@@ -3521,8 +3663,11 @@
             <button class="btn-tool" style="color: #38bdf8;" title="Interactive Move / Copy Selected Remote Items (F6)" onclick="openInteractiveMoveModal(true)">
               <svg class="icon" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
             </button>
-            <button class="btn-tool" style="color: #38bdf8;" title="Find Files on Remote Server (Ctrl+F)" onclick="openFindFilesModal()">
+            <button class="btn-tool" style="color: #38bdf8;" title="Find Files on Remote or Local (Ctrl+F / F3)" onclick="openFindFilesModal()">
               <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
+            <button class="btn-tool" style="color: #10b981;" title="Remote Server Health & Disk Analyzer" onclick="openServerHealthModal()">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
             </button>
             <button class="btn-tool" title="New Folder" onclick="promptNewRemoteFolder()">
               <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
@@ -3633,10 +3778,10 @@
         <table>
           <thead>
             <tr>
-              <th style="width: 45%;">Name</th>
-              <th style="width: 15%;">Size</th>
-              <th style="width: 25%;">Modified</th>
-              <th style="width: 15%;">Permissions</th>
+              <th class="sortable-col" style="width: 45%;" onclick="sortFilePane(true, 'name')" title="Click to sort by Name">Name <span class="sort-indicator" id="remoteSort_name">▲</span></th>
+              <th class="sortable-col" style="width: 15%;" onclick="sortFilePane(true, 'size')" title="Click to sort by Size">Size <span class="sort-indicator" id="remoteSort_size"></span></th>
+              <th class="sortable-col" style="width: 25%;" onclick="sortFilePane(true, 'modified')" title="Click to sort by Modified Date">Modified <span class="sort-indicator" id="remoteSort_modified"></span></th>
+              <th class="sortable-col" style="width: 15%;" onclick="sortFilePane(true, 'permissions')" title="Click to sort by Permissions">Permissions <span class="sort-indicator" id="remoteSort_permissions"></span></th>
             </tr>
           </thead>
           <tbody id="remoteFileList">
@@ -3812,6 +3957,25 @@
     </div>
   </div>
 
+  <!-- Native Commander Function Key & Live Status Bar -->
+  <div class="commander-fkey-bar" id="commanderFkeyBar">
+    <div class="fkey-status-group">
+      <span class="fkey-pane-pill" id="fkeyActivePaneBadge">LOCAL PANE</span>
+      <span id="fkeySelectionStatus" style="color: var(--text-muted); font-size: 11px;">Ready — Use Arrow keys, Enter, Backspace, Tab, F2–F8</span>
+    </div>
+    <div class="fkey-actions-group">
+      <button type="button" class="fkey-btn" onclick="triggerCommanderFkey('F2')" title="Rename Selected Item (F2)"><kbd>F2</kbd> Rename</button>
+      <button type="button" class="fkey-btn" onclick="openFindFilesModal()" title="Find Files on Remote or Local (F3 / Ctrl+F)"><kbd>F3</kbd> Find</button>
+      <button type="button" class="fkey-btn" onclick="triggerCommanderFkey('F4')" title="Edit Selected File in Code Editor (F4)"><kbd>F4</kbd> Edit</button>
+      <button type="button" class="fkey-btn" onclick="refreshBothPanes()" title="Refresh Both Panes (F5)"><kbd>F5</kbd> Refresh</button>
+      <button type="button" class="fkey-btn" onclick="triggerCommanderFkey('F6')" title="Interactive Move / Copy Selected Items (F6)"><kbd>F6</kbd> Move/Copy</button>
+      <button type="button" class="fkey-btn" onclick="triggerCommanderFkey('F7')" title="Create New Folder in Active Pane (F7)"><kbd>F7</kbd> New Folder</button>
+      <button type="button" class="fkey-btn" onclick="triggerCommanderFkey('F8')" title="Delete Selected Item(s) (F8 / Del)"><kbd>F8</kbd> Delete</button>
+      <button type="button" class="fkey-btn" onclick="toggleCompareDirectories()" title="Compare Local & Remote Directories (Shift+F1)"><kbd>⇧F1</kbd> Compare</button>
+      <button type="button" class="fkey-btn" onclick="openToolsModal()" title="Open Power Tools & Diagnostics Suite"><kbd>🛠️</kbd> Tools</button>
+    </div>
+  </div>
+
   <!-- Modal: Built-in Code Editor & Formatter (Authentic Native OS Window Frame) -->
   <div class="modal-overlay" id="editorModal">
     <div class="native-window-dialog" id="editorWindowFrame" style="width: 1060px; max-width: 96vw; height: 86vh; max-height: 96vh;">
@@ -3933,6 +4097,12 @@
         <div style="margin-top: 16px; display: flex; align-items: center; justify-content: space-between;">
           <label style="font-weight: 600;">Octal Value:</label>
           <input type="text" id="chmodOctal" value="0644" style="width: 110px; text-align: center; font-family: var(--font-mono); font-size: 14px;" onkeyup="updateChmodFromOctal()">
+        </div>
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--text-muted);">
+            <input type="checkbox" id="chmodRecursiveCheck" style="accent-color: var(--accent);">
+            <span>Apply recursively to all subdirectories and files (<code>chmod -R</code>)</span>
+          </label>
         </div>
       </div>
       <div class="modal-footer">
@@ -4430,7 +4600,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.51 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.52 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -4491,37 +4661,175 @@
           <span class="tool-tag ready">READY</span>
         </div>
 
-        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;">Upcoming Features</div>
+        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;">Power Tools & Server Utilities</div>
 
-        <div class="tool-native-row" style="opacity: 0.75;">
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); openServerHealthModal();">
+          <span style="font-size: 14px;">📊</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Remote Server Health & Disk Analyzer</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Live CPU load, RAM usage, OS kernel & disk partition usage bars</div>
+          </div>
+          <span class="tool-tag ready">READY</span>
+        </div>
+
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); toggleCompareDirectories(true);">
           <span style="font-size: 14px;">⚡</span>
           <div style="flex: 1; min-width: 0;">
             <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Directory Synchronization Engine</div>
-            <div style="font-size: 10.5px; color: var(--text-dim);">Fast bi-directional mirror & diff synchronization</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Fast bi-directional mirror & diff synchronization (Shift+F1)</div>
           </div>
-          <span class="tool-tag soon">SOON</span>
+          <span class="tool-tag ready">READY</span>
         </div>
 
-        <div class="tool-native-row" style="opacity: 0.75;">
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); openNetworkProbeModal();">
           <span style="font-size: 14px;">🌐</span>
           <div style="flex: 1; min-width: 0;">
             <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">Network Ping & Port Probe</div>
-            <div style="font-size: 10.5px; color: var(--text-dim);">Active latency, MTU test & traceroute analysis</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Active TCP latency, jitter, DNS resolution & SSH/FTP banner inspection</div>
           </div>
-          <span class="tool-tag soon">SOON</span>
+          <span class="tool-tag ready">READY</span>
         </div>
 
-        <div class="tool-native-row" style="opacity: 0.75;">
+        <div class="tool-native-row" style="cursor: pointer;" onclick="closeToolsModal(); openSshKeygenModal();">
           <span style="font-size: 14px;">🔑</span>
           <div style="flex: 1; min-width: 0;">
             <div style="font-size: 12px; font-weight: 600; color: var(--text-main);">SSH Keypair Generator & Vault</div>
-            <div style="font-size: 10.5px; color: var(--text-dim);">Generate Ed25519/RSA keys & manage public keys</div>
+            <div style="font-size: 10.5px; color: var(--text-dim);">Generate Ed25519/RSA keys & one-click deploy to server authorized_keys</div>
           </div>
-          <span class="tool-tag soon">SOON</span>
+          <span class="tool-tag ready">READY</span>
         </div>
 
         <div style="display: flex; justify-content: flex-end; padding-top: 6px;">
           <button type="button" class="btn btn-secondary" onclick="closeToolsModal()" style="font-size: 11.5px; padding: 3px 18px; height: 26px;">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Network Ping, Port Probe & Banner Inspector -->
+  <div class="modal-overlay" id="networkProbeModal" style="z-index: 1065;">
+    <div class="native-window-dialog" style="width: 560px; max-width: 95vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="font-size: 14px;">🌐</span>
+          <span style="font-weight: 600;">Network Ping, TCP Port Probe & Banner Inspector</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeNetworkProbeModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 14px; gap: 12px;">
+        <div style="display: flex; gap: 8px; align-items: flex-end;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Target Hostname or IP:</label>
+            <input type="text" id="probeHostInput" class="path-input" placeholder="e.g. sftp.example.com or 192.168.1.10" onkeydown="if(event.key==='Enter') runNetworkProbe();">
+          </div>
+          <div style="width: 85px; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">TCP Port:</label>
+            <input type="number" id="probePortInput" class="path-input" value="22" style="text-align: center;">
+          </div>
+          <button type="button" class="btn btn-primary" id="btnRunProbe" onclick="runNetworkProbe()" style="height: 28px; padding: 0 14px;">Run Probe</button>
+        </div>
+        <div id="probeResultsContainer" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; font-size: 12px; min-height: 150px;">
+          <div style="color: var(--text-dim); text-align: center; padding: 35px 10px; font-style: italic;">Enter a hostname or IP address and click Run Probe to test DNS speed, TCP RTT latency, and service banner.</div>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <button type="button" class="btn btn-secondary" onclick="closeNetworkProbeModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: SSH Keypair Generator & Authorized Keys Deployer -->
+  <div class="modal-overlay" id="sshKeygenModal" style="z-index: 1065;">
+    <div class="native-window-dialog" style="width: 620px; max-width: 95vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="font-size: 14px;">🔑</span>
+          <span style="font-weight: 600;">SSH Keypair Generator & Public Key Vault</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeSshKeygenModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 14px; gap: 12px;">
+        <div style="display: flex; gap: 8px; align-items: flex-end;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Key Name:</label>
+            <input type="text" id="sshKeyNameInput" class="path-input" value="id_ed25519_90ftp">
+          </div>
+          <div style="width: 120px; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Algorithm:</label>
+            <select id="sshKeyAlgoSelect" class="path-input" style="height: 28px;">
+              <option value="ed25519">Ed25519 (Fast/Secure)</option>
+              <option value="rsa">RSA</option>
+            </select>
+          </div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Comment / Label:</label>
+            <input type="text" id="sshKeyCommentInput" class="path-input" value="90ftp-admin">
+          </div>
+          <button type="button" class="btn btn-primary" onclick="generateNewSshKeypair()" style="height: 28px; padding: 0 14px;">Generate Key</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Public Key (<code>.pub</code> for <code>~/.ssh/authorized_keys</code>):</label>
+            <div style="display: flex; gap: 6px;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="copyGeneratedSshPubKey()" style="font-size: 10.5px; padding: 2px 8px;">📋 Copy Public Key</button>
+              <button type="button" class="btn btn-primary btn-sm" onclick="deployGeneratedSshKeyToServer()" style="font-size: 10.5px; padding: 2px 10px;">🚀 Deploy to Connected Server</button>
+            </div>
+          </div>
+          <textarea id="sshPubKeyOutput" readonly style="width: 100%; height: 68px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px; padding: 8px; font-family: monospace; font-size: 11px; color: #38bdf8; resize: none;" placeholder="Generate or select a key below to view its OpenSSH public key..."></textarea>
+          <div id="sshKeyMetaInfo" style="font-size: 11px; color: var(--text-muted); font-family: monospace;"></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Stored SSH Keys in 90FTP Vault:</label>
+          <div id="sshKeysListContainer" style="max-height: 140px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px; padding: 6px;"></div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="openStorageFolder()">📂 Open Keys Folder</button>
+          <button type="button" class="btn btn-secondary" onclick="closeSshKeygenModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Remote Server Health & Disk Usage Analyzer -->
+  <div class="modal-overlay" id="serverHealthModal" style="z-index: 1065;">
+    <div class="native-window-dialog" style="width: 640px; max-width: 95vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="font-size: 14px;">📊</span>
+          <span style="font-weight: 600;">Remote Server Health & Disk Space Analyzer</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeServerHealthModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 14px; gap: 12px;">
+        <div id="serverHealthBody" style="display: flex; flex-direction: column; gap: 10px; min-height: 220px;">
+          <div style="text-align: center; color: var(--text-dim); padding: 40px;">Loading server telemetry...</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="refreshServerHealth()">↻ Refresh Telemetry</button>
+          <button type="button" class="btn btn-secondary" onclick="closeServerHealthModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Side-by-Side / Unified File Content Diff Viewer -->
+  <div class="modal-overlay" id="fileDiffModal" style="z-index: 1068;">
+    <div class="native-window-dialog" style="width: 960px; max-width: 96vw; height: 80vh; max-height: 92vh;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="font-size: 14px;">⚖️</span>
+          <span style="font-weight: 600;" id="fileDiffTitle">File Content Comparison (Local vs Remote)</span>
+        </div>
+        <button type="button" class="native-win-close" onclick="closeFileDiffModal()">✕</button>
+      </div>
+      <div class="native-dialog-body" style="padding: 10px 14px; gap: 8px; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <div id="fileDiffSummaryBar" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px; font-size: 11.5px;"></div>
+        <div id="fileDiffContainer" style="flex: 1; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" class="btn btn-secondary" onclick="closeFileDiffModal()">Close</button>
         </div>
       </div>
     </div>
@@ -5014,18 +5322,25 @@
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">🔍</span>
-          <span style="font-weight: 600;">Find Files on Remote Server</span>
+          <span style="font-weight: 600;" id="findModalTitleText">Find Files (Remote & Local Search)</span>
         </div>
         <button type="button" class="btn btn-secondary" onclick="closeFindFilesModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
       </div>
       <div class="modal-body" style="padding: 14px; gap: 10px; display: flex; flex-direction: column; overflow: hidden;">
         <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="width: 155px; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Search Target:</label>
+            <select id="findScopeSelect" class="path-input" style="height: 28px; font-weight: 600;" onchange="onFindScopeChange()">
+              <option value="remote">🌐 Remote Server</option>
+              <option value="local">💻 Local Computer</option>
+            </select>
+          </div>
           <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
             <label style="font-size: 11px; font-weight: 600; color: var(--text-dim);">Search in Directory:</label>
             <div style="display: flex; gap: 6px;">
               <input type="text" id="findSearchPathInput" class="path-input" style="flex: 1;" placeholder="/var/www/html">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="setFindPathCurrent()" title="Set to Current Remote Directory">Current</button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('findSearchPathInput').value = '/'" title="Search from Root">Root /</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="setFindPathCurrent()" title="Set to Current Directory">Current</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="setFindPathRoot()" title="Search from Root">Root</button>
             </div>
           </div>
           <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
@@ -5321,7 +5636,7 @@
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.51';
+    let APP_CURRENT_VERSION = '0.0.0.52';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -6111,6 +6426,124 @@
       return cleaned.substring(0, lastSep);
     }
 
+    let localSortState = { col: 'name', asc: true };
+    let remoteSortState = { col: 'name', asc: true };
+    const calculatedFolderSizes = new Map();
+
+    function getHumanFileType(fileName, isDir) {
+      if (isDir) return 'Directory';
+      const n = (fileName || '').toLowerCase();
+      if (n.startsWith('.') && !n.slice(1).includes('.')) return 'Dotfile Config';
+      const ext = n.includes('.') ? n.split('.').pop() : '';
+      const map = {
+        php: 'PHP Script', js: 'JavaScript', ts: 'TypeScript', json: 'JSON Data',
+        html: 'HTML Doc', htm: 'HTML Doc', css: 'Stylesheet', scss: 'SASS Style',
+        py: 'Python Script', rs: 'Rust Source', go: 'Go Source', sh: 'Shell Script',
+        ps1: 'PowerShell', sql: 'SQL Database', env: 'Env Config', yml: 'YAML Config',
+        yaml: 'YAML Config', toml: 'TOML Config', xml: 'XML Data', md: 'Markdown',
+        txt: 'Text Document', log: 'Log File', ini: 'Config File', conf: 'Config File',
+        zip: 'ZIP Archive', gz: 'GZ Archive', tgz: 'TAR.GZ Archive', tar: 'TAR Archive',
+        rar: 'RAR Archive', '7z': '7-Zip Archive', pdf: 'PDF Document',
+        png: 'PNG Image', jpg: 'JPEG Image', jpeg: 'JPEG Image', gif: 'GIF Image',
+        svg: 'Vector SVG', webp: 'WebP Image', ico: 'Icon File',
+        mp4: 'MP4 Video', mp3: 'MP3 Audio', exe: 'Executable', dll: 'System Library'
+      };
+      return map[ext] || (ext ? `${ext.toUpperCase()} File` : 'File');
+    }
+
+    function applyPaneSort(list, isRemote) {
+      if (!Array.isArray(list) || list.length <= 1) return list;
+      const st = isRemote ? remoteSortState : localSortState;
+      const dirMult = st.asc ? 1 : -1;
+      list.sort((a, b) => {
+        if (!!a.is_dir !== !!b.is_dir) {
+          return a.is_dir ? -1 : 1;
+        }
+        if (st.col === 'size') {
+          const sa = a.is_dir ? (calculatedFolderSizes.get(a.path) ?? 0) : (Number(a.size) || 0);
+          const sb = b.is_dir ? (calculatedFolderSizes.get(b.path) ?? 0) : (Number(b.size) || 0);
+          if (sa !== sb) return (sa - sb) * dirMult;
+        } else if (st.col === 'modified') {
+          const ma = (a.modified || '').toString();
+          const mb = (b.modified || '').toString();
+          const cmp = ma.localeCompare(mb);
+          if (cmp !== 0) return cmp * dirMult;
+        } else if (st.col === 'type') {
+          const ta = getHumanFileType(a.name, a.is_dir);
+          const tb = getHumanFileType(b.name, b.is_dir);
+          const cmp = ta.localeCompare(tb);
+          if (cmp !== 0) return cmp * dirMult;
+        } else if (st.col === 'permissions') {
+          const pa = (a.permissions || '').toString();
+          const pb = (b.permissions || '').toString();
+          const cmp = pa.localeCompare(pb);
+          if (cmp !== 0) return cmp * dirMult;
+        }
+        return (a.name || '').toString().localeCompare((b.name || '').toString(), undefined, { numeric: true, sensitivity: 'base' }) * dirMult;
+      });
+      return list;
+    }
+
+    function updateSortHeaderIndicators(isRemote) {
+      const st = isRemote ? remoteSortState : localSortState;
+      const prefix = isRemote ? 'remoteSort_' : 'localSort_';
+      const cols = isRemote ? ['name', 'size', 'modified', 'permissions'] : ['name', 'size', 'modified', 'type'];
+      cols.forEach(c => {
+        const el = document.getElementById(prefix + c);
+        if (el) {
+          el.textContent = (st.col === c) ? (st.asc ? '▲' : '▼') : '';
+        }
+      });
+    }
+
+    function sortFilePane(isRemote, col) {
+      const st = isRemote ? remoteSortState : localSortState;
+      if (st.col === col) {
+        st.asc = !st.asc;
+      } else {
+        st.col = col;
+        st.asc = (col === 'size' || col === 'modified') ? false : true;
+      }
+      updateSortHeaderIndicators(isRemote);
+      if (isRemote) {
+        renderRemoteFiles(remoteFiles);
+      } else {
+        renderLocalFiles(localFiles);
+      }
+    }
+
+    function updateCommanderStatusFooter() {
+      const paneBadge = document.getElementById('fkeyActivePaneBadge');
+      const statusText = document.getElementById('fkeySelectionStatus');
+      const leftPane = document.getElementById('leftPane');
+      const rightPane = document.getElementById('rightPane');
+      const isRem = !!lastActivePaneIsRemote;
+
+      if (leftPane) leftPane.classList.toggle('pane-focused', !isRem);
+      if (rightPane) rightPane.classList.toggle('pane-focused', isRem);
+
+      if (paneBadge) {
+        paneBadge.textContent = isRem ? 'REMOTE PANE' : 'LOCAL PANE';
+        paneBadge.style.color = isRem ? '#22c55e' : '#38bdf8';
+        paneBadge.style.borderColor = isRem ? 'rgba(34, 197, 94, 0.35)' : 'rgba(56, 189, 248, 0.35)';
+        paneBadge.style.background = isRem ? 'rgba(34, 197, 94, 0.14)' : 'rgba(56, 189, 248, 0.14)';
+      }
+
+      if (statusText) {
+        const selItems = isRem ? getSelectedRemoteItems() : getSelectedLocalItems();
+        const allItems = isRem ? (remoteFiles || []) : (localFiles || []);
+        if (selItems.length > 0) {
+          const totalBytes = selItems.reduce((acc, it) => acc + (it.is_dir ? (calculatedFolderSizes.get(it.path) || 0) : (Number(it.size) || 0)), 0);
+          const dirsCount = selItems.filter(i => i.is_dir).length;
+          const filesCount = selItems.length - dirsCount;
+          statusText.innerHTML = `<strong style="color: var(--text-main);">${selItems.length} selected</strong> (${filesCount} file${filesCount === 1 ? '' : 's'}, ${dirsCount} folder${dirsCount === 1 ? '' : 's'} — <span style="color: var(--accent); font-family: monospace;">${formatBytes(totalBytes)}</span>)`;
+        } else {
+          const totalDirBytes = allItems.reduce((acc, it) => acc + (it.is_dir ? 0 : (Number(it.size) || 0)), 0);
+          statusText.innerHTML = `${allItems.length} item${allItems.length === 1 ? '' : 's'} in current folder (${formatBytes(totalDirBytes)}) — <span style="opacity:0.8;">Use ↑↓ Enter Backspace Tab F2–F8</span>`;
+        }
+      }
+    }
+
     function updatePaneStatsBadge(isRemote) {
       const badge = document.getElementById(isRemote ? 'remoteStatsBadge' : 'localStatsBadge');
       if (!badge) return;
@@ -6132,6 +6565,7 @@
         badge.textContent = `${allList.length} item${allList.length === 1 ? '' : 's'}`;
         badge.classList.remove('has-selection');
       }
+      updateCommanderStatusFooter();
     }
 
     function onQuickFilterChange(isRemote, val) {
@@ -6250,7 +6684,7 @@
 
     // Local Directory Listing
     function renderLocalFiles(files) {
-      localFiles = files || [];
+      localFiles = applyPaneSort([...(files || [])], false);
       selectedLocalFile = null;
       lastLocalClickedIdx = -1;
       const tbody = document.getElementById('localFileList');
@@ -6415,6 +6849,11 @@
             }
           }
 
+          const dirSizeVal = f.is_dir ? calculatedFolderSizes.get(f.path) : null;
+          const sizeCellText = f.is_dir
+            ? (typeof dirSizeVal === 'number' ? `<span style="color: #38bdf8; font-weight: 600;">${formatBytes(dirSizeVal)}</span>` : '-')
+            : formatBytes(f.size || 0);
+
           tr.innerHTML = `
             <td>
               <div class="file-cell">
@@ -6423,9 +6862,9 @@
                 ${compareBadgeHtml}
               </div>
             </td>
-            <td class="mono-cell">${f.is_dir ? '-' : formatBytes(f.size || 0)}</td>
+            <td class="mono-cell">${sizeCellText}</td>
             <td class="mono-cell">${f.modified || '-'}</td>
-            <td class="mono-cell">${f.is_dir ? 'Directory' : 'File'}</td>
+            <td class="mono-cell">${getHumanFileType(fileName, !!f.is_dir)}</td>
           `;
           tbody.appendChild(tr);
         } catch (itemErr) {
@@ -7575,7 +8014,7 @@
 
     // Remote Directory Listing
     function renderRemoteFiles(files, listError = null) {
-      remoteFiles = files || [];
+      remoteFiles = applyPaneSort([...(files || [])], true);
       selectedRemoteFile = null;
       lastRemoteClickedIdx = -1;
       const tbody = document.getElementById('remoteFileList');
@@ -7764,6 +8203,11 @@
             }
           }
 
+          const rDirSizeVal = f.is_dir ? calculatedFolderSizes.get(f.path) : null;
+          const rSizeCellText = f.is_dir
+            ? (typeof rDirSizeVal === 'number' ? `<span style="color: #38bdf8; font-weight: 600;">${formatBytes(rDirSizeVal)}</span>` : '-')
+            : formatBytes(f.size || 0);
+
           tr.innerHTML = `
             <td>
               <div class="file-cell">
@@ -7772,7 +8216,7 @@
                 ${compareBadgeHtml}
               </div>
             </td>
-            <td class="mono-cell">${f.is_dir ? '-' : formatBytes(f.size || 0)}</td>
+            <td class="mono-cell">${rSizeCellText}</td>
             <td class="mono-cell">${f.modified || '-'}</td>
             <td class="mono-cell">${f.permissions || '-'}</td>
           `;
@@ -10279,6 +10723,10 @@
               <span style="font-weight: 600;">Open Folder in New Tab</span>
               <span class="shortcut">Middle-Click</span>
             </div>
+            <div class="context-menu-item" onclick="closeContextMenu(); calculateFolderSize('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+              <span>Calculate Folder Size...</span>
+            </div>
           `;
           if (isRemote) {
             html += `
@@ -10293,22 +10741,23 @@
             <div class="context-menu-item" onclick="${isRemote ? `openRemoteFileInEditor('${escapeJsString(item.path)}')` : `openLocalFileInEditor('${escapeJsString(item.path)}')`}">
               <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
               <span>Edit in Code Editor</span>
+              <span class="shortcut">F4</span>
             </div>
           `;
         }
 
         if (isRemote) {
           html += `
-            <div class="context-menu-item" onclick="${item.is_dir ? `downloadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `downloadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`}">
+            <div class="context-menu-item" onclick="${selCount > 1 ? `transferDownload()` : (item.is_dir ? `downloadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `downloadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`)}">
               <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Download to Local</span>
+              <span>${selCount > 1 ? `Download ${selCount} Selected Items to Local` : 'Download to Local'}</span>
             </div>
           `;
         } else {
           html += `
-            <div class="context-menu-item" onclick="${item.is_dir ? `uploadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `uploadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`}">
+            <div class="context-menu-item" onclick="${selCount > 1 ? `transferUpload()` : (item.is_dir ? `uploadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `uploadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`)}">
               <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span>Upload to Server</span>
+              <span>${selCount > 1 ? `Upload ${selCount} Selected Items to Server` : 'Upload to Server'}</span>
             </div>
           `;
         }
@@ -10446,7 +10895,13 @@
           const otherFiles = isRemote ? localFiles : remoteFiles;
           const counterpart = otherFiles.find(f => !f.is_dir && f.name.toLowerCase() === item.name.toLowerCase());
           if (counterpart) {
+            const locP = isRemote ? counterpart.path : item.path;
+            const remP = isRemote ? item.path : counterpart.path;
             html += `
+              <div class="context-menu-item" onclick="closeContextMenu(); openFileDiffModal('${escapeJsString(locP)}', '${escapeJsString(remP)}', '${escapeJsString(item.name)}')">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>
+                <span style="font-weight: 600;">Compare File Contents (Side-by-Side Diff)</span>
+              </div>
               <div class="context-menu-item" onclick="openChecksumCompareModal('${escapeJsString(item.path)}', '${escapeJsString(counterpart.path)}', '${escapeJsString(item.name)}', ${isRemote})">
                 <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><polyline points="20 6 9 17 4 12"/></svg>
                 <span>Verify Checksum with ${isRemote ? 'Local' : 'Remote'} Counterpart</span>
@@ -11353,14 +11808,71 @@
     }
 
     // CHMOD Modal
+    let currentChmodTargets = [];
+
+    function parseUnixPermToOctal(permStr, isDir) {
+      if (!permStr) return isDir ? '0755' : '0644';
+      const clean = permStr.trim();
+      if (/^0?[0-7]{3,4}$/.test(clean)) {
+        return clean.length === 3 ? '0' + clean : clean;
+      }
+      if (clean.length >= 10) {
+        let u = 0, g = 0, o = 0;
+        if (clean[1] === 'r') u |= 4;
+        if (clean[2] === 'w') u |= 2;
+        if (clean[3] === 'x' || clean[3] === 's') u |= 1;
+        if (clean[4] === 'r') g |= 4;
+        if (clean[5] === 'w') g |= 2;
+        if (clean[6] === 'x' || clean[6] === 's') g |= 1;
+        if (clean[7] === 'r') o |= 4;
+        if (clean[8] === 'w') o |= 2;
+        if (clean[9] === 'x' || clean[9] === 't') o |= 1;
+        return `0${u}${g}${o}`;
+      }
+      return isDir ? '0755' : '0644';
+    }
+
+    function openChmodForItem(path, name, perms) {
+      closeContextMenu();
+      const selected = getSelectedRemoteItems();
+      const inSelected = selected.some(i => i.path === path);
+      if (inSelected && selected.length > 1) {
+        currentChmodTargets = selected;
+      } else {
+        const found = remoteFiles.find(f => f.path === path);
+        currentChmodTargets = [found || { path, name, permissions: perms, is_dir: false }];
+      }
+      showChmodModalWithTargets(currentChmodTargets);
+    }
+
     function openChmodModal() {
-      if (!selectedRemoteFile) {
-        alert('Please select a remote file first');
+      const selected = getSelectedRemoteItems();
+      if (selected.length === 0 && !selectedRemoteFile) {
+        alert('Please select at least one remote file or folder first');
         return;
       }
-      document.getElementById('chmodFilename').innerText = selectedRemoteFile.path;
-      document.getElementById('chmodOctal').value = '0644';
-      updateCheckboxesFromOctal('0644');
+      currentChmodTargets = selected.length > 0 ? selected : [selectedRemoteFile];
+      showChmodModalWithTargets(currentChmodTargets);
+    }
+
+    function showChmodModalWithTargets(targets) {
+      if (!targets || targets.length === 0) return;
+      const first = targets[0];
+      const labelEl = document.getElementById('chmodFilename');
+      if (labelEl) {
+        labelEl.innerText = targets.length > 1
+          ? `${targets.length} selected items (${first.name}, ...)`
+          : first.path;
+      }
+      const hasDir = targets.some(t => t.is_dir);
+      const recCheck = document.getElementById('chmodRecursiveCheck');
+      if (recCheck) {
+        recCheck.checked = false;
+        recCheck.disabled = !hasDir;
+      }
+      const octal = parseUnixPermToOctal(first.permissions, first.is_dir);
+      document.getElementById('chmodOctal').value = octal;
+      updateCheckboxesFromOctal(octal);
       document.getElementById('chmodModal').classList.add('active');
     }
 
@@ -11410,13 +11922,21 @@
 
     async function applyChmod() {
       const mode = document.getElementById('chmodOctal').value;
+      const recursive = !!(document.getElementById('chmodRecursiveCheck')?.checked);
+      const targets = (currentChmodTargets && currentChmodTargets.length > 0)
+        ? currentChmodTargets
+        : (selectedRemoteFile ? [selectedRemoteFile] : []);
+      if (targets.length === 0) return;
       try {
         const res = await sendRust('remote_chmod', {
-          path: selectedRemoteFile.path,
-          mode: mode
+          path: targets[0].path,
+          paths: targets.map(t => t.path),
+          mode: mode,
+          recursive: recursive,
+          current_dir: currentRemotePath || '/'
         });
         renderRemoteFiles(res.files || []);
-        addLog(`Updated permissions for '${selectedRemoteFile.name}' to ${mode}`, 'success');
+        addLog(`Updated permissions for ${targets.length} item(s) to ${mode}${recursive ? ' (recursive)' : ''}`, 'success');
         closeChmodModal();
       } catch (err) {
         addLog('Failed to change permissions: ' + err.message, 'error');
@@ -11564,23 +12084,34 @@
     }
 
     // ==========================================
-    // 2. SERVER-SIDE FIND FILES ENGINE
+    // 2. DUAL-SCOPE FIND FILES ENGINE (REMOTE + LOCAL)
     // ==========================================
     let findFilesResults = [];
 
     function openFindFilesModal() {
-      if (!isConnected) {
-        alert('Please connect to a remote server first');
-        return;
-      }
       const modal = document.getElementById('findFilesModal');
       if (!modal) return;
-      document.getElementById('findSearchPathInput').value = currentRemotePath || '/';
+      const scopeSel = document.getElementById('findScopeSelect');
+      if (scopeSel) {
+        scopeSel.value = isConnected ? 'remote' : 'local';
+      }
+      onFindScopeChange();
       const qInput = document.getElementById('findSearchQueryInput');
-      qInput.value = '';
+      if (qInput) qInput.value = '';
       clearFindResults();
       modal.classList.add('active');
-      setTimeout(() => qInput.focus(), 60);
+      setTimeout(() => qInput && qInput.focus(), 60);
+    }
+
+    function onFindScopeChange() {
+      const scope = document.getElementById('findScopeSelect')?.value || 'remote';
+      const pathInput = document.getElementById('findSearchPathInput');
+      if (!pathInput) return;
+      if (scope === 'local') {
+        pathInput.value = currentLocalPath || 'C:\\';
+      } else {
+        pathInput.value = currentRemotePath || '/';
+      }
     }
 
     function closeFindFilesModal() {
@@ -11589,7 +12120,18 @@
     }
 
     function setFindPathCurrent() {
-      document.getElementById('findSearchPathInput').value = currentRemotePath || '/';
+      const scope = document.getElementById('findScopeSelect')?.value || 'remote';
+      document.getElementById('findSearchPathInput').value = scope === 'local' ? (currentLocalPath || 'C:\\') : (currentRemotePath || '/');
+    }
+
+    function setFindPathRoot() {
+      const scope = document.getElementById('findScopeSelect')?.value || 'remote';
+      if (scope === 'local') {
+        const m = (currentLocalPath || 'C:\\').match(/^[A-Za-z]:\\/);
+        document.getElementById('findSearchPathInput').value = m ? m[0] : 'C:\\';
+      } else {
+        document.getElementById('findSearchPathInput').value = '/';
+      }
     }
 
     function clearFindResults() {
@@ -11603,11 +12145,12 @@
     }
 
     async function executeRemoteFind() {
-      if (!isConnected) {
-        alert('Please connect to server first');
+      const scope = document.getElementById('findScopeSelect')?.value || 'remote';
+      if (scope === 'remote' && !isConnected) {
+        alert('Not connected to a remote server. Switch Scope to "Local Computer" or connect to a server first.');
         return;
       }
-      const path = (document.getElementById('findSearchPathInput').value || '/').trim();
+      const path = (document.getElementById('findSearchPathInput').value || (scope === 'local' ? currentLocalPath : '/')).trim();
       const query = (document.getElementById('findSearchQueryInput').value || '').trim();
       const recursive = document.getElementById('findRecursiveCheckbox').checked;
       const file_type = document.getElementById('findTypeSelect').value;
@@ -11622,21 +12165,22 @@
       const summary = document.getElementById('findResultsSummary');
       if (spinner) spinner.style.display = 'inline-block';
       if (btn) btn.disabled = true;
-      if (summary) summary.innerText = `Searching for '${query}' in ${path}...`;
+      if (summary) summary.innerText = `Searching ${scope === 'local' ? 'local disk' : 'remote server'} for '${query}' in ${path}...`;
 
       try {
-        const res = await sendRust('remote_find_files', {
+        const cmd = scope === 'local' ? 'local_find_files' : 'remote_find_files';
+        const res = await sendRust(cmd, {
           path,
           query,
           recursive,
           file_type,
-          max_results: 300
+          max_results: 400
         });
 
-        findFilesResults = res.results || [];
+        findFilesResults = (res.results || []).map(r => ({ ...r, _scope: scope }));
         renderFindResults(findFilesResults);
         if (summary) {
-          summary.innerText = `Found ${findFilesResults.length} item(s) matching '${query}'`;
+          summary.innerText = `Found ${findFilesResults.length} ${scope} item(s) matching '${query}'`;
         }
       } catch (err) {
         if (summary) summary.innerText = `Search error: ${err.message || err}`;
@@ -11665,6 +12209,7 @@
         tr.onmouseleave = () => tr.style.background = 'transparent';
 
         const { svg, iconClass } = getFileIcon(item.name, !!item.is_dir);
+        const isLocalScope = item._scope === 'local';
 
         tr.innerHTML = `
           <td style="padding: 6px 10px;">
@@ -11681,9 +12226,9 @@
           </td>
           <td style="padding: 6px 10px; text-align: center;">
             <div style="display: flex; gap: 4px; justify-content: center;">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="jumpToFoundRemoteItem(findFilesResults[${idx}])" title="Open folder in Remote Pane" style="padding: 1px 7px; font-size: 10.5px;">Go</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="jumpToFoundRemoteItem(findFilesResults[${idx}])" title="Open folder in ${isLocalScope ? 'Local' : 'Remote'} Pane" style="padding: 1px 7px; font-size: 10.5px;">Go</button>
               ${!item.is_dir ? `
-                <button type="button" class="btn btn-secondary btn-sm" onclick="downloadFoundItem(findFilesResults[${idx}])" title="Download to local directory" style="padding: 1px 7px; font-size: 10.5px;">⬇</button>
+                ${!isLocalScope ? `<button type="button" class="btn btn-secondary btn-sm" onclick="downloadFoundItem(findFilesResults[${idx}])" title="Download to local directory" style="padding: 1px 7px; font-size: 10.5px;">⬇</button>` : ''}
                 <button type="button" class="btn btn-secondary btn-sm" onclick="editFoundItem(findFilesResults[${idx}])" title="Edit in code editor" style="padding: 1px 7px; font-size: 10.5px;">✏</button>
               ` : ''}
             </div>
@@ -11697,17 +12242,31 @@
       if (!item) return;
       closeFindFilesModal();
       const targetDir = item.is_dir ? item.path : item.dir;
-      await navigateRemote(targetDir);
-      setTimeout(() => {
-        const rows = document.querySelectorAll('#remoteFileList tr');
-        rows.forEach(r => {
-          const nameSpan = r.querySelector('.file-cell span:nth-child(2)');
-          if (nameSpan && nameSpan.innerText.trim() === item.name) {
-            r.classList.add('selected');
-            r.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        });
-      }, 300);
+      if (item._scope === 'local') {
+        await navigateLocal(targetDir);
+        setTimeout(() => {
+          const rows = document.querySelectorAll('#localFileList tr');
+          rows.forEach(r => {
+            const nameSpan = r.querySelector('.file-cell span:nth-child(2)');
+            if (nameSpan && nameSpan.innerText.trim() === item.name) {
+              r.classList.add('selected');
+              r.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          });
+        }, 250);
+      } else {
+        await navigateRemote(targetDir);
+        setTimeout(() => {
+          const rows = document.querySelectorAll('#remoteFileList tr');
+          rows.forEach(r => {
+            const nameSpan = r.querySelector('.file-cell span:nth-child(2)');
+            if (nameSpan && nameSpan.innerText.trim() === item.name) {
+              r.classList.add('selected');
+              r.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          });
+        }, 300);
+      }
     }
 
     async function downloadFoundItem(item) {
@@ -11719,7 +12278,11 @@
     async function editFoundItem(item) {
       if (!item || item.is_dir) return;
       closeFindFilesModal();
-      openRemoteFileInEditor(item.path);
+      if (item._scope === 'local') {
+        openLocalFileInEditor(item.path);
+      } else {
+        openRemoteFileInEditor(item.path);
+      }
     }
 
     // ==========================================
@@ -14728,38 +15291,349 @@
       if (isConnected && currentRemotePath) navigateRemote(currentRemotePath);
     }
 
-    function transferUpload() {
+    async function transferUpload() {
       closeAllMenus();
+      closeContextMenu();
       if (!isConnected) {
         alert('Please connect to a server before uploading');
         return;
       }
-      if (!selectedLocalFile) {
-        alert('Please select a local file or folder to upload');
+      const items = getSelectedLocalItems();
+      if (items.length === 0) {
+        alert('Please select at least one local file or folder to upload');
         return;
       }
-      if (selectedLocalFile.is_dir) {
-        uploadFolderDirect(selectedLocalFile.path, selectedLocalFile.name);
-      } else {
-        uploadFileDirect(selectedLocalFile.path, selectedLocalFile.name);
+      for (const item of items) {
+        if (item.is_dir) {
+          await uploadFolderDirect(item.path, item.name);
+        } else {
+          await uploadFileDirect(item.path, item.name);
+        }
       }
     }
 
-    function transferDownload() {
+    async function transferDownload() {
       closeAllMenus();
+      closeContextMenu();
       if (!isConnected) {
         alert('Please connect to a server before downloading');
         return;
       }
-      if (!selectedRemoteFile) {
-        alert('Please select a remote file or folder to download');
+      const items = getSelectedRemoteItems();
+      if (items.length === 0) {
+        alert('Please select at least one remote file or folder to download');
         return;
       }
-      if (selectedRemoteFile.is_dir) {
-        downloadFolderDirect(selectedRemoteFile.path, selectedRemoteFile.name);
-      } else {
-        downloadFileDirect(selectedRemoteFile.path, selectedRemoteFile.name);
+      for (const item of items) {
+        if (item.is_dir) {
+          await downloadFolderDirect(item.path, item.name);
+        } else {
+          await downloadFileDirect(item.path, item.name);
+        }
       }
+    }
+
+    // ==========================================
+    // POWER TOOLS SUITE (FOLDER SIZE, PROBE, SSH KEYGEN, SERVER HEALTH, FILE DIFF)
+    // ==========================================
+    async function calculateFolderSize(path, name, isRemote) {
+      addLog(`Calculating recursive size for folder '${name}'...`, 'info');
+      try {
+        const cmd = isRemote ? 'remote_folder_size' : 'local_folder_size';
+        const res = await sendRust(cmd, { path });
+        const bytes = res.size_bytes || 0;
+        const human = res.human_size || formatBytes(bytes);
+        if (typeof calculatedFolderSizes !== 'undefined') {
+          calculatedFolderSizes.set(path, bytes);
+        }
+        const list = isRemote ? remoteFiles : localFiles;
+        const target = list.find(f => f.path === path || f.name === name);
+        if (target) {
+          target.size = bytes;
+          target._calculated_human = human;
+        }
+        if (isRemote) renderRemoteFiles(remoteFiles);
+        else renderLocalFiles(localFiles);
+        addLog(`Folder '${name}': ${human} (${(res.size_bytes || 0).toLocaleString()} bytes${res.files_count ? `, ${res.files_count} files, ${res.dirs_count} folders` : ''})`, 'success');
+      } catch (err) {
+        addLog(`Folder size calculation failed: ${err.message || err}`, 'error');
+        alert(`Folder Size Calculation Failed:\n${err.message || err}`);
+      }
+    }
+
+    // 1. Network Ping & Port Probe
+    function openNetworkProbeModal() {
+      closeAllMenus();
+      const hostInp = document.getElementById('probeHostInput');
+      const portInp = document.getElementById('probePortInput');
+      const qcHost = document.getElementById('qcHost')?.value?.trim();
+      const qcPort = document.getElementById('qcPort')?.value?.trim();
+      if (hostInp && !hostInp.value) hostInp.value = qcHost || 'github.com';
+      if (portInp && (!portInp.value || portInp.value === '22')) portInp.value = qcPort || '22';
+      document.getElementById('networkProbeModal')?.classList.add('active');
+    }
+
+    function closeNetworkProbeModal() {
+      document.getElementById('networkProbeModal')?.classList.remove('active');
+    }
+
+    async function runNetworkProbe() {
+      const host = (document.getElementById('probeHostInput')?.value || '').trim();
+      const port = parseInt(document.getElementById('probePortInput')?.value || '22', 10) || 22;
+      if (!host) {
+        alert('Please enter a hostname or IP address to probe.');
+        return;
+      }
+      const btn = document.getElementById('btnRunProbe');
+      const box = document.getElementById('probeResultsContainer');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Probing...';
+      }
+      if (box) box.style.display = 'block';
+      document.getElementById('probeBannerBox').innerText = 'Running 4-sample TCP handshake & service banner inspection...';
+
+      try {
+        const res = await sendRust('network_probe', { host, port, count: 4 });
+        const ips = (res.resolved_ips || []).join(', ') || 'Unresolved';
+        document.getElementById('probeMetricIp').innerText = `${ips} (${res.dns_ms || 0}ms DNS)`;
+        document.getElementById('probeMetricRtt').innerText = res.avg_ms != null ? `${res.avg_ms} ms (min ${res.min_ms} / max ${res.max_ms})` : 'Timeout';
+        document.getElementById('probeMetricJitter').innerText = res.jitter_ms != null ? `${res.jitter_ms} ms` : '—';
+        const statusEl = document.getElementById('probeMetricStatus');
+        if (statusEl) {
+          statusEl.innerText = res.reachable ? `OPEN (${res.loss_percent}% loss)` : `CLOSED / UNREACHABLE`;
+          statusEl.style.color = res.reachable ? '#10b981' : '#ef4444';
+        }
+        const sampleLines = (res.samples || []).map(s =>
+          s.connected
+            ? `Sample #${s.seq}: Connected to ${s.ip} in ${s.rtt_ms} ms`
+            : `Sample #${s.seq}: FAILED (${s.error || 'Timeout'})`
+        ).join('\n');
+        document.getElementById('probeBannerBox').innerText =
+          `Service Banner: ${res.banner || '(No greeting banner returned)'}\n\n${sampleLines}`;
+        addLog(`Network Probe [${host}:${port}]: ${res.reachable ? 'OPEN (' + res.avg_ms + ' ms avg)' : 'UNREACHABLE'}`, res.reachable ? 'success' : 'warning');
+      } catch (err) {
+        document.getElementById('probeBannerBox').innerText = 'Probe Error: ' + (err.message || err);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = 'Run Probe';
+        }
+      }
+    }
+
+    // 2. SSH Keypair Generator & Vault
+    let lastGeneratedSshKey = null;
+
+    async function openSshKeygenModal() {
+      closeAllMenus();
+      document.getElementById('sshKeygenModal')?.classList.add('active');
+      await refreshSshKeyVault();
+    }
+
+    function closeSshKeygenModal() {
+      document.getElementById('sshKeygenModal')?.classList.remove('active');
+    }
+
+    async function refreshSshKeyVault() {
+      const tbody = document.getElementById('sshVaultListBody');
+      if (!tbody) return;
+      try {
+        const res = await sendRust('ssh_list_keys', {});
+        const keys = res.keys || [];
+        if (keys.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="3" style="padding: 14px; text-align: center; color: var(--text-dim);">No SSH keys generated yet in %APPDATA%\\90FTP\\ssh_keys</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = keys.map((k, idx) => `
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+            <td style="padding: 6px 10px; font-weight: 600; color: var(--text-main);">${escapeHtml(k.name)}</td>
+            <td style="padding: 6px 10px; font-family: monospace; font-size: 10.5px; color: var(--text-dim); word-break: break-all;">${escapeHtml(k.private_key_path)}</td>
+            <td style="padding: 6px 10px; text-align: right; white-space: nowrap;">
+              <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 10px;" onclick="selectVaultSshKey(${idx})">View / Use</button>
+            </td>
+          </tr>
+        `).join('');
+        window._cachedVaultKeys = keys;
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="3" style="padding: 14px; text-align: center; color: #ef4444;">Failed to load SSH key vault</td></tr>`;
+      }
+    }
+
+    function selectVaultSshKey(idx) {
+      const k = (window._cachedVaultKeys || [])[idx];
+      if (!k) return;
+      lastGeneratedSshKey = k;
+      const card = document.getElementById('sshKeyOutputCard');
+      if (card) card.style.display = 'block';
+      document.getElementById('sshKeyFingerprintBadge').innerText = k.name;
+      document.getElementById('sshPublicKeyTextarea').value = k.public_key || '';
+      document.getElementById('sshPrivateKeyPathLabel').innerText = 'Private Key: ' + k.private_key_path;
+    }
+
+    async function generateNewSshKeypair() {
+      const name = (document.getElementById('sshKeyNameInput')?.value || 'id_ed25519_90ftp').trim();
+      const algorithm = document.getElementById('sshKeyAlgoSelect')?.value || 'ed25519';
+      const comment = (document.getElementById('sshKeyCommentInput')?.value || '90ftp-client').trim();
+      try {
+        const res = await sendRust('ssh_keygen', { name, algorithm, comment });
+        lastGeneratedSshKey = res;
+        const card = document.getElementById('sshKeyOutputCard');
+        if (card) card.style.display = 'block';
+        document.getElementById('sshKeyFingerprintBadge').innerText = res.fingerprint || '';
+        document.getElementById('sshPublicKeyTextarea').value = res.public_key || '';
+        document.getElementById('sshPrivateKeyPathLabel').innerText = 'Private Key saved: ' + (res.private_key_path || '');
+        addLog(`Generated ${algorithm.toUpperCase()} SSH keypair '${name}' (${res.fingerprint})`, 'success');
+        await refreshSshKeyVault();
+      } catch (err) {
+        alert('SSH Key Generation Failed:\n' + (err.message || err));
+      }
+    }
+
+    function copySshPubKeyToClipboard() {
+      const pub = document.getElementById('sshPublicKeyTextarea')?.value || '';
+      if (!pub) return;
+      navigator.clipboard.writeText(pub).then(() => {
+        addLog('Public SSH key copied to clipboard', 'success');
+      });
+    }
+
+    async function deployGeneratedSshKeyToServer() {
+      const pub = document.getElementById('sshPublicKeyTextarea')?.value?.trim() || '';
+      if (!pub) {
+        alert('Please generate or select a public key first.');
+        return;
+      }
+      if (!isConnected) {
+        alert('Please connect to an SFTP/SSH server first to deploy this key to ~/.ssh/authorized_keys.');
+        return;
+      }
+      try {
+        const res = await sendRust('ssh_deploy_key', { public_key: pub });
+        addLog(res.message || 'Public key deployed to ~/.ssh/authorized_keys', 'success');
+        alert(res.message || 'Public key deployed to ~/.ssh/authorized_keys!');
+      } catch (err) {
+        alert('Key Deployment Error:\n' + (err.message || err));
+      }
+    }
+
+    // 3. Remote Server Health & Disk Analyzer
+    async function openServerHealthModal() {
+      closeAllMenus();
+      if (!isConnected) {
+        alert('Please connect to a remote SFTP/SSH server first to inspect server telemetry.');
+        return;
+      }
+      document.getElementById('serverHealthModal')?.classList.add('active');
+      await refreshServerHealth();
+    }
+
+    function closeServerHealthModal() {
+      document.getElementById('serverHealthModal')?.classList.remove('active');
+    }
+
+    async function refreshServerHealth() {
+      const tbody = document.getElementById('healthDisksTableBody');
+      if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="padding: 20px; text-align: center; color: var(--text-dim);">Querying remote server telemetry...</td></tr>`;
+      try {
+        const res = await sendRust('remote_server_health', {});
+        document.getElementById('healthKernelVal').innerText = res.uname || 'Linux Server';
+        document.getElementById('healthUptimeVal').innerText = `${res.uptime || '—'} ${res.loadavg ? '(Load: ' + res.loadavg.split(' ').slice(0, 3).join(' ') + ')' : ''}`;
+        const memPct = res.mem_total_mb > 0 ? Math.round((res.mem_used_mb / res.mem_total_mb) * 100) : 0;
+        document.getElementById('healthRamText').innerText = res.mem_total_mb > 0
+          ? `${res.mem_used_mb} MB / ${res.mem_total_mb} MB (${memPct}%)`
+          : 'N/A';
+        const bar = document.getElementById('healthRamBar');
+        if (bar) bar.style.width = `${Math.min(100, memPct)}%`;
+
+        const disks = res.disks || [];
+        if (tbody) {
+          if (disks.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="padding: 16px; text-align: center; color: var(--text-dim);">No mount points reported</td></tr>`;
+          } else {
+            tbody.innerHTML = disks.map(d => {
+              const pctNum = parseInt((d.use_percent || '0').replace('%', ''), 10) || 0;
+              const barColor = pctNum > 85 ? '#ef4444' : (pctNum > 70 ? '#f59e0b' : '#10b981');
+              return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                  <td style="padding: 7px 10px; font-weight: 600; font-family: monospace; color: var(--text-main);">${escapeHtml(d.mount)}</td>
+                  <td style="padding: 7px 10px; font-family: monospace; color: var(--text-dim); font-size: 11px;">${escapeHtml(d.filesystem)}</td>
+                  <td style="padding: 7px 10px; text-align: right; font-family: monospace;">${escapeHtml(d.used)} / ${escapeHtml(d.size)}</td>
+                  <td style="padding: 7px 10px; text-align: right; font-family: monospace; color: #10b981;">${escapeHtml(d.avail)}</td>
+                  <td style="padding: 7px 10px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+                        <div style="height: 100%; width: ${Math.min(100, pctNum)}%; background: ${barColor};"></div>
+                      </div>
+                      <span style="font-family: monospace; font-size: 10.5px; min-width: 32px; text-align: right;">${escapeHtml(d.use_percent)}</span>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('');
+          }
+        }
+      } catch (err) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="padding: 16px; text-align: center; color: #ef4444;">${escapeHtml(err.message || String(err))}</td></tr>`;
+      }
+    }
+
+    // 4. Side-by-Side File Content Diff Engine
+    async function openFileDiffModal(localPath, remotePath, fileName) {
+      const modal = document.getElementById('fileDiffModal');
+      if (!modal) return;
+      document.getElementById('diffLeftTitle').innerText = `LOCAL: ${localPath}`;
+      document.getElementById('diffRightTitle').innerText = `REMOTE: ${remotePath}`;
+      document.getElementById('diffLeftPane').innerHTML = `<div style="padding: 20px; color: var(--text-dim);">Reading local file...</div>`;
+      document.getElementById('diffRightPane').innerHTML = `<div style="padding: 20px; color: var(--text-dim);">Reading remote file...</div>`;
+      modal.classList.add('active');
+
+      try {
+        const [locRes, remRes] = await Promise.all([
+          sendRust('local_read_file', { path: localPath }),
+          sendRust('remote_read_file', { path: remotePath })
+        ]);
+        const leftLines = (locRes.content || '').replace(/\r\n/g, '\n').split('\n');
+        const rightLines = (remRes.content || '').replace(/\r\n/g, '\n').split('\n');
+        const maxLen = Math.max(leftLines.length, rightLines.length);
+
+        let leftHtml = '';
+        let rightHtml = '';
+        let diffCount = 0;
+
+        for (let i = 0; i < maxLen; i++) {
+          const l = leftLines[i];
+          const r = rightLines[i];
+          const lNum = i + 1;
+          if (l === r) {
+            leftHtml += `<div class="diff-line"><span class="diff-ln">${lNum}</span><span class="diff-txt">${escapeHtml(l ?? '')}</span></div>`;
+            rightHtml += `<div class="diff-line"><span class="diff-ln">${lNum}</span><span class="diff-txt">${escapeHtml(r ?? '')}</span></div>`;
+          } else {
+            diffCount++;
+            leftHtml += `<div class="diff-line ${l === undefined ? '' : 'diff-del'}"><span class="diff-ln">${l === undefined ? '' : lNum}</span><span class="diff-txt">${escapeHtml(l ?? '')}</span></div>`;
+            rightHtml += `<div class="diff-line ${r === undefined ? '' : 'diff-add'}"><span class="diff-ln">${r === undefined ? '' : lNum}</span><span class="diff-txt">${escapeHtml(r ?? '')}</span></div>`;
+          }
+        }
+
+        const lPane = document.getElementById('diffLeftPane');
+        const rPane = document.getElementById('diffRightPane');
+        lPane.innerHTML = leftHtml;
+        rPane.innerHTML = rightHtml;
+
+        // Synchronized scrolling
+        lPane.onscroll = () => { rPane.scrollTop = lPane.scrollTop; };
+        rPane.onscroll = () => { lPane.scrollTop = rPane.scrollTop; };
+
+        document.getElementById('diffStatsBadge').innerText = diffCount === 0
+          ? `✓ Identical (${maxLen} lines)`
+          : `${diffCount} line difference(s) across ${maxLen} lines`;
+      } catch (err) {
+        document.getElementById('diffLeftPane').innerHTML = `<div style="padding: 20px; color: #ef4444;">Diff Error: ${escapeHtml(err.message || String(err))}</div>`;
+      }
+    }
+
+    function closeFileDiffModal() {
+      document.getElementById('fileDiffModal')?.classList.remove('active');
     }
 
     function copyAllLogs() {
@@ -14785,10 +15659,112 @@
     }
 
     let lastActivePaneIsRemote = false;
+
+    function setActivePaneFocus(isRemote) {
+      lastActivePaneIsRemote = !!isRemote;
+      const leftWrapper = document.querySelector('#leftPane .file-pane-wrapper');
+      const rightWrapper = document.querySelector('#rightPane .file-pane-wrapper');
+      if (leftWrapper) leftWrapper.classList.toggle('pane-focused', !lastActivePaneIsRemote);
+      if (rightWrapper) rightWrapper.classList.toggle('pane-focused', lastActivePaneIsRemote);
+    }
+
     document.addEventListener('mousedown', (e) => {
-      if (e.target.closest('#rightPane')) lastActivePaneIsRemote = true;
-      else if (e.target.closest('#leftPane')) lastActivePaneIsRemote = false;
+      if (e.target.closest('#rightPane')) setActivePaneFocus(true);
+      else if (e.target.closest('#leftPane')) setActivePaneFocus(false);
     });
+
+    function triggerCommanderFkey(key) {
+      const isRem = lastActivePaneIsRemote;
+      if (key === 'F2') {
+        const item = isRem ? (getSelectedRemoteItems()[0] || selectedRemoteFile) : (getSelectedLocalItems()[0] || selectedLocalFile);
+        if (!item) {
+          alert(`Please select a ${isRem ? 'remote' : 'local'} item to rename (F2).`);
+          return;
+        }
+        promptRename(item.path, item.name, isRem);
+      } else if (key === 'F4') {
+        const item = isRem ? (getSelectedRemoteItems()[0] || selectedRemoteFile) : (getSelectedLocalItems()[0] || selectedLocalFile);
+        if (!item || item.is_dir) {
+          alert(`Please select a ${isRem ? 'remote' : 'local'} file to edit in Code Editor (F4).`);
+          return;
+        }
+        if (isRem) openRemoteFileInEditor(item.path);
+        else openLocalFileInEditor(item.path);
+      } else if (key === 'F5') {
+        if (isRem) transferDownload();
+        else transferUpload();
+      } else if (key === 'F6') {
+        openInteractiveMoveModal(isRem, 'move');
+      } else if (key === 'F7') {
+        if (isRem) promptCreateFolder();
+        else promptCreateLocalFolder();
+      } else if (key === 'F8') {
+        const remoteSel = getSelectedRemoteItems();
+        const localSel = getSelectedLocalItems();
+        if (isRem && remoteSel.length > 0) deleteSelectedItems(true);
+        else if (!isRem && localSel.length > 0) deleteSelectedItems(false);
+        else if (remoteSel.length > 0) deleteSelectedItems(true);
+        else if (localSel.length > 0) deleteSelectedItems(false);
+        else alert('Please select at least one item to delete.');
+      }
+    }
+
+    function navigateFileRowByKeyboard(delta, toBoundary = null) {
+      const isRem = lastActivePaneIsRemote;
+      const tbody = document.getElementById(isRem ? 'remoteFileList' : 'localFileList');
+      if (!tbody) return;
+      const rows = Array.from(tbody.querySelectorAll('tr[data-name]'));
+      if (rows.length === 0) return;
+      let curIdx = rows.findIndex(r => r.classList.contains('selected'));
+      let nextIdx = 0;
+      if (toBoundary === 'home') nextIdx = 0;
+      else if (toBoundary === 'end') nextIdx = rows.length - 1;
+      else if (curIdx === -1) nextIdx = delta > 0 ? 0 : rows.length - 1;
+      else nextIdx = Math.max(0, Math.min(rows.length - 1, curIdx + delta));
+
+      rows.forEach(r => r.classList.remove('selected'));
+      const targetRow = rows[nextIdx];
+      if (!targetRow) return;
+      targetRow.classList.add('selected');
+      targetRow.scrollIntoView({ block: 'nearest' });
+
+      const name = targetRow.dataset.name;
+      const list = isRem ? remoteFiles : localFiles;
+      const item = list.find(f => f.name === name);
+      if (isRem) {
+        selectedRemoteFile = item || null;
+        lastSelectedRemoteIndex = nextIdx;
+      } else {
+        selectedLocalFile = item || null;
+        lastSelectedLocalIndex = nextIdx;
+      }
+      updatePaneStatsBadge(isRem);
+    }
+
+    function activateSelectedRowByEnter() {
+      const isRem = lastActivePaneIsRemote;
+      const tbody = document.getElementById(isRem ? 'remoteFileList' : 'localFileList');
+      if (!tbody) return;
+      const selRow = tbody.querySelector('tr.selected');
+      if (!selRow) return;
+      const name = selRow.dataset.name;
+      if (!name) {
+        // Parent ".." row
+        if (isRem) remoteNavigateUp();
+        else localNavigateUp();
+        return;
+      }
+      const list = isRem ? remoteFiles : localFiles;
+      const item = list.find(f => f.name === name);
+      if (!item) return;
+      if (item.is_dir) {
+        if (isRem) navigateRemote(item.path);
+        else navigateLocal(item.path);
+      } else {
+        if (isRem) openRemoteFileInEditor(item.path);
+        else openLocalFileInEditor(item.path);
+      }
+    }
 
     // Global Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
@@ -14805,34 +15781,76 @@
         closeFindFilesModal();
         closeChecksumModal();
         closeInteractiveMoveModal();
+        closeNetworkProbeModal();
+        closeSshKeygenModal();
+        closeServerHealthModal();
+        closeFileDiffModal();
         return;
       }
 
       if (isInput) return;
 
+      const anyModalOpen = !!document.querySelector('.modal-overlay.active');
+
+      if (!anyModalOpen && e.key === 'Tab') {
+        e.preventDefault();
+        setActivePaneFocus(!lastActivePaneIsRemote);
+        return;
+      }
+
+      if (!anyModalOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End')) {
+        if (!e.altKey && !e.ctrlKey && !e.metaKey) {
+          e.preventDefault();
+          if (e.key === 'ArrowDown') navigateFileRowByKeyboard(1);
+          else if (e.key === 'ArrowUp') navigateFileRowByKeyboard(-1);
+          else if (e.key === 'Home') navigateFileRowByKeyboard(0, 'home');
+          else if (e.key === 'End') navigateFileRowByKeyboard(0, 'end');
+          return;
+        }
+      }
+
+      if (!anyModalOpen && e.key === 'Enter') {
+        e.preventDefault();
+        activateSelectedRowByEnter();
+        return;
+      }
+
+      if (!anyModalOpen && e.key === 'Backspace') {
+        e.preventDefault();
+        if (lastActivePaneIsRemote) remoteNavigateUp();
+        else localNavigateUp();
+        return;
+      }
+
+      if (!anyModalOpen && e.key === 'F2') {
+        e.preventDefault();
+        triggerCommanderFkey('F2');
+        return;
+      } else if (!anyModalOpen && e.key === 'F4') {
+        e.preventDefault();
+        triggerCommanderFkey('F4');
+        return;
+      } else if (!anyModalOpen && e.key === 'F7') {
+        e.preventDefault();
+        triggerCommanderFkey('F7');
+        return;
+      } else if (!anyModalOpen && e.key === 'F8') {
+        e.preventDefault();
+        triggerCommanderFkey('F8');
+        return;
+      }
+
       if (e.shiftKey && e.key === 'F1') {
         e.preventDefault();
         toggleCompareDirectories();
       } else if (e.key === 'Delete') {
-        const anyModalOpen = document.querySelector('.modal-overlay.active');
         if (!anyModalOpen) {
           e.preventDefault();
-          const remoteSel = getSelectedRemoteItems();
-          const localSel = getSelectedLocalItems();
-          if (lastActivePaneIsRemote && remoteSel.length > 0) {
-            deleteSelectedItems(true);
-          } else if (!lastActivePaneIsRemote && localSel.length > 0) {
-            deleteSelectedItems(false);
-          } else if (remoteSel.length > 0) {
-            deleteSelectedItems(true);
-          } else if (localSel.length > 0) {
-            deleteSelectedItems(false);
-          }
+          triggerCommanderFkey('F8');
         }
       } else if (e.key === 'F6') {
         e.preventDefault();
-        const useRemote = lastActivePaneIsRemote ? (getSelectedRemoteItems().length > 0) : (getSelectedLocalItems().length === 0 && getSelectedRemoteItems().length > 0);
-        openInteractiveMoveModal(useRemote, 'move');
+        triggerCommanderFkey('F6');
       } else if (e.altKey && e.key === 'ArrowUp') {
         e.preventDefault();
         const useRemote = lastActivePaneIsRemote ? (getSelectedRemoteItems().length > 0) : (getSelectedLocalItems().length === 0 && getSelectedRemoteItems().length > 0);

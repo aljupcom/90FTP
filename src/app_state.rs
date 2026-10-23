@@ -1191,17 +1191,49 @@ impl AppState {
             }
 
             "remote_chmod" => {
-                let path = payload["path"].as_str().unwrap_or("");
-                let mode = payload["mode"].as_str().unwrap_or("0644");
+                let single_path = payload["path"].as_str().unwrap_or("");
+                let mode = payload["mode"].as_str().unwrap_or("0644").trim();
+                let recursive = payload["recursive"].as_bool().unwrap_or(false);
+                let current_dir = payload["current_dir"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string());
+                let paths: Vec<String> = if let Some(arr) = payload["paths"].as_array() {
+                    arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).filter(|s| !s.is_empty()).collect()
+                } else if !single_path.is_empty() {
+                    vec![single_path.to_string()]
+                } else {
+                    Vec::new()
+                };
+
+                if paths.is_empty() {
+                    return IpcResponse::err(id, action, "No target path specified for CHMOD");
+                }
+
                 match self.with_remote_retry(|client| {
-                    client.chmod(mode, path)?;
-                    let files = client.list(None).unwrap_or_else(|e| {
+                    for p in &paths {
+                        if recursive {
+                            let esc_p = p.replace('\'', "'\\''");
+                            let clean_mode = mode.trim_start_matches("0o");
+                            let ssh_cmd = format!("chmod -R {} -- '{}' 2>/dev/null", clean_mode, esc_p);
+                            if client.exec_command(&ssh_cmd).is_err() {
+                                client.chmod(mode, p)?;
+                            } else {
+                                let _ = client.chmod(mode, p);
+                            }
+                        } else {
+                            client.chmod(mode, p)?;
+                        }
+                    }
+                    let files = client.list(current_dir.as_deref()).unwrap_or_else(|e| {
                         crate::logger::log_error(&format!("Listing remote directory failed after chmod: {}", e));
                         Vec::new()
                     });
                     Ok(files)
                 }) {
-                    Ok((files, reconnected)) => IpcResponse::ok(id, action, json!({ "status": "chmod_applied", "files": files, "reconnected": reconnected })),
+                    Ok((files, reconnected)) => IpcResponse::ok(id, action, json!({
+                        "status": "chmod_applied",
+                        "count": paths.len(),
+                        "files": files,
+                        "reconnected": reconnected
+                    })),
                     Err(e) => IpcResponse::err(id, action, &e),
                 }
             }
@@ -2190,6 +2222,425 @@ impl AppState {
                     "logs": logs,
                     "path": path,
                 }))
+            }
+
+            "local_find_files" => {
+                let search_path = payload["path"].as_str().unwrap_or("").trim();
+                let query = payload["query"].as_str().unwrap_or("").trim();
+                let recursive = payload["recursive"].as_bool().unwrap_or(true);
+                let file_type = payload["file_type"].as_str().unwrap_or("all");
+                let max_results = payload["max_results"].as_u64().unwrap_or(300) as usize;
+
+                if query.is_empty() {
+                    return IpcResponse::err(id, action, "Search query cannot be empty");
+                }
+                let root = if search_path.is_empty() {
+                    crate::local_fs::get_initial_dir()
+                } else {
+                    search_path.to_string()
+                };
+
+                fn walk_local_find(
+                    dir: &std::path::Path,
+                    q_lower: &str,
+                    ftype: &str,
+                    rec: bool,
+                    max: usize,
+                    depth: usize,
+                    out: &mut Vec<serde_json::Value>,
+                ) {
+                    if depth > 10 || out.len() >= max {
+                        return;
+                    }
+                    let entries = match std::fs::read_dir(dir) {
+                        Ok(rd) => rd,
+                        Err(_) => return,
+                    };
+                    for entry in entries.flatten() {
+                        if out.len() >= max {
+                            break;
+                        }
+                        let path = entry.path();
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if name == "." || name == ".." {
+                            continue;
+                        }
+                        let meta = match std::fs::symlink_metadata(&path) {
+                            Ok(m) => m,
+                            Err(_) => continue,
+                        };
+                        let is_dir = meta.is_dir();
+                        let name_lower = name.to_lowercase();
+                        let matches = if q_lower.starts_with('*') && q_lower.ends_with('*') && q_lower.len() > 2 {
+                            name_lower.contains(&q_lower[1..q_lower.len() - 1])
+                        } else if q_lower.starts_with('*') && q_lower.len() > 1 {
+                            name_lower.ends_with(&q_lower[1..])
+                        } else if q_lower.ends_with('*') && q_lower.len() > 1 {
+                            name_lower.starts_with(&q_lower[..q_lower.len() - 1])
+                        } else {
+                            name_lower.contains(q_lower)
+                        };
+
+                        let type_ok = match ftype {
+                            "files" => !is_dir,
+                            "dirs" => is_dir,
+                            _ => true,
+                        };
+
+                        if matches && type_ok {
+                            let full_str = path.to_string_lossy().to_string();
+                            let parent_str = path.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+                            out.push(json!({
+                                "name": name,
+                                "path": full_str,
+                                "dir": parent_str,
+                                "is_dir": is_dir,
+                                "size": if is_dir { 0 } else { meta.len() },
+                            }));
+                        }
+
+                        if is_dir && !meta.file_type().is_symlink() && rec && out.len() < max {
+                            walk_local_find(&path, q_lower, ftype, rec, max, depth + 1, out);
+                        }
+                    }
+                }
+
+                let mut results = Vec::new();
+                walk_local_find(
+                    std::path::Path::new(&root),
+                    &query.to_lowercase(),
+                    file_type,
+                    recursive,
+                    max_results,
+                    0,
+                    &mut results,
+                );
+
+                IpcResponse::ok(id, action, json!({
+                    "results": results,
+                    "count": results.len(),
+                    "query": query,
+                    "path": root,
+                }))
+            }
+
+            "local_folder_size" => {
+                let path_str = payload["path"].as_str().unwrap_or("").trim();
+                if path_str.is_empty() {
+                    return IpcResponse::err(id, action, "Folder path is required");
+                }
+                fn calc_dir_stats(p: &std::path::Path, depth: usize) -> (u64, u64, u64) {
+                    if depth > 16 {
+                        return (0, 0, 0);
+                    }
+                    let mut bytes = 0u64;
+                    let mut files = 0u64;
+                    let mut dirs = 0u64;
+                    if let Ok(rd) = std::fs::read_dir(p) {
+                        for entry in rd.flatten() {
+                            if let Ok(meta) = entry.metadata() {
+                                if meta.is_dir() {
+                                    dirs += 1;
+                                    let (b, f, d) = calc_dir_stats(&entry.path(), depth + 1);
+                                    bytes += b;
+                                    files += f;
+                                    dirs += d;
+                                } else {
+                                    files += 1;
+                                    bytes += meta.len();
+                                }
+                            }
+                        }
+                    }
+                    (bytes, files, dirs)
+                }
+                let (bytes, files, dirs) = calc_dir_stats(std::path::Path::new(path_str), 0);
+                IpcResponse::ok(id, action, json!({
+                    "path": path_str,
+                    "size": bytes,
+                    "files": files,
+                    "dirs": dirs
+                }))
+            }
+
+            "remote_folder_size" => {
+                let path_str = payload["path"].as_str().unwrap_or("").trim();
+                if path_str.is_empty() {
+                    return IpcResponse::err(id, action, "Remote folder path is required");
+                }
+                match self.with_remote_retry(|client| {
+                    let esc = path_str.replace('\'', "'\\''");
+                    let cmd = format!("du -sb -- '{}' 2>/dev/null || du -sk -- '{}' 2>/dev/null", esc, esc);
+                    if let Ok(out) = client.exec_command(&cmd) {
+                        if let Some(first_line) = out.lines().find(|l| !l.trim().is_empty()) {
+                            if let Some(num_tok) = first_line.split_whitespace().next() {
+                                if let Ok(val) = num_tok.parse::<u64>() {
+                                    // If du -sb succeeded it's bytes; if du -sk fallback was used on BSD/busybox, check if du -sb was supported
+                                    return Ok(val);
+                                }
+                            }
+                        }
+                    }
+                    // Fallback: walk up to 4 levels via SFTP/FTP list
+                    fn walk_remote_size(c: &mut RemoteClient, dir: &str, depth: usize) -> u64 {
+                        if depth > 4 {
+                            return 0;
+                        }
+                        let mut sum = 0u64;
+                        if let Ok(items) = c.list(Some(dir)) {
+                            for it in items {
+                                if it.name == "." || it.name == ".." {
+                                    continue;
+                                }
+                                if it.is_dir && !it.is_symlink {
+                                    sum += walk_remote_size(c, &it.path, depth + 1);
+                                } else {
+                                    sum += it.size;
+                                }
+                            }
+                        }
+                        sum
+                    }
+                    Ok(walk_remote_size(client, path_str, 0))
+                }) {
+                    Ok((size, reconnected)) => IpcResponse::ok(id, action, json!({
+                        "path": path_str,
+                        "size": size,
+                        "reconnected": reconnected
+                    })),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "network_probe" => {
+                use std::io::Read;
+                use std::net::{TcpStream, ToSocketAddrs};
+                use std::time::{Duration, Instant};
+
+                let host_raw = payload["host"].as_str().unwrap_or("").trim();
+                let port = payload["port"].as_u64().unwrap_or(22) as u16;
+                let samples = payload["samples"].as_u64().unwrap_or(4).clamp(1, 8) as usize;
+
+                if host_raw.is_empty() {
+                    return IpcResponse::err(id, action, "Host or IP address is required");
+                }
+                let clean_host = host_raw
+                    .trim_start_matches("sftp://")
+                    .trim_start_matches("ftp://")
+                    .trim_start_matches("ftps://")
+                    .split('/')
+                    .next()
+                    .unwrap_or(host_raw)
+                    .split(':')
+                    .next()
+                    .unwrap_or(host_raw)
+                    .trim();
+
+                let dns_start = Instant::now();
+                let addr_str = format!("{}:{}", clean_host, port);
+                let resolved_addrs: Vec<_> = match addr_str.to_socket_addrs() {
+                    Ok(iter) => iter.collect(),
+                    Err(e) => {
+                        return IpcResponse::err(id, action, &format!("DNS resolution failed for '{}': {}", clean_host, e));
+                    }
+                };
+                let dns_ms = dns_start.elapsed().as_secs_f64() * 1000.0;
+                if resolved_addrs.is_empty() {
+                    return IpcResponse::err(id, action, &format!("Could not resolve any IP addresses for '{}'", clean_host));
+                }
+                let target_addr = resolved_addrs[0];
+                let ip_list: Vec<String> = resolved_addrs.iter().map(|a| a.ip().to_string()).collect();
+
+                let mut latencies_ms = Vec::new();
+                let mut banner = String::new();
+                let mut reachable = false;
+                let mut last_err = String::new();
+
+                for i in 0..samples {
+                    let t0 = Instant::now();
+                    match TcpStream::connect_timeout(&target_addr, Duration::from_millis(3500)) {
+                        Ok(mut stream) => {
+                            let rtt = t0.elapsed().as_secs_f64() * 1000.0;
+                            latencies_ms.push((rtt * 100.0).round() / 100.0);
+                            reachable = true;
+                            if i == 0 && banner.is_empty() {
+                                let _ = stream.set_read_timeout(Some(Duration::from_millis(450)));
+                                let mut buf = [0u8; 256];
+                                if let Ok(n) = stream.read(&mut buf) {
+                                    if n > 0 {
+                                        banner = String::from_utf8_lossy(&buf[..n])
+                                            .lines()
+                                            .next()
+                                            .unwrap_or("")
+                                            .trim()
+                                            .to_string();
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            last_err = e.to_string();
+                        }
+                    }
+                }
+
+                let (min_ms, max_ms, avg_ms, jitter_ms) = if !latencies_ms.is_empty() {
+                    let min = latencies_ms.iter().cloned().fold(f64::INFINITY, f64::min);
+                    let max = latencies_ms.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                    let sum: f64 = latencies_ms.iter().sum();
+                    let avg = sum / (latencies_ms.len() as f64);
+                    let jitter = max - min;
+                    (
+                        (min * 100.0).round() / 100.0,
+                        (max * 100.0).round() / 100.0,
+                        (avg * 100.0).round() / 100.0,
+                        (jitter * 100.0).round() / 100.0,
+                    )
+                } else {
+                    (0.0, 0.0, 0.0, 0.0)
+                };
+
+                IpcResponse::ok(id, action, json!({
+                    "host": clean_host,
+                    "port": port,
+                    "ip": target_addr.ip().to_string(),
+                    "ips": ip_list,
+                    "dns_ms": (dns_ms * 100.0).round() / 100.0,
+                    "reachable": reachable,
+                    "samples_sent": samples,
+                    "samples_ok": latencies_ms.len(),
+                    "latencies_ms": latencies_ms,
+                    "min_ms": min_ms,
+                    "max_ms": max_ms,
+                    "avg_ms": avg_ms,
+                    "jitter_ms": jitter_ms,
+                    "banner": banner,
+                    "error": last_err,
+                }))
+            }
+
+            "ssh_keygen" => {
+                use ssh_key::{Algorithm, LineEnding, PrivateKey, rand_core::OsRng};
+
+                let key_name_raw = payload["name"].as_str().unwrap_or("id_ed25519_90ftp").trim();
+                let comment = payload["comment"].as_str().unwrap_or("90ftp-key").trim();
+                let algo_str = payload["algorithm"].as_str().unwrap_or("ed25519").to_lowercase();
+
+                let safe_name: String = key_name_raw
+                    .chars()
+                    .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' { c } else { '_' })
+                    .collect();
+                let safe_name = if safe_name.is_empty() { "id_ed25519_90ftp".to_string() } else { safe_name };
+
+                let mut keys_dir = crate::sessions::get_storage_dir();
+                keys_dir.push("ssh_keys");
+                let _ = std::fs::create_dir_all(&keys_dir);
+
+                let priv_path = keys_dir.join(&safe_name);
+                let pub_path = keys_dir.join(format!("{}.pub", safe_name));
+
+                let algorithm = if algo_str.contains("rsa") {
+                    Algorithm::Rsa { hash: None }
+                } else {
+                    Algorithm::Ed25519
+                };
+
+                let mut priv_key = match PrivateKey::random(&mut OsRng, algorithm) {
+                    Ok(k) => k,
+                    Err(e) => return IpcResponse::err(id, action, &format!("Failed to generate SSH keypair: {}", e)),
+                };
+                priv_key.set_comment(comment);
+
+                let openssh_priv = match priv_key.to_openssh(LineEnding::LF) {
+                    Ok(s) => s.to_string(),
+                    Err(e) => return IpcResponse::err(id, action, &format!("Failed to encode private key: {}", e)),
+                };
+                let mut pub_key = priv_key.public_key().clone();
+                pub_key.set_comment(comment);
+                let openssh_pub = match pub_key.to_openssh() {
+                    Ok(s) => s,
+                    Err(e) => return IpcResponse::err(id, action, &format!("Failed to encode public key: {}", e)),
+                };
+                let fingerprint = pub_key.fingerprint(ssh_key::HashAlg::Sha256).to_string();
+
+                if let Err(e) = std::fs::write(&priv_path, &openssh_priv) {
+                    return IpcResponse::err(id, action, &format!("Failed to write private key: {}", e));
+                }
+                let _ = std::fs::write(&pub_path, format!("{}\n", openssh_pub));
+
+                IpcResponse::ok(id, action, json!({
+                    "name": safe_name,
+                    "algorithm": if algo_str.contains("rsa") { "RSA" } else { "Ed25519" },
+                    "comment": comment,
+                    "fingerprint": fingerprint,
+                    "public_key": openssh_pub,
+                    "private_key_path": priv_path.to_string_lossy().to_string(),
+                    "public_key_path": pub_path.to_string_lossy().to_string(),
+                }))
+            }
+
+            "ssh_list_keys" => {
+                let mut keys_dir = crate::sessions::get_storage_dir();
+                keys_dir.push("ssh_keys");
+                let _ = std::fs::create_dir_all(&keys_dir);
+
+                let mut list = Vec::new();
+                if let Ok(rd) = std::fs::read_dir(&keys_dir) {
+                    for entry in rd.flatten() {
+                        let p = entry.path();
+                        if p.extension().and_then(|e| e.to_str()) == Some("pub") {
+                            let pub_content = std::fs::read_to_string(&p).unwrap_or_default().trim().to_string();
+                            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("key").to_string();
+                            let priv_p = keys_dir.join(&stem);
+                            list.push(json!({
+                                "name": stem,
+                                "public_key": pub_content,
+                                "private_key_path": priv_p.to_string_lossy().to_string(),
+                                "public_key_path": p.to_string_lossy().to_string(),
+                            }));
+                        }
+                    }
+                }
+                IpcResponse::ok(id, action, json!({
+                    "keys": list,
+                    "keys_dir": keys_dir.to_string_lossy().to_string(),
+                }))
+            }
+
+            "ssh_deploy_key" => {
+                let pub_key = payload["public_key"].as_str().unwrap_or("").trim();
+                if pub_key.is_empty() {
+                    return IpcResponse::err(id, action, "Public key content is required");
+                }
+                match self.with_remote_retry(|client| {
+                    let esc_key = pub_key.replace('\'', "'\\''");
+                    let cmd = format!(
+                        "mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && (grep -qxF '{}' ~/.ssh/authorized_keys || echo '{}' >> ~/.ssh/authorized_keys)",
+                        esc_key, esc_key
+                    );
+                    client.exec_command(&cmd)?;
+                    Ok(())
+                }) {
+                    Ok((_, reconnected)) => IpcResponse::ok(id, action, json!({
+                        "deployed": true,
+                        "reconnected": reconnected
+                    })),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "remote_server_health" => {
+                match self.with_remote_retry(|client| {
+                    let cmd = "echo '===UNAME==='; uname -srn 2>/dev/null; echo '===UPTIME==='; (uptime -p 2>/dev/null || uptime 2>/dev/null); echo '===LOAD==='; cat /proc/loadavg 2>/dev/null; echo '===MEM==='; free -m 2>/dev/null; echo '===DISK==='; df -hP 2>/dev/null";
+                    let out = client.exec_command(cmd)?;
+                    Ok(out)
+                }) {
+                    Ok((raw_output, reconnected)) => IpcResponse::ok(id, action, json!({
+                        "raw": raw_output,
+                        "reconnected": reconnected
+                    })),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
             }
 
             unknown => IpcResponse::err(id, action, &format!("Unknown action: {}", unknown)),
