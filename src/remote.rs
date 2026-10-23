@@ -27,7 +27,7 @@ impl RemoteClient {
                 let client = FtpClient::connect(host, actual_port, user, pass)?;
                 Ok(RemoteClient::Ftp(client))
             }
-            "sftp" | "ssh" => {
+            "sftp" | "ssh" | "scp" => {
                 let actual_port = if port == 0 { 22 } else { port };
                 let client = SftpClient::connect(
                     host, actual_port, user, auth_type, pass, key_path, passphrase, trust_host,
@@ -102,8 +102,11 @@ impl RemoteClient {
     }
 
     pub fn make_dir_all(&mut self, dir_path: &str) -> Result<(), String> {
-        let clean = dir_path.replace('\\', "/");
-        let parts: Vec<&str> = clean.split('/').filter(|s| !s.is_empty()).collect();
+        let clean = dir_path.trim().replace('\\', "/");
+        if clean.is_empty() || clean == "." || clean == "~" || clean == "/" {
+            return Ok(());
+        }
+        let parts: Vec<&str> = clean.split('/').filter(|s| !s.is_empty() && *s != "." && *s != "~").collect();
         let mut cur = if clean.starts_with('/') { String::from("/") } else { String::new() };
 
         for part in parts {

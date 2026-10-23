@@ -2491,7 +2491,17 @@
       height: 130px;
       overflow-y: auto;
       color: #94a3b8;
-      user-select: text;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      cursor: text;
+    }
+    .rt-log-entry {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+    .transfers-table td {
+      user-select: text !important;
+      -webkit-user-select: text !important;
     }
   
     /* Floating Glassmorphic Notification Toast */
@@ -3530,7 +3540,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.58</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.59</span>
         </div>
       </div>
 
@@ -4258,6 +4268,10 @@
         <!-- Transfer Actions -->
         <div id="transfersActions" style="display: flex; align-items: center; gap: 6px;" onclick="event.stopPropagation()">
           <span id="transfersSummaryText" style="font-size: 11px; color: var(--text-dim); margin-right: 4px;">Queue idle</span>
+          <button type="button" class="btn btn-secondary" id="btnCopyTransferErrors" onclick="copyAllTransferQueueErrors()" style="padding: 2px 8px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.35); display: none; align-items: center; gap: 4px;" title="Copy failed transfer errors to clipboard">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span>Copy Errors</span>
+          </button>
           <button type="button" class="btn btn-secondary" onclick="clearCompletedTransfers()" style="padding: 2px 8px; font-size: 11px;" title="Clear completed transfers">
             Clear Finished
           </button>
@@ -4265,9 +4279,17 @@
 
         <!-- Log Actions -->
         <div id="logActions" style="display: none; align-items: center; gap: 6px;" onclick="event.stopPropagation()">
+          <button type="button" class="btn btn-secondary" onclick="copyErrorsOnly()" style="padding: 2px 9px; font-size: 11px; display: flex; align-items: center; gap: 4px; color: #ef4444; border-color: rgba(239, 68, 68, 0.35);" title="Copy error lines only to clipboard">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span>Copy Errors</span>
+          </button>
           <button type="button" class="btn btn-secondary" onclick="copyAllLogs()" style="padding: 2px 9px; font-size: 11px; display: flex; align-items: center; gap: 4px;" title="Copy all log output">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Copy All
+            <span>Copy All</span>
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="exportLogsToFile()" style="padding: 2px 9px; font-size: 11px; display: flex; align-items: center; gap: 4px;" title="Export and save logs to a text file">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Export Log</span>
           </button>
           <button type="button" class="btn btn-secondary" onclick="clearLogs()" style="padding: 2px 8px; font-size: 11px;" title="Clear console">
             Clear
@@ -4417,6 +4439,10 @@
         <div class="editor-menu-item" onclick="saveEditorContent()" title="Save & Upload (Ctrl+S)">
           <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           <span>Save & Upload</span>
+        </div>
+        <div class="editor-menu-item" onclick="copyEditorContent()" title="Copy All Content to Clipboard">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Copy All</span>
         </div>
         <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
         <div class="editor-menu-item" onclick="toggleFindBar(false)" title="Find Text (Ctrl+F)">
@@ -5586,7 +5612,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </div>
           </div>
 
-          <div id="rtLogBox" class="rt-log-box"></div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; margin-top: 6px;">
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 5px;">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              <span>Transfer Engine Activity:</span>
+            </div>
+            <div style="display: flex; gap: 5px;">
+              <button type="button" class="btn btn-secondary" onclick="copyRtLog()" style="padding: 2px 8px; font-size: 10.5px; height: 22px; display: inline-flex; align-items: center; gap: 4px;" title="Copy all transfer logs to clipboard">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy Log</span>
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="copyRtErrorsOnly()" style="padding: 2px 8px; font-size: 10.5px; height: 22px; color: #ef4444; border-color: rgba(239, 68, 68, 0.35); display: inline-flex; align-items: center; gap: 4px;" title="Copy transfer errors only">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>Copy Errors</span>
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="clearRtLog()" style="padding: 2px 8px; font-size: 10.5px; height: 22px;" title="Clear log output">Clear</button>
+            </div>
+          </div>
+
+          <div id="rtLogBox" class="rt-log-box" oncontextmenu="handleRtLogContextMenu(event)"></div>
         </div>
 
       </div>
@@ -6731,7 +6775,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.58';
+    let APP_CURRENT_VERSION = '0.0.0.59';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -6856,31 +6900,130 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       body.scrollTop = body.scrollHeight;
     }
 
-    function copyAllLogs() {
-      const body = document.getElementById('logBody');
-      const lines = Array.from(body.querySelectorAll('.log-line'))
-        .map(l => l.innerText)
-        .join('\n');
-      if (!lines) return;
+    function copyTextToClipboard(text, notifyMsg = 'Copied to clipboard!') {
+      if (!text) return;
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(lines).then(() => {
-          addLog('All logs copied to clipboard!', 'success');
+        navigator.clipboard.writeText(text).then(() => {
+          addLog(notifyMsg, 'success');
         }).catch(() => {
-          fallbackCopyText(lines);
+          fallbackCopyText(text, notifyMsg);
         });
       } else {
-        fallbackCopyText(lines);
+        fallbackCopyText(text, notifyMsg);
       }
     }
 
-    function fallbackCopyText(text) {
+    function fallbackCopyText(text, notifyMsg = 'Copied to clipboard!') {
       const ta = document.createElement('textarea');
       ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
       document.body.appendChild(ta);
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      addLog('All logs copied to clipboard!', 'success');
+      addLog(notifyMsg, 'success');
+    }
+
+    function copyAllLogs() {
+      const body = document.getElementById('logBody');
+      if (!body) return;
+      const lines = Array.from(body.querySelectorAll('.log-line'))
+        .map(l => l.innerText)
+        .join('\n');
+      if (!lines) {
+        alert('Activity log is currently empty.');
+        return;
+      }
+      copyTextToClipboard(lines, 'All console logs copied to clipboard!');
+    }
+
+    function copyErrorsOnly() {
+      const body = document.getElementById('logBody');
+      if (!body) return;
+      const errorLines = Array.from(body.querySelectorAll('.log-line'))
+        .filter(l => l.querySelector('.log-msg.error'))
+        .map(l => l.innerText);
+      if (errorLines.length === 0) {
+        alert('No error logs found in the current activity log.');
+        return;
+      }
+      copyTextToClipboard(errorLines.join('\n'), `Copied ${errorLines.length} error line(s) to clipboard!`);
+    }
+
+    function exportLogsToFile() {
+      const body = document.getElementById('logBody');
+      if (!body) return;
+      const text = Array.from(body.querySelectorAll('.log-line')).map(l => l.innerText).join('\n');
+      if (!text.trim()) {
+        alert('Activity log is currently empty.');
+        return;
+      }
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `90ftp_activity_log_${new Date().toISOString().replace(/[:.]/g, '-')}.log`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      addLog('Activity log downloaded to local file.', 'success');
+    }
+
+    function copyEditorContent() {
+      const textarea = document.getElementById('editorTextarea');
+      if (!textarea || !textarea.value) {
+        alert('Editor is currently empty.');
+        return;
+      }
+      copyTextToClipboard(textarea.value, 'Editor content copied to clipboard!');
+    }
+
+    function copyRtLog() {
+      const box = document.getElementById('rtLogBox');
+      if (!box) return;
+      const text = Array.from(box.querySelectorAll('.rt-log-entry, div')).map(d => d.innerText).join('\n');
+      if (!text.trim()) {
+        alert('Remote transfer log is currently empty.');
+        return;
+      }
+      copyTextToClipboard(text, 'Remote transfer logs copied to clipboard!');
+    }
+
+    function copyRtErrorsOnly() {
+      const box = document.getElementById('rtLogBox');
+      if (!box) return;
+      const errorEntries = Array.from(box.querySelectorAll('.rt-log-entry, div'))
+        .filter(d => d.textContent.includes('✕') || d.textContent.toLowerCase().includes('failed') || d.textContent.toLowerCase().includes('error'))
+        .map(d => d.innerText);
+      if (errorEntries.length === 0) {
+        alert('No errors found in the current remote transfer session.');
+        return;
+      }
+      copyTextToClipboard(errorEntries.join('\n'), `Copied ${errorEntries.length} transfer error(s) to clipboard!`);
+    }
+
+    function clearRtLog() {
+      const box = document.getElementById('rtLogBox');
+      if (box) box.innerHTML = '<div style="color: var(--text-dim);">(Log cleared)</div>';
+    }
+
+    function handleRtLogContextMenu(e) {
+      e.preventDefault();
+      openContextMenu(e, 'rt_log');
+    }
+
+    function copyAllTransferQueueErrors() {
+      if (!transferQueue || transferQueue.length === 0) {
+        alert('Transfer queue is empty.');
+        return;
+      }
+      const errorLines = transferQueue
+        .filter(t => t.status === 'failed' || t.status === 'error' || t.error)
+        .map(t => `[${t.type.toUpperCase()}] ${t.name}: ${t.error || 'Failed'} (${t.src} -> ${t.dest})`);
+      if (errorLines.length === 0) {
+        alert('No transfer errors in the queue.');
+        return;
+      }
+      copyTextToClipboard(errorLines.join('\n'), `Copied ${errorLines.length} transfer error(s) to clipboard!`);
     }
 
     function clearLogs() {
@@ -7326,6 +7469,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           if (e.target.closest('tr')) return;
           e.preventDefault();
           openContextMenu(e, 'remote_blank');
+        });
+      }
+
+      const logBodyEl = document.getElementById('logBody');
+      if (logBodyEl) {
+        logBodyEl.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          const targetLine = e.target.closest('.log-line');
+          openContextMenu(e, 'log', targetLine);
         });
       }
 
@@ -11836,6 +11988,123 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       const menu = document.getElementById('customContextMenu');
       if (!menu) return;
 
+      if (type === 'log') {
+        const selText = window.getSelection() ? window.getSelection().toString() : '';
+        const lineText = item?.innerText || '';
+        const errorCount = document.querySelectorAll('#logBody .log-msg.error').length;
+
+        let html = `<div class="context-menu-header">Activity Log & Diagnostics</div>`;
+        if (selText && selText.trim()) {
+          html += `
+            <div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(selText)}')">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span style="font-weight: 600;">Copy Selected Text</span>
+              <span class="shortcut">Ctrl+C</span>
+            </div>
+            <div class="context-menu-separator"></div>
+          `;
+        }
+        if (lineText && lineText.trim()) {
+          html += `
+            <div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(lineText)}')">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copy Current Log Line</span>
+            </div>
+          `;
+        }
+        html += `
+          <div class="context-menu-item" onclick="closeContextMenu(); copyErrorsOnly()" style="color: #ef4444;">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #ef4444;"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style="font-weight: 600;">Copy Errors Only (${errorCount})</span>
+          </div>
+          <div class="context-menu-item" onclick="closeContextMenu(); copyAllLogs()">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copy Entire Console Log</span>
+          </div>
+          <div class="context-menu-item" onclick="closeContextMenu(); exportLogsToFile()">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Export Log to File...</span>
+          </div>
+          <div class="context-menu-separator"></div>
+          <div class="context-menu-item" onclick="closeContextMenu(); clearLogs()">
+            <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>Clear Console</span>
+          </div>
+        `;
+        menu.innerHTML = html;
+        return;
+      }
+
+      if (type === 'rt_log') {
+        const selText = window.getSelection() ? window.getSelection().toString() : '';
+        let html = `<div class="context-menu-header">Remote Transfer Logs</div>`;
+        if (selText && selText.trim()) {
+          html += `
+            <div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(selText)}')">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span style="font-weight: 600;">Copy Selected Text</span>
+            </div>
+            <div class="context-menu-separator"></div>
+          `;
+        }
+        html += `
+          <div class="context-menu-item" onclick="closeContextMenu(); copyRtLog()">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copy All Transfer Logs</span>
+          </div>
+          <div class="context-menu-item" onclick="closeContextMenu(); copyRtErrorsOnly()" style="color: #ef4444;">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #ef4444;"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style="font-weight: 600;">Copy Errors Only</span>
+          </div>
+          <div class="context-menu-separator"></div>
+          <div class="context-menu-item" onclick="closeContextMenu(); clearRtLog()">
+            <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>Clear Transfer Log</span>
+          </div>
+        `;
+        menu.innerHTML = html;
+        return;
+      }
+
+      if (type === 'transfer_item') {
+        const tr = item;
+        let html = `<div class="context-menu-header">Transfer Queue Item</div>`;
+        if (tr && tr.error) {
+          html += `
+            <div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(tr.error)}')">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #ef4444;"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span style="font-weight: 600; color: #ef4444;">Copy Error Details</span>
+            </div>
+          `;
+        }
+        if (tr && tr.name) {
+          html += `
+            <div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(tr.name)}')">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copy File Name</span>
+            </div>
+          `;
+        }
+        if (tr && (tr.src || tr.dest)) {
+          const pathSummary = `${tr.src || ''} -> ${tr.dest || ''}`;
+          html += `
+            <div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(pathSummary)}')">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>Copy Full Transfer Route</span>
+            </div>
+          `;
+        }
+        html += `
+          <div class="context-menu-separator"></div>
+          <div class="context-menu-item" onclick="closeContextMenu(); copyAllTransferQueueErrors()">
+            <svg class="icon" viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span>Copy All Queue Errors</span>
+          </div>
+        `;
+        menu.innerHTML = html;
+        return;
+      }
+
       const isRemote = type.startsWith('remote');
       const isBlank = type.endsWith('_blank');
 
@@ -12145,7 +12414,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     function escapeJsString(str) {
       if (!str) return '';
-      return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n');
     }
 
     async function promptNewFile(isRemote) {
@@ -14362,6 +14631,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       const completedCount = transferQueue.filter(t => t.status === 'completed').length;
       const failedCount = transferQueue.filter(t => t.status === 'failed').length;
 
+      const btnCopyErrs = document.getElementById('btnCopyTransferErrors');
+      if (btnCopyErrs) {
+        btnCopyErrs.style.display = failedCount > 0 ? 'inline-flex' : 'none';
+      }
+
       if (badge) {
         badge.textContent = activeCount > 0 ? activeCount : transferQueue.length;
       }
@@ -14407,13 +14681,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           statusBadge = '<span class="badge-status completed">✓ Done</span>';
           barClass = 'completed';
         } else {
-          statusBadge = '<span class="badge-status failed" title="' + escapeHtml(item.error || 'Transfer failed') + '">✕ Failed</span>';
+          statusBadge = '<span class="badge-status failed" style="cursor: pointer;" onclick="copyTextToClipboard(\'' + escapeJsString(item.error || 'Transfer failed') + '\', \'Transfer error copied!\')" title="Click or right-click to copy error details: ' + escapeHtml(item.error || 'Transfer failed') + '">✕ Failed</span>';
           barClass = 'failed';
         }
 
         const iconPrefix = isDir ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ' : (isUpload ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg> ' : '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ');
 
-        return '<tr>' +
+        return '<tr oncontextmenu="openContextMenu(event, \'transfer_item\', transferQueue[' + idx + '])" style="cursor: context-menu;">' +
           '<td style="text-align: center; color: var(--text-dim); font-size: 11px;">' + (idx + 1) + '</td>' +
           '<td>' + typeBadge + '</td>' +
           '<td style="font-weight: 600; color: var(--text-main); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(item.name) + '">' +
@@ -17007,7 +17281,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (sel && sel.length > 0) {
           currentRtSources = sel.map(item => item.path);
         } else {
-          const curDir = isRemote ? currentRemoteDir : currentLocalDir;
+          const curDir = isRemote ? (currentRemotePath || '/') : (currentLocalPath || 'C:\\');
           currentRtSources = curDir ? [curDir] : [];
         }
       }

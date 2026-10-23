@@ -251,13 +251,15 @@ pub fn collect_remote_items(
         if cancelled.load(Ordering::Relaxed) {
             return Err("Transfer cancelled by user".to_string());
         }
-        let clean = src.trim();
-        if clean.is_empty() {
+        let raw = src.trim();
+        if raw.is_empty() {
             continue;
         }
+        let clean = raw.trim_end_matches('/');
+        let clean_path = if clean.is_empty() { "/" } else { clean };
 
-        let stat_item = client.stat(clean)?;
-        let name = clean.rsplit('/').next().unwrap_or(clean).to_string();
+        let stat_item = client.stat(clean_path)?;
+        let name = clean_path.rsplit('/').next().unwrap_or(clean_path).to_string();
 
         if let Some(item) = stat_item {
             if item.is_dir {
@@ -265,15 +267,15 @@ pub fn collect_remote_items(
                     relative_path: name.clone(),
                     is_dir: true,
                     size: 0,
-                    source_full_path: clean.to_string(),
+                    source_full_path: clean_path.to_string(),
                 });
-                walk_remote_dir(client, clean, &name, &mut items, cancelled)?;
+                walk_remote_dir(client, clean_path, &name, &mut items, cancelled)?;
             } else {
                 items.push(TransferItem {
                     relative_path: name,
                     is_dir: false,
                     size: item.size,
-                    source_full_path: clean.to_string(),
+                    source_full_path: clean_path.to_string(),
                 });
             }
         } else {
@@ -282,7 +284,7 @@ pub fn collect_remote_items(
                 relative_path: name,
                 is_dir: false,
                 size: 0,
-                source_full_path: clean.to_string(),
+                source_full_path: clean_path.to_string(),
             });
         }
     }
@@ -338,17 +340,17 @@ pub fn execute_transfer_thread(
 ) {
     let emit_log = |msg: &str, kind: &str| {
         if let Some(ref cb) = exec_script {
-            let escaped = msg.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
+            let payload = json!({ "text": msg, "kind": kind });
+            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
             cb(format!(
-                "if(window.onRemoteTransferLog) window.onRemoteTransferLog({{ text: \"{}\", kind: \"{}\" }});",
-                escaped, kind
+                "if(window.onRemoteTransferLog) window.onRemoteTransferLog({});",
+                json_str
             ));
         }
     };
 
     let emit_progress = |file: &str, done_files: usize, total_files: usize, done_bytes: u64, total_bytes: u64, speed_str: &str| {
         if let Some(ref cb) = exec_script {
-            let escaped = file.replace('\\', "\\\\").replace('"', "\\\"");
             let pct = if total_bytes > 0 {
                 (done_bytes as f64 / total_bytes as f64 * 100.0).min(100.0)
             } else if total_files > 0 {
@@ -356,29 +358,47 @@ pub fn execute_transfer_thread(
             } else {
                 100.0
             };
+            let payload = json!({
+                "percent": pct,
+                "current_file": file,
+                "done_files": done_files,
+                "total_files": total_files,
+                "done_bytes": done_bytes,
+                "total_bytes": total_bytes,
+                "speed": speed_str
+            });
+            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
             cb(format!(
-                "if(window.onRemoteTransferProgress) window.onRemoteTransferProgress({{ percent: {:.1}, current_file: \"{}\", done_files: {}, total_files: {}, done_bytes: {}, total_bytes: {}, speed: \"{}\" }});",
-                pct, escaped, done_files, total_files, done_bytes, total_bytes, speed_str
+                "if(window.onRemoteTransferProgress) window.onRemoteTransferProgress({});",
+                json_str
             ));
         }
     };
 
     let emit_complete = |success: bool, msg: &str, count: usize, bytes: u64, secs: f64| {
         if let Some(ref cb) = exec_script {
-            let escaped = msg.replace('\\', "\\\\").replace('"', "\\\"");
+            let payload = json!({
+                "success": success,
+                "message": msg,
+                "count": count,
+                "bytes": bytes,
+                "elapsed_secs": secs
+            });
+            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
             cb(format!(
-                "if(window.onRemoteTransferComplete) window.onRemoteTransferComplete({{ success: {}, message: \"{}\", count: {}, bytes: {}, elapsed_secs: {:.1} }});",
-                success, escaped, count, bytes, secs
+                "if(window.onRemoteTransferComplete) window.onRemoteTransferComplete({});",
+                json_str
             ));
         }
     };
 
     let emit_error = |err: &str| {
         if let Some(ref cb) = exec_script {
-            let escaped = err.replace('\\', "\\\\").replace('"', "\\\"");
+            let payload = json!({ "error": err });
+            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
             cb(format!(
-                "if(window.onRemoteTransferError) window.onRemoteTransferError({{ error: \"{}\" }});",
-                escaped
+                "if(window.onRemoteTransferError) window.onRemoteTransferError({});",
+                json_str
             ));
         }
     };
@@ -388,18 +408,18 @@ pub fn execute_transfer_thread(
     // 1. Direct Server-to-Server Attempt (if source is remote SSH, target is SSH, and mode is direct or auto)
     if task.source_is_remote && (task.target_protocol == "scp" || task.target_protocol == "sftp" || task.target_protocol == "ssh") {
         if let Some(ref src) = source_client {
-            if task.transfer_mode == "direct_scp" || task.transfer_mode == "direct_rsync" {
+            if task.transfer_mode == "direct_scp" || task.transfer_mode == "direct_rsync" || task.transfer_mode == "auto" {
                 emit_log("Attempting direct Server-to-Server transfer via native remote command...", "info");
                 let sources_joined = task.sources.iter().map(|s| format!("'{}'", s.replace('\'', "'\\''"))).collect::<Vec<_>>().join(" ");
                 let target_dest = format!("{}@{}:'{}'", task.target_user, task.target_host, task.target_path.replace('\'', "'\\''"));
 
                 let direct_cmd = if task.transfer_mode == "direct_rsync" {
-                    format!("rsync -avz -e 'ssh -p {} -o StrictHostKeyChecking=no' {} {}", task.target_port, sources_joined, target_dest)
+                    format!("rsync -avz -e 'ssh -p {} -o BatchMode=yes -o StrictHostKeyChecking=no' {} {}", task.target_port, sources_joined, target_dest)
                 } else if !task.target_pass.is_empty() {
                     let esc_pass = task.target_pass.replace('\'', "'\\''");
                     format!("sshpass -p '{}' scp -P {} -r -o StrictHostKeyChecking=no {} {}", esc_pass, task.target_port, sources_joined, target_dest)
                 } else {
-                    format!("scp -P {} -r -o StrictHostKeyChecking=no {} {}", task.target_port, sources_joined, target_dest)
+                    format!("scp -P {} -r -o BatchMode=yes -o StrictHostKeyChecking=no {} {}", task.target_port, sources_joined, target_dest)
                 };
 
                 emit_log(&format!("Executing: {}", direct_cmd), "info");
@@ -419,7 +439,7 @@ pub fn execute_transfer_thread(
                             emit_error(&err_msg);
                             return;
                         }
-                        emit_log("Direct Server-to-Server execution failed or required interactive terminal. Falling back to Universal Stream Relay Bridge...", "info");
+                        emit_log("Direct Server-to-Server execution failed or required interactive auth. Falling back to Universal Stream Relay Bridge...", "info");
                     }
                     Err(e) => {
                         emit_log(&format!("Could not execute direct command: {}. Falling back to Stream Relay...", e), "warning");
@@ -457,8 +477,10 @@ pub fn execute_transfer_thread(
     emit_log("Connected to destination server! Ensuring target directory exists...", "info");
     let dest_clean = task.target_path.trim().replace('\\', "/");
     let dest_base = if dest_clean.is_empty() { ".".to_string() } else { dest_clean };
-    if let Err(e) = target_client.make_dir_all(&dest_base) {
-        emit_log(&format!("Notice: make_dir_all on {}: {}", dest_base, e), "info");
+    if dest_base != "." && dest_base != "/" && dest_base != "~" {
+        if let Err(e) = target_client.make_dir_all(&dest_base) {
+            emit_log(&format!("Notice: make_dir_all on {}: {}", dest_base, e), "info");
+        }
     }
 
     emit_log("Scanning and enumerating source files and folders...", "info");
@@ -502,6 +524,7 @@ pub fn execute_transfer_thread(
     let start_time = Instant::now();
     let mut done_files = 0;
     let mut done_bytes: u64 = 0;
+    let mut failed_files = 0;
 
     for item in &items {
         if cancelled.load(Ordering::Relaxed) {
@@ -510,7 +533,7 @@ pub fn execute_transfer_thread(
             return;
         }
 
-        let target_item_path = if dest_base == "." || dest_base.is_empty() {
+        let target_item_path = if dest_base == "." || dest_base.is_empty() || dest_base == "~" {
             item.relative_path.clone()
         } else {
             format!("{}/{}", dest_base.trim_end_matches('/'), item.relative_path)
@@ -521,6 +544,24 @@ pub fn execute_transfer_thread(
                 emit_log(&format!("Directory create note ({}): {}", target_item_path, e), "info");
             }
         } else {
+            // Check overwrite skip option
+            if task.overwrite == "skip" {
+                if let Ok(Some(_)) = target_client.stat(&target_item_path) {
+                    emit_log(&format!("↷ Skipped (already exists): {}", item.relative_path), "info");
+                    done_files += 1;
+                    done_bytes += item.size;
+                    continue;
+                }
+            }
+
+            // Ensure parent directory of target file exists
+            if let Some(idx) = target_item_path.rfind('/') {
+                let parent_dir = &target_item_path[..idx];
+                if !parent_dir.is_empty() && parent_dir != "." && parent_dir != "/" && parent_dir != "~" {
+                    let _ = target_client.make_dir_all(parent_dir);
+                }
+            }
+
             let elapsed = start_time.elapsed().as_secs_f64();
             let speed_mb = if elapsed > 0.05 {
                 (done_bytes as f64 / (1024.0 * 1024.0)) / elapsed
@@ -532,9 +573,19 @@ pub fn execute_transfer_thread(
 
             let transfer_res = if task.source_is_remote {
                 if let Some(ref mut src) = source_client {
-                    match src.download_file(&item.source_full_path) {
-                        Ok(data) => target_client.upload_file(&target_item_path, &data),
-                        Err(e) => Err(format!("Download failed for {}: {}", item.source_full_path, e)),
+                    let temp_file_path = std::env::temp_dir().join(format!("90ftp_relay_{}_{}.tmp", std::process::id(), done_files));
+                    let temp_str = temp_file_path.to_string_lossy().to_string();
+
+                    match src.download_to_local_file(&item.source_full_path, &temp_str) {
+                        Ok(_) => {
+                            let res = target_client.upload_from_local_file(&temp_str, &target_item_path).map(|_| ());
+                            let _ = std::fs::remove_file(&temp_file_path);
+                            res
+                        }
+                        Err(e) => {
+                            let _ = std::fs::remove_file(&temp_file_path);
+                            Err(format!("Download failed for {}: {}", item.source_full_path, e))
+                        }
                     }
                 } else {
                     Err("Source client disconnected".to_string())
@@ -550,6 +601,7 @@ pub fn execute_transfer_thread(
                     emit_log(&format!("✓ Transferred: {} ({})", item.relative_path, format_size(item.size)), "success");
                 }
                 Err(e) => {
+                    failed_files += 1;
                     emit_log(&format!("✕ Failed to transfer {}: {}", item.relative_path, e), "error");
                 }
             }
@@ -557,17 +609,28 @@ pub fn execute_transfer_thread(
     }
 
     let elapsed_total = start_time.elapsed().as_secs_f64();
-    emit_log(
-        &format!(
-            "Transfer session completed! Transferred {}/{} files ({} in {:.1}s)",
+    let is_all_success = failed_files == 0;
+    let completion_msg = if is_all_success {
+        format!(
+            "Transfer session completed successfully! Transferred {}/{} files ({} in {:.1}s)",
             done_files,
             total_files,
             format_size(done_bytes),
             elapsed_total
-        ),
-        "success",
-    );
-    emit_complete(true, "All selected items transferred successfully", done_files, done_bytes, elapsed_total);
+        )
+    } else {
+        format!(
+            "Transfer finished with {} failures: {}/{} files succeeded ({} in {:.1}s)",
+            failed_files,
+            done_files,
+            total_files,
+            format_size(done_bytes),
+            elapsed_total
+        )
+    };
+
+    emit_log(&completion_msg, if is_all_success { "success" } else { "warning" });
+    emit_complete(is_all_success, &completion_msg, done_files, done_bytes, elapsed_total);
 }
 
 #[cfg(test)]
@@ -599,5 +662,25 @@ mod tests {
 
         let _ = std::fs::remove_file(test_file);
         let _ = std::fs::remove_dir(temp_dir);
+    }
+
+    #[test]
+    fn test_task_deserialization() {
+        let json_data = serde_json::json!({
+            "source_is_remote": true,
+            "sources": ["/var/www/site/index.html"],
+            "target_protocol": "scp",
+            "target_host": "192.168.1.50",
+            "target_port": 22,
+            "target_user": "ubuntu",
+            "target_path": "/var/backup"
+        });
+
+        let task: RemoteTransferTask = serde_json::from_value(json_data).unwrap();
+        assert!(task.source_is_remote);
+        assert_eq!(task.target_protocol, "scp");
+        assert_eq!(task.transfer_mode, "auto");
+        assert_eq!(task.overwrite, "overwrite");
+        assert!(task.recursive);
     }
 }
