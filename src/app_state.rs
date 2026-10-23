@@ -312,6 +312,32 @@ impl AppState {
                 }
             }
 
+            "local_delete_batch" => {
+                let items = payload["items"].as_array().cloned().unwrap_or_default();
+                let mut deleted = Vec::new();
+                let mut errors = Vec::new();
+                for item in items {
+                    let path = item["path"].as_str().unwrap_or_else(|| item.as_str().unwrap_or(""));
+                    if path.is_empty() {
+                        continue;
+                    }
+                    match local_fs::delete_path(path) {
+                        Ok(_) => deleted.push(path.to_string()),
+                        Err(e) => errors.push(format!("{}: {}", path, e)),
+                    }
+                }
+                if deleted.is_empty() && !errors.is_empty() {
+                    IpcResponse::err(id, action, &errors.join("\n"))
+                } else {
+                    IpcResponse::ok(id, action, json!({
+                        "status": "deleted",
+                        "deleted_count": deleted.len(),
+                        "deleted": deleted,
+                        "errors": errors,
+                    }))
+                }
+            }
+
             "local_rename" => {
                 let old_p = payload["old_path"].as_str().unwrap_or("");
                 let new_p = payload["new_path"].as_str().unwrap_or("");
@@ -1103,19 +1129,63 @@ impl AppState {
             "remote_delete" => {
                 let path = payload["path"].as_str().unwrap_or("");
                 let is_dir = payload["is_dir"].as_bool().unwrap_or(false);
+                let current_dir = payload["current_dir"].as_str().filter(|s| !s.is_empty());
                 match self.with_remote_retry(|client| {
                     if is_dir {
                         client.remove_dir(path)?;
                     } else {
                         client.remove_file(path)?;
                     }
-                    let files = client.list(None).unwrap_or_else(|e| {
+                    let files = client.list(current_dir).unwrap_or_else(|e| {
                         crate::logger::log_error(&format!("Listing remote directory failed after delete: {}", e));
                         Vec::new()
                     });
                     Ok(files)
                 }) {
                     Ok((files, reconnected)) => IpcResponse::ok(id, action, json!({ "status": "deleted", "files": files, "reconnected": reconnected })),
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "remote_delete_batch" => {
+                let items = payload["items"].as_array().cloned().unwrap_or_default();
+                let current_dir = payload["current_dir"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string());
+                match self.with_remote_retry(|client| {
+                    let mut deleted = Vec::new();
+                    let mut errors = Vec::new();
+                    for item in &items {
+                        let path = item["path"].as_str().unwrap_or("");
+                        let is_dir = item["is_dir"].as_bool().unwrap_or(false);
+                        if path.is_empty() {
+                            continue;
+                        }
+                        let res = if is_dir {
+                            client.remove_dir(path)
+                        } else {
+                            client.remove_file(path)
+                        };
+                        match res {
+                            Ok(_) => deleted.push(path.to_string()),
+                            Err(e) => errors.push(format!("{}: {}", path, e)),
+                        }
+                    }
+                    if deleted.is_empty() && !errors.is_empty() {
+                        return Err(errors.join("\n"));
+                    }
+                    let files = client.list(current_dir.as_deref()).unwrap_or_else(|e| {
+                        crate::logger::log_error(&format!("Listing remote directory failed after batch delete: {}", e));
+                        Vec::new()
+                    });
+                    Ok((deleted, errors, files))
+                }) {
+                    Ok(((deleted, errors, files), reconnected)) => IpcResponse::ok(id, action, json!({
+                        "status": "deleted",
+                        "deleted_count": deleted.len(),
+                        "deleted": deleted,
+                        "errors": errors,
+                        "files": files,
+                        "reconnected": reconnected
+                    })),
                     Err(e) => IpcResponse::err(id, action, &e),
                 }
             }

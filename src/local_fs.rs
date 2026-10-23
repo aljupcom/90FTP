@@ -48,6 +48,7 @@ unsafe extern "system" {
         lpFileSystemNameBuffer: *mut u16,
         nFileSystemNameSize: u32,
     ) -> i32;
+    fn SetFileAttributesW(lpFileName: *const u16, dwFileAttributes: u32) -> i32;
 }
 
 pub fn list_drives() -> Vec<String> {
@@ -214,12 +215,67 @@ pub fn create_empty_file(path_str: &str) -> Result<(), String> {
     fs::write(path_str, "").map_err(|e| format!("Failed to create file: {}", e))
 }
 
+fn clear_windows_special_attrs(path: &Path) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        const FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
+        let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+        wide.push(0);
+        unsafe {
+            let _ = SetFileAttributesW(wide.as_ptr(), FILE_ATTRIBUTE_NORMAL);
+        }
+    }
+    if let Ok(meta) = fs::symlink_metadata(path) {
+        let mut perms = meta.permissions();
+        if perms.readonly() {
+            perms.set_readonly(false);
+            let _ = fs::set_permissions(path, perms);
+        }
+    }
+}
+
+fn clear_windows_special_attrs_recursive(path: &Path) {
+    clear_windows_special_attrs(path);
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let child = entry.path();
+            if let Ok(meta) = fs::symlink_metadata(&child) {
+                if meta.file_type().is_dir() && !meta.file_type().is_symlink() {
+                    clear_windows_special_attrs_recursive(&child);
+                } else {
+                    clear_windows_special_attrs(&child);
+                }
+            } else {
+                clear_windows_special_attrs(&child);
+            }
+        }
+    }
+}
+
 pub fn delete_path(path_str: &str) -> Result<(), String> {
     let path = Path::new(path_str);
-    if path.is_dir() {
-        fs::remove_dir_all(path).map_err(|e| format!("Failed to delete folder: {}", e))
+    let sym_meta = fs::symlink_metadata(path)
+        .map_err(|e| format!("Path not found or inaccessible ({}): {}", path_str, e))?;
+
+    let is_real_dir = sym_meta.file_type().is_dir() && !sym_meta.file_type().is_symlink();
+    if is_real_dir {
+        if fs::remove_dir_all(path).is_err() {
+            clear_windows_special_attrs_recursive(path);
+            fs::remove_dir_all(path)
+                .map_err(|e| format!("Failed to delete folder {}: {}", path_str, e))?;
+        }
+        Ok(())
     } else {
-        fs::remove_file(path).map_err(|e| format!("Failed to delete file: {}", e))
+        clear_windows_special_attrs(path);
+        if let Err(file_err) = fs::remove_file(path) {
+            // On Windows, directory junctions/symlinks may require remove_dir
+            if fs::remove_dir(path).is_ok() {
+                return Ok(());
+            }
+            return Err(format!("Failed to delete file {}: {}", path_str, file_err));
+        }
+        Ok(())
     }
 }
 

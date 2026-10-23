@@ -259,26 +259,15 @@ impl SftpClient {
         });
 
         match sftp_res {
-            Ok(items) => {
-                if !items.is_empty() {
-                    return Ok(items);
-                }
-                // If SFTP returned empty, verify if SSH ls sees files (e.g. permission/chroot edge case)
-                if let Ok(ssh_items) = self.list_via_ssh_exec(&target_s) {
-                    if !ssh_items.is_empty() {
-                        return Ok(ssh_items);
-                    }
-                }
-                Ok(items)
-            }
+            Ok(items) => Ok(items),
             Err(sftp_err) => {
                 crate::logger::log_warn(&format!("{}. Attempting SSH ls fallback...", sftp_err));
                 match self.list_via_ssh_exec(&target_s) {
-                    Ok(ssh_items) if !ssh_items.is_empty() => {
+                    Ok(ssh_items) => {
                         crate::logger::log_info(&format!("Successfully listed directory '{}' via SSH fallback ({} items)", target_s, ssh_items.len()));
                         Ok(ssh_items)
                     }
-                    _ => {
+                    Err(_) => {
                         crate::logger::log_error(&sftp_err);
                         Err(sftp_err)
                     }
@@ -288,8 +277,15 @@ impl SftpClient {
     }
 
     fn list_via_ssh_exec(&self, target_dir: &str) -> Result<Vec<FileItem>, String> {
-        let cmd = format!("ls -la --time-style=+%Y-%m-%d\\ %H:%M \"{}\" 2>/dev/null", target_dir);
-        let output = self.exec_command(&cmd)?;
+        let escaped_dir = target_dir.replace('\'', "'\\''");
+        let cmd = format!(
+            "LC_ALL=C ls -la --color=never --time-style=+%Y-%m-%d\\ %H:%M -- '{}' 2>/dev/null || LC_ALL=C ls -la '{}' 2>/dev/null",
+            escaped_dir, escaped_dir
+        );
+        let output = match self.exec_command_clean(&cmd) {
+            Ok((_code, out)) if !out.trim().is_empty() => out,
+            _ => self.exec_command(&cmd)?,
+        };
         let mut items = Vec::new();
 
         for line in output.lines() {
@@ -300,23 +296,6 @@ impl SftpClient {
             if let Some(item) = crate::ftp_client::parse_ftp_list_line(line_trimmed, target_dir) {
                 if item.name != "." && item.name != ".." {
                     items.push(item);
-                }
-            }
-        }
-
-        if items.is_empty() {
-            let simple_cmd = format!("ls -la \"{}\" 2>/dev/null", target_dir);
-            if let Ok(simple_out) = self.exec_command(&simple_cmd) {
-                for line in simple_out.lines() {
-                    let line_trimmed = line.trim();
-                    if line_trimmed.is_empty() || line_trimmed.starts_with("total ") {
-                        continue;
-                    }
-                    if let Some(item) = crate::ftp_client::parse_ftp_list_line(line_trimmed, target_dir) {
-                        if item.name != "." && item.name != ".." {
-                            items.push(item);
-                        }
-                    }
                 }
             }
         }
@@ -507,21 +486,212 @@ impl SftpClient {
     }
 
     pub fn remove_file(&self, file_path: &str) -> Result<(), String> {
-        let path_s = file_path.to_string();
-        self.rt.block_on(async {
-            self.sftp.remove_file(&path_s).await
-                .map_err(|e| format!("Failed to delete file: {}", e))?;
-            Ok(())
-        })
+        let path_s = file_path.trim().replace('\\', "/");
+        let sftp_attempt: Result<(), String> = self.rt.block_on(async {
+            // 1. Direct SFTP remove_file
+            if self.sftp.remove_file(&path_s).await.is_ok() {
+                return Ok(());
+            }
+            // 2. If read-only hidden file, try chmod u+w first then remove_file
+            if let Ok(mut meta) = self.sftp.metadata(&path_s).await {
+                if let Some(ref mut perms) = meta.permissions {
+                    *perms |= 0o600;
+                }
+                let _ = self.sftp.set_metadata(&path_s, meta).await;
+                if self.sftp.remove_file(&path_s).await.is_ok() {
+                    return Ok(());
+                }
+            }
+            // 3. Maybe it's an empty directory or symlink to directory
+            if self.sftp.remove_dir(&path_s).await.is_ok() {
+                return Ok(());
+            }
+            // 4. Try canonicalized parent directory + exact basename (handles symlinked parent paths)
+            if let Some((parent, base)) = path_s.rsplit_once('/') {
+                if !base.is_empty() {
+                    let parent_dir = if parent.is_empty() { "/" } else { parent };
+                    if let Ok(canon_parent) = self.sftp.canonicalize(parent_dir).await {
+                        let alt_path = if canon_parent.ends_with('/') {
+                            format!("{}{}", canon_parent, base)
+                        } else {
+                            format!("{}/{}", canon_parent, base)
+                        };
+                        if alt_path != path_s {
+                            if self.sftp.remove_file(&alt_path).await.is_ok()
+                                || self.sftp.remove_dir(&alt_path).await.is_ok()
+                            {
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            }
+            Err(format!("SFTP remove_file failed for {}", path_s))
+        });
+
+        if sftp_attempt.is_ok() {
+            return Ok(());
+        }
+
+        // 5. Fallback to SSH rm -rf (handles read-only hidden files, broken symlinks, special files)
+        if self.ssh_rm_rf_fallback(&path_s).is_ok() {
+            return Ok(());
+        }
+
+        // 6. Final check: if the item no longer exists on the server, succeed idempotently
+        let still_exists = self.rt.block_on(async {
+            self.sftp.symlink_metadata(&path_s).await.is_ok()
+        });
+        if !still_exists {
+            return Ok(());
+        }
+
+        Err(format!("Failed to delete file: {}", path_s))
     }
 
     pub fn remove_dir(&self, dir_path: &str) -> Result<(), String> {
-        let dir_s = dir_path.to_string();
-        self.rt.block_on(async {
-            self.sftp.remove_dir(&dir_s).await
-                .map_err(|e| format!("Failed to delete folder: {}", e))?;
+        let dir_s = dir_path.trim().replace('\\', "/");
+        if dir_s.is_empty() || dir_s == "/" {
+            return Err("Refusing to delete root directory '/'".to_string());
+        }
+
+        // 1. Fast path: empty directory or symlink via SFTP
+        let fast_ok = self.rt.block_on(async {
+            if self.sftp.remove_dir(&dir_s).await.is_ok() {
+                return true;
+            }
+            // If dir_s is actually a symlink or file
+            if let Ok(meta) = self.sftp.symlink_metadata(&dir_s).await {
+                if meta.is_symlink() || !meta.is_dir() {
+                    if self.sftp.remove_file(&dir_s).await.is_ok() {
+                        return true;
+                    }
+                }
+            }
+            false
+        });
+        if fast_ok {
+            return Ok(());
+        }
+
+        // 2. Fast recursive deletion via SSH `rm -rf` (handles non-empty dirs & hidden dotfiles instantly)
+        if self.ssh_rm_rf_fallback(&dir_s).is_ok() {
+            let gone = self.rt.block_on(async {
+                self.sftp.symlink_metadata(&dir_s).await.is_err()
+            });
+            if gone {
+                return Ok(());
+            }
+        }
+
+        // 3. Pure-SFTP recursive directory deletion (for SFTP-only accounts without shell access)
+        let sftp_recursive_res = self.rt.block_on(async {
+            let mut stack: Vec<(String, bool)> = vec![(dir_s.clone(), false)];
+            while let Some((curr_dir, children_processed)) = stack.pop() {
+                if children_processed {
+                    if let Ok(mut meta) = self.sftp.metadata(&curr_dir).await {
+                        if let Some(ref mut perms) = meta.permissions {
+                            *perms |= 0o700;
+                        }
+                        let _ = self.sftp.set_metadata(&curr_dir, meta).await;
+                    }
+                    if let Err(e) = self.sftp.remove_dir(&curr_dir).await {
+                        if self.sftp.remove_file(&curr_dir).await.is_err() {
+                            return Err(format!("Failed to delete folder {}: {}", curr_dir, e));
+                        }
+                    }
+                    continue;
+                }
+
+                // Ensure directory is readable/writable before listing
+                if let Ok(mut meta) = self.sftp.metadata(&curr_dir).await {
+                    if let Some(ref mut perms) = meta.permissions {
+                        *perms |= 0o700;
+                    }
+                    let _ = self.sftp.set_metadata(&curr_dir, meta).await;
+                }
+
+                stack.push((curr_dir.clone(), true));
+
+                if let Ok(mut rd) = self.sftp.read_dir(&curr_dir).await {
+                    while let Some(entry) = rd.next() {
+                        let name = entry.file_name();
+                        if name == "." || name == ".." || name.is_empty() {
+                            continue;
+                        }
+                        let child_path = if curr_dir.ends_with('/') {
+                            format!("{}{}", curr_dir, name)
+                        } else {
+                            format!("{}/{}", curr_dir, name)
+                        };
+                        let meta = entry.metadata();
+                        if meta.is_dir() && !meta.is_symlink() {
+                            stack.push((child_path, false));
+                        } else {
+                            if let Ok(mut fmeta) = self.sftp.metadata(&child_path).await {
+                                if let Some(ref mut perms) = fmeta.permissions {
+                                    *perms |= 0o600;
+                                }
+                                let _ = self.sftp.set_metadata(&child_path, fmeta).await;
+                            }
+                            if self.sftp.remove_file(&child_path).await.is_err() {
+                                let _ = self.sftp.remove_dir(&child_path).await;
+                            }
+                        }
+                    }
+                }
+            }
             Ok(())
-        })
+        });
+
+        if sftp_recursive_res.is_ok() {
+            return Ok(());
+        }
+
+        // 4. Final check: if directory no longer exists, succeed
+        let still_exists = self.rt.block_on(async {
+            self.sftp.symlink_metadata(&dir_s).await.is_ok()
+        });
+        if !still_exists {
+            return Ok(());
+        }
+
+        sftp_recursive_res
+    }
+
+    fn ssh_rm_rf_fallback(&self, target_path: &str) -> Result<(), String> {
+        let trimmed = target_path.trim();
+        if trimmed.is_empty() || trimmed == "/" || trimmed == "." || trimmed == ".." {
+            return Err("Invalid target path for rm -rf".to_string());
+        }
+        let escaped = trimmed.replace('\'', "'\\''");
+        let cmd = format!(
+            "rm -rf -- '{}' 2>/dev/null || (chmod -R u+rwx -- '{}' 2>/dev/null; rm -rf -- '{}' 2>/dev/null)",
+            escaped, escaped, escaped
+        );
+        if let Ok((code, _)) = self.exec_command_clean(&cmd) {
+            if code == 0 {
+                return Ok(());
+            }
+        }
+        // Relative basename fallback inside parent directory
+        if let Some((parent, base)) = trimmed.rsplit_once('/') {
+            if !base.is_empty() && base != "." && base != ".." {
+                let parent_dir = if parent.is_empty() { "/" } else { parent };
+                let esc_parent = parent_dir.replace('\'', "'\\''");
+                let esc_base = base.replace('\'', "'\\''");
+                let rel_cmd = format!(
+                    "cd '{}' 2>/dev/null && (rm -rf -- './{}' 2>/dev/null || (chmod -R u+rwx -- './{}' 2>/dev/null; rm -rf -- './{}' 2>/dev/null))",
+                    esc_parent, esc_base, esc_base, esc_base
+                );
+                if let Ok((code, _)) = self.exec_command_clean(&rel_cmd) {
+                    if code == 0 {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        Err("SSH rm -rf fallback failed".to_string())
     }
 
     pub fn rename(&self, old_path: &str, new_path: &str) -> Result<(), String> {
