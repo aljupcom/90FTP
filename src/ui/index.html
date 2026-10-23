@@ -2482,7 +2482,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.47</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.48</span>
         </div>
       </div>
 
@@ -2684,7 +2684,7 @@
       <!-- Server Dropdown Selector (Sites from Site Manager) -->
       <div class="qc-item">
         <span class="qc-label">Server:</span>
-        <select id="quickSiteSelect" onchange="onQuickSiteSelect(this.value)" style="min-width: 175px; max-width: 230px; font-weight: 600; color: #38bdf8;">
+        <select id="quickSiteSelect" onchange="onQuickSiteSelect(this.value, true)" style="min-width: 175px; max-width: 230px; font-weight: 600; color: #38bdf8;">
           <option value="manual">⚡ Manual Input...</option>
         </select>
       </div>
@@ -3743,7 +3743,7 @@
           <div style="font-size: 19px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">90FTP</div>
           <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Modern Site Manager & File Transfer Engine</div>
           <div style="margin-top: 8px;">
-            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.47 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" style="display: inline-block; padding: 3px 12px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 700; font-size: 11.5px; border: 1px solid rgba(56, 189, 248, 0.28);">Version 0.0.0.48 Dev (Windows x64)</span>
           </div>
         </div>
 
@@ -4634,7 +4634,7 @@
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.47';
+    let APP_CURRENT_VERSION = '0.0.0.48';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -4836,6 +4836,21 @@
       navigateRemote(path);
     }
 
+    function isProfileMatchingSite(profile, site) {
+      if (!profile || !site) return false;
+      if (profile.site_id && site.id && profile.site_id === site.id) {
+        return profile.host === site.host &&
+               String(profile.port || 22) === String(site.port || 22) &&
+               profile.username === site.username &&
+               (profile.protocol || 'sftp') === (site.protocol || 'sftp');
+      }
+      return profile.host === site.host &&
+             String(profile.port || 22) === String(site.port || 22) &&
+             profile.username === site.username &&
+             (profile.protocol || 'sftp') === (site.protocol || 'sftp') &&
+             (profile.remote_dir || '') === (site.remote_dir || '');
+    }
+
     // Quick Connect Server Selector (Sites from Site Manager)
     function updateQuickSiteSelect() {
       const sel = document.getElementById('quickSiteSelect');
@@ -4854,28 +4869,53 @@
 
       if (currentVal && currentVal !== 'manual' && savedSites.some(s => s.id === currentVal)) {
         sel.value = currentVal;
-        onQuickSiteSelect(currentVal);
+        onQuickSiteSelect(currentVal, false);
       } else if (selectedQuickSite && savedSites.some(s => s.id === selectedQuickSite.id)) {
         sel.value = selectedQuickSite.id;
-        onQuickSiteSelect(selectedQuickSite.id);
+        onQuickSiteSelect(selectedQuickSite.id, false);
       } else {
         sel.value = 'manual';
-        onQuickSiteSelect('manual');
+        onQuickSiteSelect('manual', false);
       }
     }
 
-    function onQuickSiteSelect(val) {
+    function onQuickSiteSelect(val, userTriggered = false) {
       const manualGroup = document.getElementById('manualFieldsGroup');
       const siteBadge = document.getElementById('selectedSiteBadge');
       const badgeInfo = document.getElementById('selectedSiteBadgeInfo');
+      const btnConn = document.getElementById('btnConnect');
+      const btnRec = document.getElementById('btnReconnect');
+      const btnDisc = document.getElementById('btnDisconnect');
 
       if (val === 'manual' || !val) {
         selectedQuickSite = null;
         if (manualGroup) manualGroup.style.display = 'flex';
         if (siteBadge) siteBadge.style.display = 'none';
+        if (userTriggered) {
+          if (isConnected) {
+            stopKeepAliveTimer();
+            sendRust('disconnect', { wipe_credentials: true }).catch(() => {});
+            isConnected = false;
+            currentConnectedProfile = null;
+          }
+          lastConnectedProfile = null;
+          remoteFiles = [];
+          selectedRemoteFile = null;
+          currentRemotePath = '';
+          if (typeof clearQuickFilter === 'function') clearQuickFilter(true);
+          const rInp = document.getElementById('remotePathInput');
+          if (rInp) rInp.value = 'Not connected';
+          const rList = document.getElementById('remoteFileList');
+          if (rList) {
+            rList.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 50px;">Enter server credentials above and click Connect.</td></tr>`;
+          }
+          updatePaneStatsBadge(true);
+          setConnectedState(false);
+        }
         if (!isConnected) {
-          const btnConn = document.getElementById('btnConnect');
           if (btnConn) btnConn.style.display = 'inline-flex';
+          if (btnRec) btnRec.style.display = 'none';
+          if (btnDisc) btnDisc.style.display = 'none';
         }
         return;
       }
@@ -4883,18 +4923,62 @@
       const site = savedSites.find(s => s.id === val);
       if (!site) return;
 
+      const activeProfile = currentConnectedProfile || lastConnectedProfile;
+      const isDifferentServer = !isProfileMatchingSite(activeProfile, site);
+
       selectedQuickSite = site;
       if (manualGroup) manualGroup.style.display = 'none';
+
+      // When user explicitly selects a different server in the dropdown, clear the old server's state & files immediately
+      if (userTriggered && isDifferentServer) {
+        if (isConnected) {
+          stopKeepAliveTimer();
+          sendRust('disconnect', { wipe_credentials: true }).catch(() => {});
+          isConnected = false;
+          currentConnectedProfile = null;
+          addLog(`Switched target server to '${site.name}' (${site.host}). Previous session closed.`, 'info');
+        }
+        lastConnectedProfile = null;
+        remoteFiles = [];
+        selectedRemoteFile = null;
+        currentRemotePath = site.remote_dir || '/';
+        if (typeof clearQuickFilter === 'function') clearQuickFilter(true);
+
+        const rInp = document.getElementById('remotePathInput');
+        if (rInp) rInp.value = site.remote_dir || '/';
+        const rList = document.getElementById('remoteFileList');
+        if (rList) {
+          rList.innerHTML = `
+            <tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 42px 15px;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                <span style="color: var(--text-main); font-weight: 700; font-size: 13px;">Selected Server: ${escapeHtml(site.name)} (${escapeHtml(site.host)})</span>
+                <span style="font-size: 11.5px; color: var(--text-muted);">Ready to connect (${site.protocol.toUpperCase()}://${escapeHtml(site.username)}@${escapeHtml(site.host)}:${site.port})</span>
+                <button type="button" class="btn btn-primary" onclick="handleConnectClick()" style="padding: 5px 16px; font-weight: 600; margin-top: 2px;">
+                  ⚡ Connect to ${escapeHtml(site.name)}
+                </button>
+              </div>
+            </td></tr>
+          `;
+        }
+        updatePaneStatsBadge(true);
+        setConnectedState(false);
+      }
+
       if (!isConnected) {
-        const btnConn = document.getElementById('btnConnect');
-        const btnRec = document.getElementById('btnReconnect');
-        if (lastConnectedProfile && lastConnectedProfile.host === site.host && lastConnectedProfile.username === site.username) {
+        if (!isDifferentServer && lastConnectedProfile) {
           if (btnRec) btnRec.style.display = 'inline-flex';
           if (btnConn) btnConn.style.display = 'none';
+          if (btnDisc) btnDisc.style.display = 'none';
         } else {
           if (btnConn) btnConn.style.display = 'inline-flex';
+          if (btnRec) btnRec.style.display = 'none';
+          if (btnDisc) btnDisc.style.display = 'none';
         }
+      } else if (isDifferentServer) {
+        if (btnConn) btnConn.style.display = 'inline-flex';
+        if (btnRec) btnRec.style.display = 'none';
       }
+
       if (siteBadge && badgeInfo) {
         siteBadge.style.display = 'flex';
         const authDesc = site.auth_type === 'key' ? 'SSH Key' : 'Password';
@@ -4911,7 +4995,7 @@
     function resetQuickSiteSelect() {
       const sel = document.getElementById('quickSiteSelect');
       if (sel) sel.value = 'manual';
-      onQuickSiteSelect('manual');
+      onQuickSiteSelect('manual', true);
     }
 
     // Loading overlay controls & live step progression
@@ -6802,6 +6886,24 @@
     }
 
     async function executeConnect(params) {
+      stopKeepAliveTimer();
+      isConnected = false;
+      currentConnectedProfile = null;
+      remoteFiles = [];
+      selectedRemoteFile = null;
+      currentRemotePath = params.remote_dir || '';
+      if (typeof clearQuickFilter === 'function' && remoteQuickFilterText) {
+        clearQuickFilter(true);
+      }
+
+      const rInp = document.getElementById('remotePathInput');
+      if (rInp) rInp.value = `Connecting to ${params.host}...`;
+      const rList = document.getElementById('remoteFileList');
+      if (rList) {
+        rList.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 45px;">Connecting to ${escapeHtml(params.host)}...</td></tr>`;
+      }
+      updatePaneStatsBadge(true);
+
       setConnectingState(true);
       showConnectionLoading(params);
       pendingConnection = params;
@@ -6843,6 +6945,10 @@
         hideConnectionLoading();
         setConnectedState(false);
         pendingConnection = null;
+        if (rInp) rInp.value = 'Connection failed';
+        if (rList) {
+          rList.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #ef4444; padding: 45px;">Connection failed to ${escapeHtml(params.host)}: ${escapeHtml(err.message || String(err))}</td></tr>`;
+        }
         addLog(`Connection failed: ${err.message}`, 'error');
         setTimeout(() => {
           alert('Connection Failed:\n' + err.message);
@@ -6851,9 +6957,21 @@
     }
 
     async function handleConnectClick() {
+      const selEl = document.getElementById('quickSiteSelect');
+      const selVal = selEl ? selEl.value : 'manual';
+      if (selVal && selVal !== 'manual') {
+        const liveSite = savedSites.find(s => s.id === selVal);
+        if (liveSite) {
+          selectedQuickSite = liveSite;
+        }
+      } else {
+        selectedQuickSite = null;
+      }
+
       if (selectedQuickSite) {
         addLog(`Connecting to saved site: ${selectedQuickSite.name} (${selectedQuickSite.host})...`, 'info');
         executeConnect({
+          site_id: selectedQuickSite.id,
           protocol: selectedQuickSite.protocol,
           host: selectedQuickSite.host,
           port: selectedQuickSite.port,
@@ -6862,7 +6980,7 @@
           auth_type: selectedQuickSite.auth_type || 'password',
           key_path: selectedQuickSite.key_path,
           passphrase: selectedQuickSite.passphrase,
-          remote_dir: selectedQuickSite.remote_dir,
+          remote_dir: selectedQuickSite.remote_dir || '',
           site_name: selectedQuickSite.name
         });
         return;
@@ -6899,7 +7017,11 @@
       stopKeepAliveTimer();
       const wipe = !!(appOptions && appOptions.wipeOnDisconnect);
       if (!wipe && currentConnectedProfile) {
-        lastConnectedProfile = { ...currentConnectedProfile, remote_dir: currentRemotePath || currentConnectedProfile.remote_dir || '/' };
+        if (!selectedQuickSite || isProfileMatchingSite(currentConnectedProfile, selectedQuickSite)) {
+          lastConnectedProfile = { ...currentConnectedProfile, remote_dir: currentRemotePath || currentConnectedProfile.remote_dir || '/' };
+        } else {
+          lastConnectedProfile = null;
+        }
       } else if (wipe) {
         lastConnectedProfile = null;
       }
@@ -6910,7 +7032,7 @@
       currentConnectedProfile = null;
       setConnectedState(false);
 
-      const keepView = !wipe && (appOptions ? appOptions.keepViewOnDisconnect !== false : true);
+      const keepView = !wipe && (appOptions ? appOptions.keepViewOnDisconnect !== false : true) && !!lastConnectedProfile;
       if (keepView && remoteFiles && remoteFiles.length > 0) {
         addLog('Disconnected from server. Folder view cached (click any folder or Reconnect to resume silently).', 'info');
       } else {
@@ -6927,6 +7049,7 @@
                </div>
              </td></tr>`
           : `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 50px;">Disconnected from server.</td></tr>`;
+        updatePaneStatsBadge(true);
         addLog('Disconnected from server.', 'info');
       }
     }
@@ -6954,43 +7077,77 @@
       if (isConnected) return { ok: true, alreadyNavigated: false };
       if (silentReconnectPromise) return silentReconnectPromise;
 
-      const profile = lastConnectedProfile || currentConnectedProfile || (selectedQuickSite ? {
-        protocol: selectedQuickSite.protocol,
-        host: selectedQuickSite.host,
-        port: selectedQuickSite.port,
-        username: selectedQuickSite.username,
-        password: selectedQuickSite.password,
-        auth_type: selectedQuickSite.auth_type || 'password',
-        key_path: selectedQuickSite.key_path,
-        passphrase: selectedQuickSite.passphrase,
-        remote_dir: selectedQuickSite.remote_dir,
-        site_name: selectedQuickSite.name
-      } : null);
+      const selEl = document.getElementById('quickSiteSelect');
+      const selVal = selEl ? selEl.value : 'manual';
+      if (selVal && selVal !== 'manual') {
+        const liveSite = savedSites.find(s => s.id === selVal);
+        if (liveSite) selectedQuickSite = liveSite;
+      }
+
+      const switchedToNewQuickSite = selectedQuickSite && !isProfileMatchingSite(lastConnectedProfile, selectedQuickSite);
+
+      const profile = switchedToNewQuickSite
+        ? {
+            site_id: selectedQuickSite.id,
+            protocol: selectedQuickSite.protocol,
+            host: selectedQuickSite.host,
+            port: selectedQuickSite.port,
+            username: selectedQuickSite.username,
+            password: selectedQuickSite.password,
+            auth_type: selectedQuickSite.auth_type || 'password',
+            key_path: selectedQuickSite.key_path,
+            passphrase: selectedQuickSite.passphrase,
+            remote_dir: selectedQuickSite.remote_dir || '',
+            site_name: selectedQuickSite.name
+          }
+        : (lastConnectedProfile || currentConnectedProfile || (selectedQuickSite ? {
+            site_id: selectedQuickSite.id,
+            protocol: selectedQuickSite.protocol,
+            host: selectedQuickSite.host,
+            port: selectedQuickSite.port,
+            username: selectedQuickSite.username,
+            password: selectedQuickSite.password,
+            auth_type: selectedQuickSite.auth_type || 'password',
+            key_path: selectedQuickSite.key_path,
+            passphrase: selectedQuickSite.passphrase,
+            remote_dir: selectedQuickSite.remote_dir || '',
+            site_name: selectedQuickSite.name
+          } : null));
 
       if (!profile || !profile.host) {
         return { ok: false, alreadyNavigated: false };
       }
 
-      const desiredDir = targetPath || currentRemotePath || profile.remote_dir || '/';
+      const desiredDir = switchedToNewQuickSite
+        ? (profile.remote_dir || '/')
+        : (targetPath || currentRemotePath || profile.remote_dir || '/');
       const dot = document.getElementById('statusDot');
       const text = document.getElementById('statusText');
       const btnRec = document.getElementById('btnReconnect');
       if (dot) dot.className = 'status-dot connecting';
-      if (text) text.innerText = `Reconnecting to ${profile.host}...`;
+      if (text) text.innerText = `Connecting to ${profile.host}...`;
       if (btnRec) btnRec.disabled = true;
 
       silentReconnectPromise = (async () => {
         try {
-          addLog(`Auto-reconnecting silently to ${profile.host} (${desiredDir})...`, 'info');
+          addLog(`Connecting silently to ${profile.host} (${desiredDir})...`, 'info');
           let res;
-          try {
-            res = await sendRust('reconnect', { path: desiredDir });
-          } catch (_) {
+          if (switchedToNewQuickSite) {
             res = await sendRust('connect', {
               ...profile,
               remote_dir: desiredDir,
               trust_host: true
             });
+          } else {
+            try {
+              res = await sendRust('reconnect', { path: desiredDir });
+            } catch (_) {
+              res = await sendRust('connect', {
+                ...profile,
+                remote_dir: desiredDir,
+                trust_host: true
+              });
+            }
           }
 
           isConnected = true;
@@ -7009,11 +7166,11 @@
             : `${(profile.protocol || 'sftp').toUpperCase()}://${profile.host}`;
           setConnectedState(true, label);
           startKeepAliveTimer();
-          addLog(`Reconnected silently to ${profile.host} (${currentRemotePath})`, 'success');
+          addLog(`Connected silently to ${profile.host} (${currentRemotePath})`, 'success');
           return { ok: true, alreadyNavigated: true, data: res };
         } catch (err) {
           setConnectedState(false);
-          addLog(`Silent reconnect failed: ${err.message || err}`, 'error');
+          addLog(`Silent connect failed: ${err.message || err}`, 'error');
           return { ok: false, alreadyNavigated: false };
         } finally {
           if (btnRec) btnRec.disabled = false;
@@ -7026,6 +7183,18 @@
 
     async function handleReconnect(silent = true, targetPath = null) {
       closeAllMenus();
+      const selEl = document.getElementById('quickSiteSelect');
+      const selVal = selEl ? selEl.value : 'manual';
+      if (selVal && selVal !== 'manual') {
+        const liveSite = savedSites.find(s => s.id === selVal);
+        if (liveSite) selectedQuickSite = liveSite;
+      }
+
+      if (selectedQuickSite && !isProfileMatchingSite(lastConnectedProfile, selectedQuickSite)) {
+        handleConnectClick();
+        return;
+      }
+
       if (silent && (lastConnectedProfile || currentConnectedProfile || selectedQuickSite)) {
         const res = await ensureSilentConnected(targetPath || currentRemotePath);
         if (res && res.ok) return;
@@ -7130,11 +7299,13 @@
         if (menuRec) menuRec.style.display = 'none';
         if (menuDisc) menuDisc.style.display = 'flex';
       } else {
-        const hasPrev = !!(lastConnectedProfile && lastConnectedProfile.host);
+        const hasMatchingPrev = !!(lastConnectedProfile && lastConnectedProfile.host && (!selectedQuickSite || isProfileMatchingSite(lastConnectedProfile, selectedQuickSite)));
         dot.className = 'status-dot';
-        text.innerText = hasPrev ? `Disconnected (${lastConnectedProfile.host})` : 'Disconnected';
+        text.innerText = hasMatchingPrev
+          ? `Disconnected (${lastConnectedProfile.host})`
+          : (selectedQuickSite ? `Ready: ${selectedQuickSite.name} (${selectedQuickSite.host})` : 'Disconnected');
         btnDisc.style.display = 'none';
-        if (hasPrev) {
+        if (hasMatchingPrev) {
           if (btnRec) btnRec.style.display = 'inline-flex';
           btnConn.style.display = 'none';
           if (btnToolRec) btnToolRec.style.display = 'inline-flex';
@@ -10312,7 +10483,9 @@
         return;
       }
 
+      const siteId = document.getElementById('siteId').value;
       const siteConfig = {
+        site_id: siteId || '',
         protocol: document.getElementById('siteProtocol').value,
         host: host,
         port: parseInt(document.getElementById('sitePort').value) || 22,
@@ -10327,11 +10500,10 @@
 
       closeSitesModal();
 
-      const siteId = document.getElementById('siteId').value;
       const sel = document.getElementById('quickSiteSelect');
       if (sel && siteId && savedSites.some(s => s.id === siteId)) {
         sel.value = siteId;
-        onQuickSiteSelect(siteId);
+        onQuickSiteSelect(siteId, false);
       }
 
       addLog(`Connecting to: ${siteConfig.site_name} (${siteConfig.host})...`, 'info');
@@ -10405,12 +10577,13 @@
       const sel = document.getElementById('quickSiteSelect');
       if (sel) {
         sel.value = site.id;
-        onQuickSiteSelect(site.id);
+        onQuickSiteSelect(site.id, false);
       }
 
       addLog(`Connecting to saved site: ${site.name} (${site.host})...`, 'info');
 
       executeConnect({
+        site_id: site.id,
         protocol: site.protocol,
         host: site.host,
         port: site.port,
@@ -10419,7 +10592,7 @@
         auth_type: site.auth_type || 'password',
         key_path: site.key_path,
         passphrase: site.passphrase,
-        remote_dir: site.remote_dir,
+        remote_dir: site.remote_dir || '',
         site_name: site.name
       });
     }

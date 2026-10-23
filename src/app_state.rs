@@ -635,6 +635,14 @@ impl AppState {
                     return IpcResponse::err(id, action, "Host cannot be empty");
                 }
 
+                // Always close and clear any previous active connection before connecting to a new server
+                {
+                    let mut lock = self.remote.lock().unwrap();
+                    *lock = None;
+                    let mut conn_lock = self.current_connection.lock().unwrap();
+                    *conn_lock = None;
+                }
+
                 match RemoteClient::connect(protocol, host, port, user, pass, auth_type, key_path, passphrase, trust_host) {
                     Ok(mut client) => {
                         let pwd = if !initial_remote.is_empty() {
