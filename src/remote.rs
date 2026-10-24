@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use crate::ftp_client::FtpClient;
 use crate::models::FileItem;
 use crate::sftp_client::SftpClient;
@@ -172,6 +174,21 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(_) => Err("Terminal command execution is not supported on standard FTP/FTPS. Please connect with SSH/SFTP.".to_string()),
             RemoteClient::Sftp(c) => c.exec_command_streaming(cmd, cols, rows, on_chunk),
+        }
+    }
+
+    pub fn exec_command_stream_pty<F>(
+        &self,
+        cmd: &str,
+        cancelled: Option<Arc<AtomicBool>>,
+        on_chunk: F,
+    ) -> Result<(i32, String), String>
+    where
+        F: FnMut(&str) + Send,
+    {
+        match self {
+            RemoteClient::Ftp(_) => Err("Terminal command execution is not supported on standard FTP/FTPS. Please connect with SSH/SFTP.".to_string()),
+            RemoteClient::Sftp(c) => c.exec_command_stream_pty(cmd, cancelled, on_chunk),
         }
     }
 

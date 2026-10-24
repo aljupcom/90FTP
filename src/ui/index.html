@@ -3576,7 +3576,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.61</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.62</span>
         </div>
       </div>
 
@@ -6838,7 +6838,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.61';
+    let APP_CURRENT_VERSION = '0.0.0.62';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -17901,7 +17901,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       const files = document.getElementById('rtFilesRatio');
       if (files) files.textContent = `${data.done_files} / ${data.total_files} files`;
       const bytes = document.getElementById('rtBytesRatio');
-      if (bytes) bytes.textContent = `${formatBytes(data.done_bytes)} / ${formatBytes(data.total_bytes)}`;
+      if (bytes) {
+        if (data.total_bytes > 0) {
+          bytes.textContent = `${formatBytes(data.done_bytes)} / ${formatBytes(data.total_bytes)}`;
+        } else if (data.done_bytes > 0) {
+          bytes.textContent = formatBytes(data.done_bytes);
+        } else {
+          bytes.textContent = '0 B';
+        }
+      }
       const spd = document.getElementById('rtSpeedText');
       if (spd) spd.textContent = data.speed;
     };

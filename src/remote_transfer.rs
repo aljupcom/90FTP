@@ -332,6 +332,89 @@ fn walk_remote_dir(
     Ok(())
 }
 
+fn strip_ansi_codes(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut in_escape = false;
+    for c in input.chars() {
+        if c == '\x1b' {
+            in_escape = true;
+        } else if in_escape {
+            if c.is_ascii_alphabetic() || c == '~' {
+                in_escape = false;
+            }
+        } else if c != '\r' {
+            out.push(c);
+        }
+    }
+    out
+}
+
+fn parse_size_with_unit(s: &str) -> Option<u64> {
+    let s = s.trim().replace(',', "");
+    let (num_str, mult) = if s.ends_with("TB") || s.ends_with("TiB") {
+        (s.trim_end_matches(|c: char| c.is_alphabetic()), 1024u64 * 1024 * 1024 * 1024)
+    } else if s.ends_with("GB") || s.ends_with("GiB") {
+        (s.trim_end_matches(|c: char| c.is_alphabetic()), 1024u64 * 1024 * 1024)
+    } else if s.ends_with("MB") || s.ends_with("MiB") {
+        (s.trim_end_matches(|c: char| c.is_alphabetic()), 1024u64 * 1024)
+    } else if s.ends_with("KB") || s.ends_with("KiB") {
+        (s.trim_end_matches(|c: char| c.is_alphabetic()), 1024u64)
+    } else if s.ends_with('B') {
+        (s.trim_end_matches('B'), 1u64)
+    } else if let Ok(n) = s.parse::<u64>() {
+        return Some(n);
+    } else {
+        return None;
+    };
+
+    if let Ok(num) = num_str.parse::<f64>() {
+        Some((num * mult as f64) as u64)
+    } else {
+        None
+    }
+}
+
+pub fn parse_scp_progress_line(chunk: &str) -> Option<(f64, Option<String>, Option<String>, Option<u64>)> {
+    let clean = strip_ansi_codes(chunk);
+    let mut pct_opt: Option<f64> = None;
+    let mut speed_opt: Option<String> = None;
+    let mut file_opt: Option<String> = None;
+    let mut bytes_opt: Option<u64> = None;
+
+    for line in clean.lines().chain(clean.split('\r')) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+        for (i, &t) in tokens.iter().enumerate() {
+            if t.ends_with('%') && t.len() >= 2 {
+                if let Ok(p) = t[..t.len() - 1].parse::<f64>() {
+                    if p >= 0.0 && p <= 100.0 {
+                        pct_opt = Some(p);
+                        if i > 0 && file_opt.is_none() {
+                            let candidate = tokens[0];
+                            if !candidate.ends_with('%') && !candidate.contains("/s") && candidate != "ETA" {
+                                file_opt = Some(candidate.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            if (t.ends_with("/s") || t.ends_with("/S")) && t.len() >= 4 {
+                speed_opt = Some(t.to_string());
+            }
+            if (t.ends_with("KB") || t.ends_with("MB") || t.ends_with("GB") || t.ends_with("TB")) && bytes_opt.is_none() {
+                if let Some(b) = parse_size_with_unit(t) {
+                    bytes_opt = Some(b);
+                }
+            }
+        }
+    }
+
+    pct_opt.map(|p| (p, speed_opt, file_opt, bytes_opt))
+}
+
 pub fn execute_transfer_thread(
     mut source_client: Option<RemoteClient>,
     task: RemoteTransferTask,
@@ -349,9 +432,11 @@ pub fn execute_transfer_thread(
         }
     };
 
-    let emit_progress = |file: &str, done_files: usize, total_files: usize, done_bytes: u64, total_bytes: u64, speed_str: &str| {
+    let emit_progress = |file: &str, done_files: usize, total_files: usize, done_bytes: u64, total_bytes: u64, speed_str: &str, override_pct: Option<f64>| {
         if let Some(ref cb) = exec_script {
-            let pct = if total_bytes > 0 {
+            let pct = if let Some(p) = override_pct {
+                p.max(0.0).min(100.0)
+            } else if total_bytes > 0 {
                 (done_bytes as f64 / total_bytes as f64 * 100.0).min(100.0)
             } else if total_files > 0 {
                 (done_files as f64 / total_files as f64 * 100.0).min(100.0)
@@ -438,7 +523,7 @@ pub fn execute_transfer_thread(
                     let target_dest = format!("{}@{}:'{}'", task.target_user, task.target_host, task.target_path.replace('\'', "'\\''"));
 
                     let direct_cmd = if task.transfer_mode == "direct_rsync" {
-                        format!("rsync -avz -e 'ssh -p {} -o BatchMode=yes -o StrictHostKeyChecking=no' {} {}", task.target_port, sources_joined, target_dest)
+                        format!("rsync -avz --info=progress2 -e 'ssh -p {} -o BatchMode=yes -o StrictHostKeyChecking=no' {} {}", task.target_port, sources_joined, target_dest)
                     } else if !task.target_pass.is_empty() {
                         let esc_pass = task.target_pass.replace('\'', "'\\''");
                         format!("sshpass -p '{}' scp -P {} -r -o StrictHostKeyChecking=no {} {}", esc_pass, task.target_port, sources_joined, target_dest)
@@ -446,9 +531,73 @@ pub fn execute_transfer_thread(
                         format!("scp -P {} -r -o BatchMode=yes -o StrictHostKeyChecking=no {} {}", task.target_port, sources_joined, target_dest)
                     };
 
+                    let total_files = task.sources.len();
+                    let first_file = task.sources.first()
+                        .map(|s| s.rsplit('/').next().unwrap_or(s))
+                        .unwrap_or("transfer")
+                        .to_string();
+
+                    // Probe total size on source server for real-time progress calculations
+                    let mut total_bytes = 0u64;
+                    let size_probe_cmd = format!("stat -c %s {} 2>/dev/null || du -sb {} 2>/dev/null | cut -f1", sources_joined, sources_joined);
+                    if let Ok((0, out)) = src.exec_command_clean(&size_probe_cmd) {
+                        if let Some(line) = out.lines().next() {
+                            if let Ok(b) = line.trim().parse::<u64>() {
+                                total_bytes = b;
+                            }
+                        }
+                    }
+
+                    emit_progress(&first_file, 0, total_files, 0, total_bytes, "Connecting to target...", Some(0.0));
                     emit_log(&format!("Executing: {}", direct_cmd), "info");
-                    match src.exec_command_clean(&direct_cmd) {
+
+                    let direct_start_time = Instant::now();
+                    let mut last_progress_tick = Instant::now();
+                    let mut cur_file = first_file.clone();
+                    let mut cur_speed = "Transferring...".to_string();
+                    let mut cur_done_bytes = 0u64;
+
+                    let exec_res = src.exec_command_stream_pty(
+                        &direct_cmd,
+                        Some(cancelled.clone()),
+                        |chunk: &str| {
+                            if let Some((pct, spd_opt, file_opt, bytes_opt)) = parse_scp_progress_line(chunk) {
+                                if let Some(s) = spd_opt {
+                                    cur_speed = s;
+                                }
+                                if let Some(f) = file_opt {
+                                    cur_file = f;
+                                }
+                                if let Some(b) = bytes_opt {
+                                    cur_done_bytes = b;
+                                } else if total_bytes > 0 {
+                                    cur_done_bytes = (total_bytes as f64 * (pct / 100.0)) as u64;
+                                }
+
+                                if last_progress_tick.elapsed().as_millis() >= 200 || pct >= 100.0 {
+                                    last_progress_tick = Instant::now();
+                                    emit_progress(
+                                        &cur_file,
+                                        if pct >= 100.0 { total_files } else { 0 },
+                                        total_files,
+                                        cur_done_bytes,
+                                        total_bytes,
+                                        &cur_speed,
+                                        Some(pct),
+                                    );
+                                }
+                            }
+                        },
+                    );
+
+                    match exec_res {
                         Ok((code, out)) => {
+                            if cancelled.load(Ordering::Relaxed) {
+                                emit_log("Transfer cancelled by user.", "warning");
+                                emit_complete(false, "Transfer cancelled by user", 0, 0, direct_start_time.elapsed().as_secs_f64());
+                                return;
+                            }
+
                             let is_clean_success = code == 0
                                 && !out.to_lowercase().contains("command not found")
                                 && !out.to_lowercase().contains("not found")
@@ -457,11 +606,26 @@ pub fn execute_transfer_thread(
                                 && !out.to_lowercase().contains("no such file");
 
                             if is_clean_success {
+                                emit_progress(
+                                    &first_file,
+                                    total_files,
+                                    total_files,
+                                    total_bytes,
+                                    total_bytes,
+                                    "Completed",
+                                    Some(100.0),
+                                );
                                 emit_log("Direct Server-to-Server command finished successfully!", "success");
                                 if !out.trim().is_empty() {
                                     emit_log(&format!("Output:\n{}", out.trim()), "info");
                                 }
-                                emit_complete(true, "Direct Server-to-Server transfer completed successfully", task.sources.len(), 0, 0.0);
+                                emit_complete(
+                                    true,
+                                    "Direct Server-to-Server transfer completed successfully",
+                                    total_files,
+                                    total_bytes,
+                                    direct_start_time.elapsed().as_secs_f64(),
+                                );
                                 return;
                             }
 
@@ -479,6 +643,11 @@ pub fn execute_transfer_thread(
                             emit_log("Direct Server-to-Server execution failed. Falling back to Universal Stream Relay Bridge...", "info");
                         }
                         Err(e) => {
+                            if cancelled.load(Ordering::Relaxed) {
+                                emit_log("Transfer cancelled by user.", "warning");
+                                emit_complete(false, "Transfer cancelled by user", 0, 0, direct_start_time.elapsed().as_secs_f64());
+                                return;
+                            }
                             emit_log(&format!("Could not execute direct command: {}. Falling back to Stream Relay...", e), "warning");
                             if task.transfer_mode != "auto" {
                                 emit_error(&e);
@@ -607,7 +776,7 @@ pub fn execute_transfer_thread(
                 0.0
             };
             let speed_str = format!("{:.2} MB/s", speed_mb);
-            emit_progress(&item.relative_path, done_files, total_files, done_bytes, total_bytes, &speed_str);
+            emit_progress(&item.relative_path, done_files, total_files, done_bytes, total_bytes, &speed_str, None);
 
             let transfer_res = if task.source_is_remote {
                 if let Some(ref mut src) = source_client {
@@ -720,5 +889,27 @@ mod tests {
         assert_eq!(task.transfer_mode, "auto");
         assert_eq!(task.overwrite, "overwrite");
         assert!(task.recursive);
+    }
+
+    #[test]
+    fn test_parse_scp_progress_line() {
+        let scp_line = "backup-git.ysnapp.com-10.23.2026_18-11-47.tar.gz   45%  450MB  32.1MB/s   00:15 ETA\r";
+        let res = parse_scp_progress_line(scp_line).expect("Should parse SCP progress line");
+        assert_eq!(res.0, 45.0);
+        assert_eq!(res.1.as_deref(), Some("32.1MB/s"));
+        assert_eq!(res.2.as_deref(), Some("backup-git.ysnapp.com-10.23.2026_18-11-47.tar.gz"));
+        assert_eq!(res.3, Some(450 * 1024 * 1024));
+
+        let rsync_line = "   157,286,400  15%   32.10MB/s    0:00:25\n";
+        let res2 = parse_scp_progress_line(rsync_line).expect("Should parse rsync line");
+        assert_eq!(res2.0, 15.0);
+        assert_eq!(res2.1.as_deref(), Some("32.10MB/s"));
+
+        let ansi_line = "\x1b[2Kfile.zip  100%  1024KB  25.0MB/s  00:00\r";
+        let res3 = parse_scp_progress_line(ansi_line).expect("Should parse line with ANSI codes");
+        assert_eq!(res3.0, 100.0);
+        assert_eq!(res3.1.as_deref(), Some("25.0MB/s"));
+        assert_eq!(res3.2.as_deref(), Some("file.zip"));
+        assert_eq!(res3.3, Some(1024 * 1024));
     }
 }

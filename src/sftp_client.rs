@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use russh::client::{self, Config, Handle, Handler};
 use russh::keys::{key::PrivateKeyWithHashAlg, PublicKeyOrCertificate};
 use russh_sftp::client::{Config as SftpConfig, SftpSession};
@@ -845,6 +846,89 @@ impl SftpClient {
             }
 
             // Fallback check: if exit code wasn't updated or server didn't emit ExitStatus on early EOF
+            if exit_code == 0 && (all_output.contains("command not found") || all_output.contains("not found: sshpass") || all_output.contains(": not found")) {
+                exit_code = 127;
+            }
+
+            Ok((exit_code, all_output))
+        })
+    }
+
+    /// Executes a command with PTY and real-time streaming callback, supporting live progress monitoring and cancellation
+    pub fn exec_command_stream_pty<F>(
+        &self,
+        cmd: &str,
+        cancelled: Option<Arc<AtomicBool>>,
+        mut on_chunk: F,
+    ) -> Result<(i32, String), String>
+    where
+        F: FnMut(&str) + Send,
+    {
+        let cmd_s = cmd.to_string();
+        self.rt.block_on(async {
+            let mut channel = self.session.channel_open_session().await
+                .map_err(|e| format!("Failed to open SSH channel: {}", e))?;
+
+            // Request PTY so interactive tools like scp/rsync stream live progress meters
+            let _ = channel.request_pty(false, "xterm-256color", 160, 30, 0, 0, &[]).await;
+
+            channel.exec(true, cmd_s).await
+                .map_err(|e| format!("Failed to execute command: {}", e))?;
+
+            let mut all_output = String::new();
+            let mut exit_code = 0i32;
+            let mut got_exit_status = false;
+
+            loop {
+                if let Some(ref c) = cancelled {
+                    if c.load(Ordering::Relaxed) {
+                        let mut sig = std::io::Cursor::new(vec![0x03u8]);
+                        let _ = channel.data(&mut sig).await;
+                        let _ = channel.close().await;
+                        return Err("Command cancelled by user".to_string());
+                    }
+                }
+
+                tokio::select! {
+                    wait_res = tokio::time::timeout(tokio::time::Duration::from_millis(500), channel.wait()) => {
+                        match wait_res {
+                            Ok(Some(msg)) => {
+                                match msg {
+                                    russh::ChannelMsg::Data { ref data } => {
+                                        let text = String::from_utf8_lossy(data).to_string();
+                                        on_chunk(&text);
+                                        all_output.push_str(&text);
+                                    }
+                                    russh::ChannelMsg::ExtendedData { ref data, .. } => {
+                                        let text = String::from_utf8_lossy(data).to_string();
+                                        on_chunk(&text);
+                                        all_output.push_str(&text);
+                                    }
+                                    russh::ChannelMsg::ExitStatus { exit_status } => {
+                                        exit_code = exit_status as i32;
+                                        got_exit_status = true;
+                                    }
+                                    russh::ChannelMsg::Close => {
+                                        break;
+                                    }
+                                    russh::ChannelMsg::Eof => {
+                                        if got_exit_status {
+                                            break;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            Ok(None) => break,
+                            Err(_) => {
+                                // 500ms timeout tick allows responsiveness to cancellation
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
             if exit_code == 0 && (all_output.contains("command not found") || all_output.contains("not found: sshpass") || all_output.contains(": not found")) {
                 exit_code = 127;
             }
