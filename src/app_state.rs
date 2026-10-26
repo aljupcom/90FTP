@@ -1393,6 +1393,10 @@ impl AppState {
                 *lock = None;
                 // The transfer session belongs to the profile being closed.
                 *self.transfer_client.lock().unwrap() = None;
+                // Stop any queued transfers: they would fail on reconnect anyway
+                // and should not surprise the user by restarting after a new
+                // connection is opened to a different server.
+                self.transfer_queue.shutdown();
                 if wipe {
                     let mut conn_lock = self.current_connection.lock().unwrap();
                     *conn_lock = None;

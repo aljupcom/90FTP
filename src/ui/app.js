@@ -8056,11 +8056,13 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     function transferSource(task) {
-      return task.kind === 'upload' ? task.local_path : task.remote_path;
+      const raw = task.kind === 'upload' ? task.local_path : task.remote_path;
+      return String(raw || '').replace(/\\/g, '/');
     }
 
     function transferDestination(task) {
-      return task.kind === 'upload' ? task.remote_path : task.local_path;
+      const raw = task.kind === 'upload' ? task.remote_path : task.local_path;
+      return String(raw || '').replace(/\\/g, '/');
     }
 
     function transferPercent(task) {
