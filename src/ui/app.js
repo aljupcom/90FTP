@@ -10011,12 +10011,53 @@ window.onerror = function(msg, url, line, col, error) {
     function openToolsModal() {
       closeAllMenus();
       const modal = document.getElementById('toolsModal');
-      if (modal) modal.classList.add('active');
+      if (!modal) return;
+      modal.classList.add('active');
+
+      const search = document.getElementById('toolsSearchInput');
+      if (search) {
+        // Always start from the full list: a filter left over from last time
+        // would look like the suite had lost tools.
+        search.value = '';
+        filterTools('');
+        // Focus after the pop-in animation, otherwise the caret fights it.
+        setTimeout(() => { try { search.focus(); } catch (_) {} }, 70);
+      }
     }
 
     function closeToolsModal() {
       const modal = document.getElementById('toolsModal');
       if (modal) modal.classList.remove('active');
+    }
+
+    /// Filters the tool cards by name, description or keyword. Sections whose
+    /// cards are all hidden collapse too, so the grid never leaves an empty
+    /// heading behind.
+    function filterTools(query) {
+      const body = document.getElementById('toolsBody');
+      if (!body) return;
+
+      const needle = String(query || '').trim().toLowerCase();
+      let visible = 0;
+
+      body.querySelectorAll('.tool-card').forEach((card) => {
+        const haystack = ((card.dataset.tool || '') + ' ' + card.textContent).toLowerCase();
+        const show = !needle || haystack.includes(needle);
+        card.hidden = !show;
+        if (show) visible++;
+      });
+
+      body.querySelectorAll('.tools-section').forEach((section) => {
+        const anyVisible = Array.from(section.querySelectorAll('.tool-card'))
+          .some((card) => !card.hidden);
+        section.hidden = !anyVisible;
+      });
+
+      const empty = document.getElementById('toolsEmptyState');
+      if (empty) empty.classList.toggle('visible', visible === 0);
+
+      const count = document.getElementById('toolsCountLabel');
+      if (count) count.textContent = visible === 1 ? '1 tool' : visible + ' tools';
     }
 
     async function clearKnownHostsCache() {
@@ -12473,6 +12514,7 @@ window.onerror = function(msg, url, line, col, error) {
         closeInteractiveMoveModal();
         closeNetworkProbeModal();
         closeSshKeygenModal();
+        closeToolsModal();
         closeServerHealthModal();
         closeFileDiffModal();
         closeCommandPalette();
