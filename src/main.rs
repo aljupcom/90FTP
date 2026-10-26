@@ -10,6 +10,7 @@ mod remote;
 mod remote_transfer;
 mod sessions;
 mod sftp_client;
+mod watcher;
 
 use std::sync::Arc;
 use tao::{
@@ -40,6 +41,9 @@ enum AppEvent {
 
 fn main() {
     logger::init_logger();
+    // Warm the credential vault key (and perform the one-time DPAPI migration)
+    // before the window opens, so the first IPC call is never blocked by it.
+    sessions::init_vault();
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
 
     let saved_state = sessions::load_window_state();
@@ -127,7 +131,9 @@ fn main() {
     };
 
     let webview = WebViewBuilder::new_with_web_context(&mut context)
-        .with_devtools(true)
+        // DevTools stay available in debug builds only; shipping them enabled in a
+        // release binary hands any script-injection bug a full execution console.
+        .with_devtools(cfg!(debug_assertions))
         .with_background_color((17, 17, 19, 255))
         .with_html(html_content)
         .with_ipc_handler(ipc_handler)
@@ -232,7 +238,7 @@ fn main() {
                         let init_script = format!("window.__INIT_PARAMS__ = {};", params);
 
                         if let Ok(term_wv) = WebViewBuilder::new_with_web_context(&mut context)
-                            .with_devtools(true)
+                            .with_devtools(cfg!(debug_assertions))
                             .with_background_color((0, 0, 0, 255))
                             .with_initialization_script(&init_script)
                             .with_html(term_html)

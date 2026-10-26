@@ -18,6 +18,20 @@ trigger: always_on
 - Never commit hardcoded tokens into files.
 - In-app updates require a GitHub Release object with `.exe` asset attached.
 
+## Code Signing Credentials
+- The PFX password is never stored in the repository. `release.ps1` resolves it from
+  `NINETYFTP_PFX_PASS` first, then from the gitignored `assets/certs/.pfxpass`.
+- The script aborts on any non-zero exit code from `cargo test`, `cargo build` or
+  `ISCC`. A failing stage must never publish — `$ErrorActionPreference = "Stop"` does
+  not catch native exit codes, so every native call is checked explicitly.
+- Because the certificate is self-signed, `signtool verify /pa` fails on any machine
+  where the root is not installed. `Sign-File` therefore falls back to comparing the
+  embedded signer thumbprint against `assets/certs/aljailane.crt`.
+- Rotating the PFX password only re-locks the container: the certificate and private
+  key stay the same, so previously published signatures remain valid.
+- Never sign with a silently-failing `try/catch`. An unsigned build must stop the
+  release, not ship.
+
 ## Structured Changelog Enforcement
 - Never publish a single-line or vague changelog.
 - Every release must categorize items into:

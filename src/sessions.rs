@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
@@ -15,8 +16,22 @@ const VAULT_VERSION: u8 = 1;
 const VAULT_PEPPER: &[u8] = b"90FTP_AEAD_AES256GCM_MASTER_KEY_2026_PEPPER_SECURE_AUTH";
 const FILENAME_SALT: &[u8] = b"90FTP_OBFUSCATED_FILENAME_DERIVATION_SALT_V2";
 
-/// Derives a 256-bit AES master key tied cryptographically to this user and machine.
-fn get_master_vault_key() -> [u8; 32] {
+/// Logical stores kept in the encrypted vault.
+const VAULT_STORES: [&str; 4] = [
+    "sites_profiles_v2",
+    "known_hosts_v2",
+    "remote_history_v2",
+    "window_state_v2",
+];
+
+static MASTER_KEY: OnceLock<[u8; 32]> = OnceLock::new();
+
+/// Legacy key derivation: a hash of machine/user identifiers and a constant.
+///
+/// Every input is readable by any process on the machine, so this was never a
+/// secret — it is kept only for decrypting vaults written by older builds and
+/// for deriving the (obfuscated, not secret) vault filenames.
+fn legacy_env_key() -> [u8; 32] {
     let user = std::env::var("USERNAME").unwrap_or_else(|_| "90ftp_user".to_string());
     let domain = std::env::var("USERDOMAIN").unwrap_or_else(|_| "localhost".to_string());
     let computer = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "pc".to_string());
@@ -38,6 +53,208 @@ fn get_master_vault_key() -> [u8; 32] {
     key
 }
 
+fn key_file_path() -> PathBuf {
+    let mut p = get_storage_dir();
+    p.push("v_key.dat");
+    p
+}
+
+/// Wraps a 32-byte key with Windows DPAPI (current user + machine scope) so the
+/// master key can only be unwrapped by this Windows account on this machine.
+#[cfg(target_os = "windows")]
+mod dpapi {
+    use std::ffi::c_void;
+
+    #[repr(C)]
+    struct DataBlob {
+        cb_data: u32,
+        pb_data: *mut u8,
+    }
+
+    #[link(name = "crypt32")]
+    unsafe extern "system" {
+        fn CryptProtectData(
+            p_data_in: *const DataBlob,
+            sz_data_descr: *const u16,
+            p_optional_entropy: *const DataBlob,
+            pv_reserved: *const c_void,
+            p_prompt_struct: *const c_void,
+            dw_flags: u32,
+            p_data_out: *mut DataBlob,
+        ) -> i32;
+        fn CryptUnprotectData(
+            p_data_in: *const DataBlob,
+            ppsz_data_descr: *mut *mut u16,
+            p_optional_entropy: *const DataBlob,
+            pv_reserved: *const c_void,
+            p_prompt_struct: *const c_void,
+            dw_flags: u32,
+            p_data_out: *mut DataBlob,
+        ) -> i32;
+    }
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn LocalFree(h_mem: *mut c_void) -> *mut c_void;
+    }
+
+    // CRYPTPROTECT_UI_FORBIDDEN — never show a prompt from a background thread.
+    const UI_FORBIDDEN: u32 = 0x1;
+
+    pub fn protect(data: &[u8]) -> Option<Vec<u8>> {
+        unsafe {
+            let in_blob = DataBlob {
+                cb_data: data.len() as u32,
+                pb_data: data.as_ptr() as *mut u8,
+            };
+            let mut out_blob = DataBlob {
+                cb_data: 0,
+                pb_data: std::ptr::null_mut(),
+            };
+            let ok = CryptProtectData(
+                &in_blob,
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                UI_FORBIDDEN,
+                &mut out_blob,
+            );
+            if ok == 0 || out_blob.pb_data.is_null() {
+                return None;
+            }
+            let slice = std::slice::from_raw_parts(out_blob.pb_data, out_blob.cb_data as usize);
+            let out = slice.to_vec();
+            LocalFree(out_blob.pb_data as *mut c_void);
+            Some(out)
+        }
+    }
+
+    pub fn unprotect(data: &[u8]) -> Option<Vec<u8>> {
+        unsafe {
+            let in_blob = DataBlob {
+                cb_data: data.len() as u32,
+                pb_data: data.as_ptr() as *mut u8,
+            };
+            let mut out_blob = DataBlob {
+                cb_data: 0,
+                pb_data: std::ptr::null_mut(),
+            };
+            let ok = CryptUnprotectData(
+                &in_blob,
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                UI_FORBIDDEN,
+                &mut out_blob,
+            );
+            if ok == 0 || out_blob.pb_data.is_null() {
+                return None;
+            }
+            let slice = std::slice::from_raw_parts(out_blob.pb_data, out_blob.cb_data as usize);
+            let out = slice.to_vec();
+            LocalFree(out_blob.pb_data as *mut c_void);
+            Some(out)
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+mod dpapi {
+    // Non-Windows builds have no DPAPI; the key file is stored unwrapped. The
+    // shipping target is Windows, so this path only exists to keep the crate
+    // buildable on other platforms.
+    pub fn protect(data: &[u8]) -> Option<Vec<u8>> {
+        Some(data.to_vec())
+    }
+    pub fn unprotect(data: &[u8]) -> Option<Vec<u8>> {
+        Some(data.to_vec())
+    }
+}
+
+fn read_stored_key() -> Option<[u8; 32]> {
+    let raw = fs::read(key_file_path()).ok()?;
+    let plain = dpapi::unprotect(&raw)?;
+    if plain.len() != 32 {
+        return None;
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&plain);
+    Some(key)
+}
+
+fn write_stored_key(key: &[u8; 32]) -> bool {
+    let wrapped = match dpapi::protect(key) {
+        Some(w) => w,
+        None => return false,
+    };
+    fs::write(key_file_path(), wrapped).is_ok()
+}
+
+/// Resolves the vault master key once per process.
+///
+/// Order of preference:
+///   1. A per-install random key protected by DPAPI (written by this or a newer build).
+///   2. Migration: existing vaults are decrypted with the legacy machine-derived
+///      key, a fresh random key is generated, everything is re-encrypted in place,
+///      and the new key is stored with DPAPI.
+///   3. If migration cannot be completed safely, the legacy key keeps working —
+///      we never risk making an existing vault unreadable.
+fn bootstrap_master_key() -> [u8; 32] {
+    if let Some(key) = read_stored_key() {
+        return key;
+    }
+
+    let legacy = legacy_env_key();
+
+    // Collect every existing store that can be decrypted with the legacy key.
+    let mut pending: Vec<(PathBuf, Vec<u8>)> = Vec::new();
+    let mut saw_existing = false;
+
+    for store in VAULT_STORES {
+        let path = vault_file_path_with_key(&legacy, store);
+        if !path.exists() {
+            continue;
+        }
+        saw_existing = true;
+        match read_vault_encrypted_with_key(&path, &legacy) {
+            Ok(plain) => pending.push((path, plain)),
+            Err(_) => {
+                // Something in the vault does not decrypt with the legacy key —
+                // bail out and keep the old behaviour rather than destroying data.
+                return legacy;
+            }
+        }
+    }
+
+    let mut new_key = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut new_key);
+
+    if !write_stored_key(&new_key) {
+        return legacy;
+    }
+
+    if saw_existing {
+        for (path, plain) in pending {
+            let _ = write_vault_encrypted_with_key(&path, &plain, &new_key);
+        }
+    }
+
+    new_key
+}
+
+/// Master key used for all vault encryption.
+fn master_key() -> [u8; 32] {
+    *MASTER_KEY.get_or_init(bootstrap_master_key)
+}
+
+/// Warms the vault key (and performs one-time migration) at startup so the first
+/// real IPC request does not pay for it.
+pub fn init_vault() {
+    let _ = master_key();
+}
+
 fn hex_encode(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
@@ -47,13 +264,13 @@ fn hex_encode(bytes: &[u8]) -> String {
     s
 }
 
-/// Derives a cryptographically secure, obfuscated filename for a logical store.
-/// E.g. "sites" -> "v_7b3a9e102f4a.dat"
-fn get_vault_file_path(logical_store_id: &str) -> PathBuf {
-    let key = get_master_vault_key();
+/// Derives an obfuscated filename for a logical store using a specific key.
+/// Filenames are deliberately derived from the stable legacy key so that the
+/// on-disk layout never changes when the encryption key is rotated.
+fn vault_file_path_with_key(key: &[u8; 32], logical_store_id: &str) -> PathBuf {
     let mut hasher = Sha256::new();
     hasher.update(FILENAME_SALT);
-    hasher.update(&key);
+    hasher.update(key);
     hasher.update(logical_store_id.as_bytes());
     let hash = hasher.finalize();
     let filename = format!("v_{}.dat", hex_encode(&hash[0..12]));
@@ -61,6 +278,10 @@ fn get_vault_file_path(logical_store_id: &str) -> PathBuf {
     let mut p = get_storage_dir();
     p.push(filename);
     p
+}
+
+fn get_vault_file_path(logical_store_id: &str) -> PathBuf {
+    vault_file_path_with_key(&legacy_env_key(), logical_store_id)
 }
 
 /// Securely wipes a file from disk before deletion by overwriting with zeroes.
@@ -79,9 +300,8 @@ fn secure_wipe_file(path: &Path) {
 
 /// Encrypts raw data using AES-256-GCM authenticated cipher with a fresh random 12-byte Nonce.
 /// Binary format: [MAGIC 4B "90FV"] + [VERSION 1B 0x01] + [NONCE 12B] + [CIPHERTEXT + 16B TAG]
-fn encrypt_vault_payload(plaintext: &[u8]) -> Result<Vec<u8>, String> {
-    let key = get_master_vault_key();
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("AES init error: {:?}", e))?;
+fn encrypt_vault_payload_with_key(plaintext: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("AES init error: {:?}", e))?;
 
     let mut nonce_bytes = [0u8; 12];
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
@@ -99,8 +319,12 @@ fn encrypt_vault_payload(plaintext: &[u8]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+fn encrypt_vault_payload(plaintext: &[u8]) -> Result<Vec<u8>, String> {
+    encrypt_vault_payload_with_key(plaintext, &master_key())
+}
+
 /// Decrypts AES-256-GCM authenticated vault payload.
-fn decrypt_vault_payload(data: &[u8]) -> Result<Vec<u8>, String> {
+fn decrypt_vault_payload_with_key(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
     if data.len() < VAULT_MAGIC.len() + 1 + 12 + 16 {
         return Err("Vault data too short or corrupted".to_string());
     }
@@ -114,8 +338,7 @@ fn decrypt_vault_payload(data: &[u8]) -> Result<Vec<u8>, String> {
     let nonce_bytes = &data[5..17];
     let ciphertext = &data[17..];
 
-    let key = get_master_vault_key();
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("AES init error: {:?}", e))?;
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("AES init error: {:?}", e))?;
     let nonce = Nonce::try_from(nonce_bytes).map_err(|e| format!("Invalid nonce: {:?}", e))?;
 
     let decrypted = cipher
@@ -125,16 +348,45 @@ fn decrypt_vault_payload(data: &[u8]) -> Result<Vec<u8>, String> {
     Ok(decrypted)
 }
 
+fn decrypt_vault_payload(data: &[u8]) -> Result<Vec<u8>, String> {
+    decrypt_vault_payload_with_key(data, &master_key())
+}
+
 /// Writes encrypted data to the specified path.
+fn write_vault_encrypted_with_key(path: &Path, plaintext: &[u8], key: &[u8; 32]) -> Result<(), String> {
+    let encrypted = encrypt_vault_payload_with_key(plaintext, key)?;
+    fs::write(path, encrypted).map_err(|e| e.to_string())
+}
+
 fn write_vault_encrypted(path: &Path, plaintext: &[u8]) -> Result<(), String> {
     let encrypted = encrypt_vault_payload(plaintext)?;
     fs::write(path, encrypted).map_err(|e| e.to_string())
 }
 
 /// Reads and decrypts data from the specified path.
+fn read_vault_encrypted_with_key(path: &Path, key: &[u8; 32]) -> Result<Vec<u8>, String> {
+    let raw = fs::read(path).map_err(|e| e.to_string())?;
+    decrypt_vault_payload_with_key(&raw, key)
+}
+
 fn read_vault_encrypted(path: &Path) -> Result<Vec<u8>, String> {
     let raw = fs::read(path).map_err(|e| e.to_string())?;
-    decrypt_vault_payload(&raw)
+    match decrypt_vault_payload(&raw) {
+        Ok(plain) => Ok(plain),
+        Err(master_err) => {
+            // Self-healing path: a store that was not re-encrypted because the
+            // process died mid-rotation still decrypts with the legacy key. Migrate
+            // it now rather than reporting the vault as corrupt.
+            let legacy = legacy_env_key();
+            match decrypt_vault_payload_with_key(&raw, &legacy) {
+                Ok(plain) => {
+                    let _ = write_vault_encrypted(path, &plain);
+                    Ok(plain)
+                }
+                Err(_) => Err(master_err),
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -260,6 +512,12 @@ pub fn trust_host(host: &str, port: u16, fingerprint: &str) {
 }
 
 pub fn get_storage_dir() -> PathBuf {
+    // Test/portable override so the suite never touches a real user profile.
+    if let Some(custom) = std::env::var_os("NINETYFTP_HOME") {
+        let p = PathBuf::from(custom);
+        let _ = fs::create_dir_all(&p);
+        return p;
+    }
     if let Some(appdata) = std::env::var_os("APPDATA") {
         let mut p = PathBuf::from(appdata);
         p.push("90FTP");
@@ -499,30 +757,45 @@ pub fn open_storage_dir() {
 mod tests {
     use super::*;
 
+    fn fixed_key() -> [u8; 32] {
+        let mut k = [0u8; 32];
+        for (i, b) in k.iter_mut().enumerate() {
+            *b = (i as u8).wrapping_mul(7).wrapping_add(3);
+        }
+        k
+    }
+
     #[test]
     fn test_vault_roundtrip() {
+        let key = fixed_key();
         let sample = b"Sensitive site credentials: host=84.46.254.56, user=root";
-        let encrypted = encrypt_vault_payload(sample).expect("Encryption failed");
+        let encrypted = encrypt_vault_payload_with_key(sample, &key).expect("Encryption failed");
         assert_ne!(&encrypted[..], sample);
         assert_eq!(&encrypted[0..4], b"90FV");
-        let decrypted = decrypt_vault_payload(&encrypted).expect("Decryption failed");
+        let decrypted = decrypt_vault_payload_with_key(&encrypted, &key).expect("Decryption failed");
         assert_eq!(decrypted, sample);
     }
 
     #[test]
-    fn test_obfuscated_filenames() {
-        let sites_path = get_vault_file_path("sites_profiles_v2");
-        let history_path = get_vault_file_path("remote_history_v2");
-        let hosts_path = get_vault_file_path("known_hosts_v2");
+    fn test_wrong_key_is_rejected() {
+        let encrypted = encrypt_vault_payload_with_key(b"secret", &fixed_key()).unwrap();
+        let mut other = fixed_key();
+        other[0] ^= 0xFF;
+        assert!(decrypt_vault_payload_with_key(&encrypted, &other).is_err());
+    }
 
-        let sites_name = sites_path.file_name().unwrap().to_str().unwrap();
-        let history_name = history_path.file_name().unwrap().to_str().unwrap();
-        let hosts_name = hosts_path.file_name().unwrap().to_str().unwrap();
+    #[test]
+    fn test_obfuscated_filenames() {
+        let legacy = legacy_env_key();
+        let sites = vault_file_path_with_key(&legacy, "sites_profiles_v2");
+        let history = vault_file_path_with_key(&legacy, "remote_history_v2");
+        let hosts = vault_file_path_with_key(&legacy, "known_hosts_v2");
+
+        let sites_name = sites.file_name().unwrap().to_str().unwrap();
+        let history_name = history.file_name().unwrap().to_str().unwrap();
+        let hosts_name = hosts.file_name().unwrap().to_str().unwrap();
 
         assert!(sites_name.starts_with("v_") && sites_name.ends_with(".dat"));
-        assert!(history_name.starts_with("v_") && history_name.ends_with(".dat"));
-        assert!(hosts_name.starts_with("v_") && hosts_name.ends_with(".dat"));
-
         assert_ne!(sites_name, history_name);
         assert_ne!(sites_name, hosts_name);
         assert!(!sites_name.contains("site"));
@@ -531,27 +804,44 @@ mod tests {
     }
 
     #[test]
-    fn test_migration_and_shredding() {
-        let sites = load_sites();
-        let hosts = load_known_hosts();
-        let history = load_remote_history();
-        let _window = load_window_state();
+    fn test_filename_layout_is_stable_across_key_rotation() {
+        // Filenames are derived from the legacy key on purpose: rotating the
+        // encryption key must never relocate existing vault files.
+        let legacy = legacy_env_key();
+        let path = vault_file_path_with_key(&legacy, "sites_profiles_v2");
+        assert_eq!(path, get_vault_file_path("sites_profiles_v2"));
+    }
 
-        println!("Loaded sites count: {}", sites.len());
-        println!("Loaded hosts count: {}", hosts.len());
-        println!("Loaded history count: {}", history.len());
+    #[test]
+    fn test_dpapi_wrap_roundtrip() {
+        let key = fixed_key();
+        let wrapped = dpapi::protect(&key).expect("protect failed");
+        assert_ne!(&wrapped[..], &key[..], "wrapped key must not equal the raw key");
+        let restored = dpapi::unprotect(&wrapped).expect("unprotect failed");
+        assert_eq!(restored, key.to_vec());
+    }
 
-        // Verify that the vault files exist
-        assert!(get_storage_path().exists());
-        assert!(get_known_hosts_path().exists());
-        assert!(get_remote_history_path().exists());
-        assert!(get_window_state_path().exists());
+    #[test]
+    fn test_vault_reencrypt_with_new_key() {
+        let mut dir = std::env::temp_dir();
+        dir.push(format!("90ftp_test_reencrypt_{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let path = dir.join("store.dat");
 
-        // Verify that the legacy unencrypted json files are gone!
-        assert!(!get_storage_dir().join("sites.json").exists());
-        assert!(!get_storage_dir().join("known_hosts.json").exists());
-        assert!(!get_storage_dir().join("remote_history.json").exists());
-        assert!(!get_storage_dir().join("window.json").exists());
+        let legacy = legacy_env_key();
+        let payload = b"{\"sites\":[]}";
+        write_vault_encrypted_with_key(&path, payload, &legacy).unwrap();
+        let plain = read_vault_encrypted_with_key(&path, &legacy).unwrap();
+        assert_eq!(plain, payload);
+
+        let mut rotated = legacy;
+        rotated[0] ^= 0x5A;
+        write_vault_encrypted_with_key(&path, &plain, &rotated).unwrap();
+
+        assert!(read_vault_encrypted_with_key(&path, &legacy).is_err());
+        assert_eq!(read_vault_encrypted_with_key(&path, &rotated).unwrap(), payload);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
 

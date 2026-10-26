@@ -1,37 +1,125 @@
 use std::io::Cursor;
-use suppaftp::FtpStream;
+use suppaftp::{FtpStream, ImplFtpStream, NativeTlsConnector, NativeTlsFtpStream, TlsStream};
 use crate::models::FileItem;
 
-#[allow(dead_code)]
-pub struct FtpClient {
-    stream: FtpStream,
-    pub current_dir: String,
-    pub host: String,
-    pub username: String,
+/// Transport-agnostic FTP surface consumed by `RemoteClient`.
+///
+/// Implemented once for every TLS backend, so plain FTP (`ImplFtpStream<TcpStream>`)
+/// and explicit FTPS (`ImplFtpStream<NativeTlsStream>`, i.e. AUTH TLS) share a single
+/// code path. This removes the previous situation where "ftps" silently degraded to
+/// a cleartext control channel.
+pub trait FtpBackend: Send {
+    #[allow(dead_code)]
+    fn current_dir(&self) -> &str;
+    #[allow(dead_code)]
+    fn host(&self) -> &str;
+    #[allow(dead_code)]
+    fn username(&self) -> &str;
+    fn is_secure(&self) -> bool;
+    fn list(&mut self, path: Option<&str>) -> Result<Vec<FileItem>, String>;
+    fn change_dir(&mut self, path: &str) -> Result<String, String>;
+    #[allow(dead_code)]
+    fn cdup(&mut self) -> Result<String, String>;
+    fn download_file(&mut self, remote_file: &str) -> Result<Vec<u8>, String>;
+    fn download_to_local_file(&mut self, remote_file: &str, local_path: &str) -> Result<u64, String>;
+    fn upload_file(&mut self, remote_file: &str, data: &[u8]) -> Result<(), String>;
+    fn upload_from_local_file(&mut self, local_path: &str, remote_file: &str) -> Result<u64, String>;
+    fn stat(&mut self, remote_path: &str) -> Result<Option<FileItem>, String>;
+    fn make_dir(&mut self, dir_name: &str) -> Result<(), String>;
+    fn remove_file(&mut self, file_name: &str) -> Result<(), String>;
+    fn remove_dir(&mut self, dir_name: &str) -> Result<(), String>;
+    fn chmod(&mut self, mode: &str, file_name: &str) -> Result<(), String>;
+    fn rename(&mut self, from: &str, to: &str) -> Result<(), String>;
+    fn ping(&mut self) -> Result<(), String>;
 }
 
 #[allow(dead_code)]
-impl FtpClient {
-    pub fn connect(host: &str, port: u16, user: &str, pass: &str) -> Result<Self, String> {
-        let addr = format!("{}:{}", host, port);
-        let mut stream = FtpStream::connect(&addr)
-            .map_err(|e| format!("FTP Connection failed to {}: {}", addr, e))?;
+pub struct FtpClient<T: TlsStream> {
+    stream: ImplFtpStream<T>,
+    current_dir: String,
+    host: String,
+    username: String,
+    secure: bool,
+}
 
-        stream
-            .login(user, pass)
-            .map_err(|e| format!("FTP Login failed for user {}: {}", user, e))?;
-
+impl<T: TlsStream> FtpClient<T> {
+    fn from_stream(mut stream: ImplFtpStream<T>, host: &str, user: &str, secure: bool) -> Self {
         let current_dir = stream.pwd().unwrap_or_else(|_| "/".to_string());
-
-        Ok(Self {
+        Self {
             stream,
             current_dir,
             host: host.to_string(),
             username: user.to_string(),
-        })
+            secure,
+        }
+    }
+}
+
+/// Plain, unencrypted FTP (RFC 959). Credentials cross the wire in cleartext —
+/// only offered when the user explicitly picks the `ftp` protocol.
+pub fn connect_plain(
+    host: &str,
+    port: u16,
+    user: &str,
+    pass: &str,
+) -> Result<Box<dyn FtpBackend>, String> {
+    let addr = format!("{}:{}", host, port);
+    let mut stream =
+        FtpStream::connect(&addr).map_err(|e| format!("FTP Connection failed to {}: {}", addr, e))?;
+
+    stream
+        .login(user, pass)
+        .map_err(|e| format!("FTP Login failed for user {}: {}", user, e))?;
+
+    Ok(Box::new(FtpClient::from_stream(stream, host, user, false)))
+}
+
+/// Explicit FTPS / FTPES: connects, upgrades the control channel with `AUTH TLS`,
+/// negotiates `PBSZ 0` + `PROT P` (handled by `into_secure`) and only then sends
+/// credentials. Certificate validation uses the platform trust store (SChannel).
+pub fn connect_secure(
+    host: &str,
+    port: u16,
+    user: &str,
+    pass: &str,
+) -> Result<Box<dyn FtpBackend>, String> {
+    let addr = format!("{}:{}", host, port);
+    let stream = NativeTlsFtpStream::connect(&addr)
+        .map_err(|e| format!("FTPS Connection failed to {}: {}", addr, e))?;
+
+    let connector = native_tls::TlsConnector::builder()
+        .build()
+        .map_err(|e| format!("FTPS TLS engine initialisation failed: {}", e))?;
+
+    let mut stream = stream
+        .into_secure(NativeTlsConnector::from(connector), host)
+        .map_err(|e| format!("FTPS handshake (AUTH TLS) failed for {}: {}", addr, e))?;
+
+    stream
+        .login(user, pass)
+        .map_err(|e| format!("FTPS Login failed for user {}: {}", user, e))?;
+
+    Ok(Box::new(FtpClient::from_stream(stream, host, user, true)))
+}
+
+impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
+    fn current_dir(&self) -> &str {
+        &self.current_dir
     }
 
-    pub fn list(&mut self, path: Option<&str>) -> Result<Vec<FileItem>, String> {
+    fn host(&self) -> &str {
+        &self.host
+    }
+
+    fn username(&self) -> &str {
+        &self.username
+    }
+
+    fn is_secure(&self) -> bool {
+        self.secure
+    }
+
+    fn list(&mut self, path: Option<&str>) -> Result<Vec<FileItem>, String> {
         let target_dir = path.unwrap_or(&self.current_dir);
         let lines = self
             .stream
@@ -67,7 +155,7 @@ impl FtpClient {
         Ok(items)
     }
 
-    pub fn change_dir(&mut self, path: &str) -> Result<String, String> {
+    fn change_dir(&mut self, path: &str) -> Result<String, String> {
         self.stream
             .cwd(path)
             .map_err(|e| format!("Failed to change directory to {}: {}", path, e))?;
@@ -76,7 +164,7 @@ impl FtpClient {
         Ok(new_pwd)
     }
 
-    pub fn cdup(&mut self) -> Result<String, String> {
+    fn cdup(&mut self) -> Result<String, String> {
         self.stream
             .cdup()
             .map_err(|e| format!("Failed to navigate up: {}", e))?;
@@ -85,7 +173,7 @@ impl FtpClient {
         Ok(new_pwd)
     }
 
-    pub fn download_file(&mut self, remote_file: &str) -> Result<Vec<u8>, String> {
+    fn download_file(&mut self, remote_file: &str) -> Result<Vec<u8>, String> {
         let cursor = self
             .stream
             .retr_as_buffer(remote_file)
@@ -93,7 +181,7 @@ impl FtpClient {
         Ok(cursor.into_inner())
     }
 
-    pub fn download_to_local_file(&mut self, remote_file: &str, local_path: &str) -> Result<u64, String> {
+    fn download_to_local_file(&mut self, remote_file: &str, local_path: &str) -> Result<u64, String> {
         if let Some(parent) = std::path::Path::new(local_path).parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -108,7 +196,7 @@ impl FtpClient {
         Ok(len)
     }
 
-    pub fn upload_file(&mut self, remote_file: &str, data: &[u8]) -> Result<(), String> {
+    fn upload_file(&mut self, remote_file: &str, data: &[u8]) -> Result<(), String> {
         let mut cursor = Cursor::new(data);
         self.stream
             .put_file(remote_file, &mut cursor)
@@ -116,7 +204,7 @@ impl FtpClient {
         Ok(())
     }
 
-    pub fn upload_from_local_file(&mut self, local_path: &str, remote_file: &str) -> Result<u64, String> {
+    fn upload_from_local_file(&mut self, local_path: &str, remote_file: &str) -> Result<u64, String> {
         let bytes = std::fs::read(local_path)
             .map_err(|e| format!("Failed to read local file {}: {}", local_path, e))?;
         let len = bytes.len() as u64;
@@ -127,7 +215,7 @@ impl FtpClient {
         Ok(len)
     }
 
-    pub fn stat(&mut self, remote_path: &str) -> Result<Option<FileItem>, String> {
+    fn stat(&mut self, remote_path: &str) -> Result<Option<FileItem>, String> {
         let parent: String = if let Some(idx) = remote_path.rfind('/') {
             if idx == 0 { "/".to_string() } else { remote_path[..idx].to_string() }
         } else {
@@ -143,7 +231,7 @@ impl FtpClient {
         Ok(None)
     }
 
-    pub fn make_dir(&mut self, dir_name: &str) -> Result<(), String> {
+    fn make_dir(&mut self, dir_name: &str) -> Result<(), String> {
         match self.stream.mkdir(dir_name) {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -157,7 +245,7 @@ impl FtpClient {
         }
     }
 
-    pub fn remove_file(&mut self, file_name: &str) -> Result<(), String> {
+    fn remove_file(&mut self, file_name: &str) -> Result<(), String> {
         if self.stream.rm(file_name).is_ok() {
             return Ok(());
         }
@@ -184,7 +272,7 @@ impl FtpClient {
             .map_err(|e| format!("Failed to delete file {}: {}", file_name, e))
     }
 
-    pub fn remove_dir(&mut self, dir_name: &str) -> Result<(), String> {
+    fn remove_dir(&mut self, dir_name: &str) -> Result<(), String> {
         // 1. Fast path for empty directory
         if self.stream.rmdir(dir_name).is_ok() {
             return Ok(());
@@ -243,7 +331,7 @@ impl FtpClient {
             .map_err(|e| format!("Failed to delete folder {}: {}", dir_name, e))
     }
 
-    pub fn chmod(&mut self, mode: &str, file_name: &str) -> Result<(), String> {
+    fn chmod(&mut self, mode: &str, file_name: &str) -> Result<(), String> {
         let cmd = format!("CHMOD {} {}", mode, file_name);
         self.stream
             .site(&cmd)
@@ -251,11 +339,11 @@ impl FtpClient {
         Ok(())
     }
 
-    pub fn rename(&mut self, from: &str, to: &str) -> Result<(), String> {
+    fn rename(&mut self, from: &str, to: &str) -> Result<(), String> {
         self.stream.rename(from, to).map_err(|e| format!("FTP rename failed: {}", e))
     }
 
-    pub fn ping(&mut self) -> Result<(), String> {
+    fn ping(&mut self) -> Result<(), String> {
         self.stream.noop().map_err(|e| format!("FTP keepalive failed: {}", e))
     }
 }

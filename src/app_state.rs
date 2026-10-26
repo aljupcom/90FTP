@@ -1,12 +1,25 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use serde_json::json;
 use crate::local_fs;
 use crate::models::{IpcRequest, IpcResponse, SiteProfile};
 use crate::remote::RemoteClient;
 use crate::sessions;
+use crate::watcher;
 
 pub type ScriptCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub type TerminalWindowCallback = Arc<dyn Fn(serde_json::Value) + Send + Sync>;
+
+/// What the background change-detector is currently looking at.
+#[derive(Debug, Clone, Default)]
+pub struct WatchConfig {
+    pub local_dir: String,
+    pub remote_dir: String,
+    pub interval_ms: u64,
+    /// Bumped on every `watch_start`; the loop resets its fingerprints when it
+    /// sees a new value so a directory switch never fires a false positive.
+    pub generation: u64,
+}
 
 pub struct AppState {
     pub remote: Arc<Mutex<Option<RemoteClient>>>,
@@ -17,6 +30,9 @@ pub struct AppState {
     pub tab_sessions: Arc<Mutex<std::collections::HashMap<String, (Option<RemoteClient>, Option<serde_json::Value>)>>>,
     pub archive_cancelled: Arc<std::sync::atomic::AtomicBool>,
     pub remote_transfer_cancelled: Arc<std::sync::atomic::AtomicBool>,
+    pub watch: Arc<Mutex<WatchConfig>>,
+    pub watch_running: Arc<AtomicBool>,
+    pub watch_started: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -33,7 +49,98 @@ impl AppState {
             tab_sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             archive_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             remote_transfer_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            watch: Arc::new(Mutex::new(WatchConfig::default())),
+            watch_running: Arc::new(AtomicBool::new(false)),
+            watch_started: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Starts the single background change-detector thread (idempotent).
+    ///
+    /// The remote probe uses `try_lock`, so a long upload or a running terminal
+    /// command can never be blocked — or block the watcher — by this loop.
+    pub fn ensure_watcher(&self) {
+        if self.watch_started.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        let cfg = self.watch.clone();
+        let running = self.watch_running.clone();
+        let remote = self.remote.clone();
+        let exec_script = self.exec_script.clone();
+
+        std::thread::spawn(move || {
+            let mut last_local: u64 = 0;
+            let mut last_remote: u64 = 0;
+            let mut last_generation: u64 = 0;
+            let mut tick: u64 = 0;
+            let mut remote_backoff: u64 = 1;
+
+            loop {
+                if !running.load(Ordering::Relaxed) {
+                    last_local = 0;
+                    last_remote = 0;
+                    std::thread::sleep(std::time::Duration::from_millis(400));
+                    continue;
+                }
+
+                let (local_dir, remote_dir, interval_ms, generation) = {
+                    match cfg.lock() {
+                        Ok(c) => (c.local_dir.clone(), c.remote_dir.clone(), c.interval_ms.max(400), c.generation),
+                        Err(_) => {
+                            std::thread::sleep(std::time::Duration::from_millis(400));
+                            continue;
+                        }
+                    }
+                };
+
+                if generation != last_generation {
+                    last_generation = generation;
+                    last_local = 0;
+                    last_remote = 0;
+                    tick = 0;
+                }
+
+                if !local_dir.is_empty() {
+                    let sig = watcher::local_signature(&local_dir);
+                    if last_local != 0 && sig != 0 && sig != last_local {
+                        if let Some(ref cb) = exec_script {
+                            cb("if(window.onFsChanged)window.onFsChanged('local');".to_string());
+                        }
+                    }
+                    last_local = sig;
+                }
+
+                tick = tick.wrapping_add(1);
+                // Remote probing costs a round-trip, so sample it less often than
+                // the local disk. `remote_backoff` stretches the interval when the
+                // server answers slowly, so a hung connection is not hammered and
+                // the mutex is not held in a tight loop.
+                let remote_every = ((4000 * remote_backoff) / interval_ms).max(1);
+                if !remote_dir.is_empty() && tick % remote_every == 0 {
+                    if let Ok(mut lock) = remote.try_lock() {
+                        if let Some(client) = lock.as_mut() {
+                            let probe_started = std::time::Instant::now();
+                            if let Ok(sig) = watcher::remote_signature(client, &remote_dir) {
+                                if last_remote != 0 && sig != 0 && sig != last_remote {
+                                    if let Some(ref cb) = exec_script {
+                                        cb("if(window.onFsChanged)window.onFsChanged('remote');".to_string());
+                                    }
+                                }
+                                last_remote = sig;
+                            }
+                            if probe_started.elapsed() > std::time::Duration::from_millis(1500) {
+                                remote_backoff = (remote_backoff * 2).min(8);
+                            } else {
+                                remote_backoff = 1;
+                            }
+                        }
+                    }
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(interval_ms));
+            }
+        });
     }
 }
 
@@ -69,6 +176,24 @@ fn matches_exclude(name: &str, rel_path: &str, patterns: &[String]) -> bool {
     false
 }
 
+/// Quotes a value for safe interpolation into a POSIX shell command.
+/// Single quotes are the only construct that suppresses `$`, backticks, `"`,
+/// `;`, newlines and glob characters, so every remote path goes through here.
+fn sq(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+/// Serialises a value into a JS string literal that is safe to embed inside an
+/// `evaluate_script` payload. JSON escaping covers quotes and backslashes;
+/// U+2028/U+2029 are additionally escaped because they are legal inside JSON
+/// strings but terminate a JS string literal.
+fn js_literal(value: &str) -> String {
+    serde_json::to_string(value)
+        .unwrap_or_else(|_| "\"\"".to_string())
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029")
+}
+
 fn compute_local_checksum(path: &str, algo: &str) -> Result<String, String> {
     use std::io::Read;
     use sha2::{Sha256, Digest};
@@ -97,10 +222,11 @@ fn compute_local_checksum(path: &str, algo: &str) -> Result<String, String> {
 }
 
 fn compute_remote_checksum(client: &mut RemoteClient, remote_path: &str, algo: &str) -> Result<String, String> {
+    let quoted = sq(remote_path);
     let cmd = if algo.eq_ignore_ascii_case("md5") {
-        format!("md5sum \"{}\" 2>/dev/null || md5 -q \"{}\" 2>/dev/null", remote_path, remote_path)
+        format!("md5sum {} 2>/dev/null || md5 -q {} 2>/dev/null", quoted, quoted)
     } else {
-        format!("sha256sum \"{}\" 2>/dev/null || shasum -a 256 \"{}\" 2>/dev/null", remote_path, remote_path)
+        format!("sha256sum {} 2>/dev/null || shasum -a 256 {} 2>/dev/null", quoted, quoted)
     };
 
     if let Ok(output) = client.exec_command(&cmd) {
@@ -692,6 +818,7 @@ impl AppState {
                             }
                         };
                         let mut lock = self.remote.lock().unwrap();
+                        let encrypted = client.is_encrypted();
                         *lock = Some(client);
 
                         let mut conn_lock = self.current_connection.lock().unwrap();
@@ -718,6 +845,7 @@ impl AppState {
                                 "files": files,
                                 "list_error": list_err,
                                 "remote_history": history,
+                                "encrypted": encrypted,
                             }),
                         )
                     }
@@ -1194,7 +1322,17 @@ impl AppState {
 
             "remote_chmod" => {
                 let single_path = payload["path"].as_str().unwrap_or("");
-                let mode = payload["mode"].as_str().unwrap_or("0644").trim();
+                let mode_raw = payload["mode"].as_str().unwrap_or("0644").trim();
+                // Strict octal validation: this value is interpolated into a shell
+                // command, so anything outside [0-7]{3,4} is rejected outright.
+                let clean_mode = mode_raw.trim_start_matches("0o");
+                if clean_mode.is_empty()
+                    || clean_mode.len() > 4
+                    || !clean_mode.chars().all(|c| ('0'..='7').contains(&c))
+                {
+                    return IpcResponse::err(id, action, "Invalid permission mode: expected 3 or 4 octal digits (for example 0644 or 755)");
+                }
+                let mode = clean_mode.to_string();
                 let recursive = payload["recursive"].as_bool().unwrap_or(false);
                 let current_dir = payload["current_dir"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string());
                 let paths: Vec<String> = if let Some(arr) = payload["paths"].as_array() {
@@ -1212,16 +1350,14 @@ impl AppState {
                 match self.with_remote_retry(|client| {
                     for p in &paths {
                         if recursive {
-                            let esc_p = p.replace('\'', "'\\''");
-                            let clean_mode = mode.trim_start_matches("0o");
-                            let ssh_cmd = format!("chmod -R {} -- '{}' 2>/dev/null", clean_mode, esc_p);
+                            let ssh_cmd = format!("chmod -R {} -- {} 2>/dev/null", mode, sq(p));
                             if client.exec_command(&ssh_cmd).is_err() {
-                                client.chmod(mode, p)?;
+                                client.chmod(&mode, p)?;
                             } else {
-                                let _ = client.chmod(mode, p);
+                                let _ = client.chmod(&mode, p);
                             }
                         } else {
-                            client.chmod(mode, p)?;
+                            client.chmod(&mode, p)?;
                         }
                     }
                     let files = client.list(current_dir.as_deref()).unwrap_or_else(|e| {
@@ -1525,6 +1661,44 @@ impl AppState {
                 }
             }
 
+            "watch_start" => {
+                let local_dir = payload.get("local_dir").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let remote_dir = payload.get("remote_dir").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let interval_ms = payload.get("interval_ms").and_then(|v| v.as_u64()).unwrap_or(1200).clamp(400, 30_000);
+
+                {
+                    let mut cfg = self.watch.lock().unwrap();
+                    if cfg.local_dir == local_dir && cfg.remote_dir == remote_dir {
+                        cfg.interval_ms = interval_ms;
+                    } else {
+                        cfg.local_dir = local_dir.clone();
+                        cfg.remote_dir = remote_dir.clone();
+                        cfg.interval_ms = interval_ms;
+                        cfg.generation = cfg.generation.wrapping_add(1);
+                    }
+                }
+                self.watch_running.store(true, Ordering::SeqCst);
+                self.ensure_watcher();
+
+                IpcResponse::ok(id, action, json!({
+                    "watching": true,
+                    "local_dir": local_dir,
+                    "remote_dir": remote_dir,
+                    "interval_ms": interval_ms,
+                }))
+            }
+
+            "watch_stop" => {
+                self.watch_running.store(false, Ordering::SeqCst);
+                {
+                    let mut cfg = self.watch.lock().unwrap();
+                    cfg.local_dir.clear();
+                    cfg.remote_dir.clear();
+                    cfg.generation = cfg.generation.wrapping_add(1);
+                }
+                IpcResponse::ok(id, action, json!({ "watching": false }))
+            }
+
             "clear_remote_history" => {
                 match sessions::clear_remote_history() {
                     Ok(history) => IpcResponse::ok(id, action, json!({ "history": history })),
@@ -1546,7 +1720,14 @@ impl AppState {
                     let mut temp_dir = std::env::temp_dir();
                     temp_dir.push("90FTP_Updates");
                     let _ = std::fs::create_dir_all(&temp_dir);
-                    let target_path = temp_dir.join(&filename);
+                    // Keep only the final path component so a crafted asset name
+                    // ("../../Startup/x.exe") cannot escape the updates folder.
+                    let safe_name = std::path::Path::new(&filename)
+                        .file_name()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or_else(|| "90FTP-Setup.exe".to_string());
+                    let target_path = temp_dir.join(safe_name);
 
                     match ureq::get(&url).call() {
                         Ok(resp) => {
@@ -1562,7 +1743,7 @@ impl AppState {
                                 Ok(f) => f,
                                 Err(e) => {
                                     if let Some(ref cb) = exec_script {
-                                        cb(format!("window.onUpdateDownloadError({{ error: \"Failed to create file: {}\" }});", e));
+                                        cb(format!("window.onUpdateDownloadError({{ error: {} }});", js_literal(&format!("Failed to create file: {}", e))));
                                     }
                                     return;
                                 }
@@ -1580,7 +1761,7 @@ impl AppState {
                                     Ok(n) => {
                                         if let Err(e) = file.write_all(&buffer[..n]) {
                                             if let Some(ref cb) = exec_script {
-                                                cb(format!("window.onUpdateDownloadError({{ error: \"Write error: {}\" }});", e));
+                                                cb(format!("window.onUpdateDownloadError({{ error: {} }});", js_literal(&format!("Write error: {}", e))));
                                             }
                                             return;
                                         }
@@ -1611,7 +1792,7 @@ impl AppState {
                                     }
                                     Err(e) => {
                                         if let Some(ref cb) = exec_script {
-                                            cb(format!("window.onUpdateDownloadError({{ error: \"Download error: {}\" }});", e));
+                                            cb(format!("window.onUpdateDownloadError({{ error: {} }});", js_literal(&format!("Download error: {}", e))));
                                         }
                                         return;
                                     }
@@ -1619,17 +1800,17 @@ impl AppState {
                             }
 
                             // Download completed successfully
-                            let escaped_path = target_path.to_string_lossy().replace('\\', "\\\\");
+                            let completed_path = target_path.to_string_lossy().to_string();
                             if let Some(ref cb) = exec_script {
                                 cb(format!(
-                                    "window.onUpdateDownloadComplete({{ path: \"{}\", version: \"{}\", size: {} }});",
-                                    escaped_path, version, downloaded
+                                    "window.onUpdateDownloadComplete({{ path: {}, version: {}, size: {} }});",
+                                    js_literal(&completed_path), js_literal(&version), downloaded
                                 ));
                             }
                         }
                         Err(e) => {
                             if let Some(ref cb) = exec_script {
-                                cb(format!("window.onUpdateDownloadError({{ error: \"Failed to connect to GitHub: {}\" }});", e));
+                                cb(format!("window.onUpdateDownloadError({{ error: {} }});", js_literal(&format!("Failed to connect to GitHub: {}", e))));
                             }
                         }
                     }
@@ -1739,9 +1920,11 @@ impl AppState {
                         let remote_lock = remote_arc.lock().unwrap();
                         if let Some(ref remote) = *remote_lock {
                             let safe_cwd = if cwd.is_empty() { "~" } else { &cwd };
+                            // Single-quote the cwd: a remote directory named with a
+                            // double quote used to break out of the wrapper and inject.
                             let wrapped_cmd = format!(
-                                "cd \"{}\" 2>/dev/null; {}; printf \"\\n__90FTP_PWD__%s\\n\" \"$(pwd)\"",
-                                safe_cwd, cmd_raw
+                                "cd {} 2>/dev/null; {}; printf \"\\n__90FTP_PWD__%s\\n\" \"$(pwd)\"",
+                                sq(safe_cwd), cmd_raw
                             );
 
                             let cb_clone = exec_cb.clone();
@@ -1749,7 +1932,7 @@ impl AppState {
                             let on_chunk = move |chunk: &str| {
                                 if let Some(ref cb) = cb_clone {
                                     let json_str = serde_json::to_string(chunk).unwrap_or_default();
-                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", s_id, json_str));
+                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream({}, {});", js_literal(&s_id), json_str));
                                 }
                             };
 
@@ -1765,16 +1948,16 @@ impl AppState {
                                     }
                                     if let Some(ref cb) = exec_cb {
                                         let json_cwd = serde_json::to_string(&new_cwd).unwrap_or_default();
-                                        cb(format!("if(window.onTerminalDone)window.onTerminalDone('{}', {}, 0);", sess_id, json_cwd));
+                                        cb(format!("if(window.onTerminalDone)window.onTerminalDone({}, {}, 0);", js_literal(&sess_id), json_cwd));
                                     }
                                 }
                                 Err(e) => {
                                     if let Some(ref cb) = exec_cb {
                                         let err_str = format!("\x1b[31mRemote error: {}\x1b[0m\n", e);
                                         let json_err = serde_json::to_string(&err_str).unwrap_or_default();
-                                        cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", sess_id, json_err));
+                                        cb(format!("if(window.onTerminalStream)window.onTerminalStream({}, {});", js_literal(&sess_id), json_err));
                                         let json_cwd = serde_json::to_string(&cwd).unwrap_or_default();
-                                        cb(format!("if(window.onTerminalDone)window.onTerminalDone('{}', {}, 1);", sess_id, json_cwd));
+                                        cb(format!("if(window.onTerminalDone)window.onTerminalDone({}, {}, 1);", js_literal(&sess_id), json_cwd));
                                     }
                                 }
                             }
@@ -1820,9 +2003,9 @@ impl AppState {
                                 if let Some(ref cb) = exec_cb {
                                     let err_str = format!("\x1b[31mFailed to start PowerShell: {}\x1b[0m\n", e);
                                     let json_err = serde_json::to_string(&err_str).unwrap_or_default();
-                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", sess_id, json_err));
+                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream({}, {});", js_literal(&sess_id), json_err));
                                     let json_cwd = serde_json::to_string(&run_dir).unwrap_or_default();
-                                    cb(format!("if(window.onTerminalDone)window.onTerminalDone('{}', {}, 1);", sess_id, json_cwd));
+                                    cb(format!("if(window.onTerminalDone)window.onTerminalDone({}, {}, 1);", js_literal(&sess_id), json_cwd));
                                 }
                                 return;
                             }
@@ -1838,7 +2021,7 @@ impl AppState {
                                 all_output.push_str(&text);
                                 if let Some(ref cb) = exec_cb {
                                     let json_chunk = serde_json::to_string(&text).unwrap_or_default();
-                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", sess_id, json_chunk));
+                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream({}, {});", js_literal(&sess_id), json_chunk));
                                 }
                             }
                         }
@@ -1850,7 +2033,7 @@ impl AppState {
                                 all_output.push_str(&text);
                                 if let Some(ref cb) = exec_cb {
                                     let json_chunk = serde_json::to_string(&text).unwrap_or_default();
-                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream('{}', {});", sess_id, json_chunk));
+                                    cb(format!("if(window.onTerminalStream)window.onTerminalStream({}, {});", js_literal(&sess_id), json_chunk));
                                 }
                             }
                         }
@@ -1868,7 +2051,7 @@ impl AppState {
 
                         if let Some(ref cb) = exec_cb {
                             let json_cwd = serde_json::to_string(&new_cwd).unwrap_or_default();
-                            cb(format!("if(window.onTerminalDone)window.onTerminalDone('{}', {}, 0);", sess_id, json_cwd));
+                            cb(format!("if(window.onTerminalDone)window.onTerminalDone({}, {}, 0);", js_literal(&sess_id), json_cwd));
                         }
                     });
 

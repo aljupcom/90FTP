@@ -43,6 +43,26 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
+# --- Code signing credentials -------------------------------------------------
+# The certificate password must never live in this script (it is committed to a
+# public repository). Provide it once as a user environment variable:
+#     setx NINETYFTP_PFX_PASS "<password>"
+# and open a new shell.
+$pfxPath = Join-Path $Root "assets\certs\aljailane.pfx"
+$pfxPass = $env:NINETYFTP_PFX_PASS
+if (-not $pfxPass -and (Test-Path (Join-Path $Root "assets\certs\.pfxpass"))) {
+    $pfxPass = (Get-Content (Join-Path $Root "assets\certs\.pfxpass") -Raw).Trim()
+}
+if (-not $pfxPass) {
+    throw "Signing password not found. Set the NINETYFTP_PFX_PASS environment variable before releasing."
+}
+
+# The certificate is self-signed, so `signtool verify /pa` fails on any machine
+# where the root is not installed — even though the signature is perfectly valid.
+# We therefore assert that the embedded signer is *our* certificate instead.
+$expectedThumb = (New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
+    (Join-Path $Root "assets\certs\aljailane.crt"))).Thumbprint
+
 Write-Host ">>> [1/8] Updating version to v$Version across project files..." -ForegroundColor Cyan
 
 # 1. Cargo.toml
@@ -73,53 +93,93 @@ Set-Content $htmlPath $html -NoNewline
 
 Write-Host ">>> [2/8] Running test suite..." -ForegroundColor Cyan
 cargo test --bin ninety_ftp
+if ($LASTEXITCODE -ne 0) {
+    throw "Test suite failed (exit code $LASTEXITCODE). Release aborted — nothing was published."
+}
 
 Write-Host ">>> [3/8] Building release binary..." -ForegroundColor Cyan
 cargo build --release
+if ($LASTEXITCODE -ne 0) {
+    throw "cargo build --release failed (exit code $LASTEXITCODE). Release aborted."
+}
 
 Write-Host ">>> [4/8] Signing binaries (target\release\ninety_ftp.exe and 90FTP.exe)..." -ForegroundColor Cyan
 Stop-Process -Name "90FTP", "ninety_ftp" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 600
 
 $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
-if (Test-Path $signtool) {
-    try {
-        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "target\release\ninety_ftp.exe"
-    } catch {
-        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /d "90FTP Client" "target\release\ninety_ftp.exe"
-    }
-    Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
-    try {
-        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Client" "90FTP.exe"
-    } catch {
-        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /d "90FTP Client" "90FTP.exe"
-    }
-} else {
-    Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
+if (-not (Test-Path $signtool)) {
+    throw "signtool.exe not found at $signtool. Refusing to publish an unsigned build."
 }
+
+function Sign-File {
+    param([string]$Path, [string]$Description)
+    if (-not (Test-Path $Path)) {
+        throw "Cannot sign '$Path' — file does not exist."
+    }
+    & $signtool sign /f $pfxPath /p $pfxPass /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d $Description $Path
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Timestamped signing failed for $Path (exit $LASTEXITCODE); retrying without a timestamp..."
+        & $signtool sign /f $pfxPath /p $pfxPass /fd SHA256 /d $Description $Path
+        if ($LASTEXITCODE -ne 0) {
+            throw "Code signing failed for '$Path' (exit $LASTEXITCODE). Release aborted."
+        }
+    }
+    # `signtool verify` writes its complaint to stderr. Under $ErrorActionPreference
+    # = "Stop" any native stderr line becomes a terminating NativeCommandError, which
+    # would abort the release *before* the self-signed-root fallback below can run.
+    # Capture the output with a temporarily relaxed preference instead.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $verifyOut = & $signtool verify /pa $Path 2>&1 | Out-String
+    $verifyCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+
+    if ($verifyCode -ne 0) {
+        $sig = Get-AuthenticodeSignature -FilePath (Resolve-Path $Path).Path
+        if (-not $sig -or -not $sig.SignerCertificate) {
+            throw "'$Path' is not Authenticode-signed. Release aborted."
+        }
+        if ($sig.SignerCertificate.Thumbprint -ne $expectedThumb) {
+            throw "'$Path' was signed by an unexpected certificate ($($sig.SignerCertificate.Thumbprint)). Release aborted."
+        }
+        Write-Host "    Signature present and signed by the 90FTP certificate (self-signed root not trusted locally)." -ForegroundColor DarkGray
+    }
+}
+
+Sign-File -Path "target\release\ninety_ftp.exe" -Description "90FTP Client"
+Copy-Item "target\release\ninety_ftp.exe" "90FTP.exe" -Force
+Sign-File -Path "90FTP.exe" -Description "90FTP Client"
 
 Write-Host ">>> [5/8] Compiling Inno Setup installer dynamically (Version: $Version)..." -ForegroundColor Cyan
 & "C:\Program Files\Inno Setup 7\ISCC.exe" "/DMyAppVersion=$Version" installer.iss
+if ($LASTEXITCODE -ne 0) {
+    throw "Inno Setup compilation failed (exit code $LASTEXITCODE). Release aborted."
+}
 
 $setupExe = Join-Path $Root "dist\90FTP-Setup-v$Version.exe"
 Write-Host ">>> [6/8] Signing installer: $setupExe..." -ForegroundColor Cyan
-if (Test-Path $signtool) {
-    try {
-        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "90FTP Setup" $setupExe
-    } catch {
-        & $signtool sign /f "assets\certs\aljailane.pfx" /p "password123" /fd SHA256 /d "90FTP Setup" $setupExe
-    }
-}
+Sign-File -Path $setupExe -Description "90FTP Setup"
 Copy-Item $setupExe (Join-Path $Root "90FTP-Setup-v$Version.exe") -Force
 
 Write-Host ">>> [7/8] Committing and pushing branch & tag to Git..." -ForegroundColor Cyan
 git add .
-try {
-    git commit -m "release: v$Version - $Message"
-} catch {}
+git commit -m "release: v$Version - $Message"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "    Nothing new to commit (or commit failed) — continuing with the existing tree." -ForegroundColor DarkGray
+}
 git push origin main
+if ($LASTEXITCODE -ne 0) {
+    throw "git push origin main failed (exit code $LASTEXITCODE). Release aborted before publishing a release for an unpushed tag."
+}
 git tag -a "v$Version" -m "Release v${Version} - $Message" -f
+if ($LASTEXITCODE -ne 0) {
+    throw "git tag v$Version failed (exit code $LASTEXITCODE). Release aborted."
+}
 git push origin "v$Version" -f
+if ($LASTEXITCODE -ne 0) {
+    throw "git push origin v$Version failed (exit code $LASTEXITCODE). Release aborted."
+}
 
 Write-Host ">>> [8/8] Creating GitHub Release & uploading installer asset..." -ForegroundColor Cyan
 $repo = "aljupcom/90FTP"

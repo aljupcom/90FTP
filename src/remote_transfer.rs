@@ -522,13 +522,44 @@ pub fn execute_transfer_thread(
                     let sources_joined = task.sources.iter().map(|s| format!("'{}'", s.replace('\'', "'\\''"))).collect::<Vec<_>>().join(" ");
                     let target_dest = format!("{}@{}:'{}'", task.target_user, task.target_host, task.target_path.replace('\'', "'\\''"));
 
-                    let direct_cmd = if task.transfer_mode == "direct_rsync" {
-                        format!("rsync -avz --info=progress2 -e 'ssh -p {} -o BatchMode=yes -o StrictHostKeyChecking=no' {} {}", task.target_port, sources_joined, target_dest)
+                    // `accept-new` still trusts the key on first contact (there is no
+                    // way to pre-seed a remote-to-remote host key) but it refuses a
+                    // changed key, which is what stops a silent MITM on re-connect.
+                    // `no` was disabling that check entirely.
+                    let ssh_opts = "-o BatchMode=yes -o StrictHostKeyChecking=accept-new";
+
+                    // The password never goes on the sshpass command line (`-p`
+                    // exposes it to `ps` for every local user) and never reaches the
+                    // UI log. It is written to a 0600 file, consumed with `-f`, and
+                    // removed immediately afterwards.
+                    let (direct_cmd, display_cmd) = if task.transfer_mode == "direct_rsync" {
+                        let cmd = format!(
+                            "rsync -avz --info=progress2 -e 'ssh -p {} {}' {} {}",
+                            task.target_port, ssh_opts, sources_joined, target_dest
+                        );
+                        (cmd.clone(), cmd)
                     } else if !task.target_pass.is_empty() {
                         let esc_pass = task.target_pass.replace('\'', "'\\''");
-                        format!("sshpass -p '{}' scp -P {} -r -o StrictHostKeyChecking=no {} {}", esc_pass, task.target_port, sources_joined, target_dest)
+                        let cmd = format!(
+                            "umask 077; __p=$(mktemp /tmp/.90ftp.XXXXXX); printf '%s' '{p}' > \"$__p\"; \
+sshpass -f \"$__p\" scp -P {port} -r {opts} {src} {dst}; __rc=$?; rm -f \"$__p\"; exit $__rc",
+                            p = esc_pass,
+                            port = task.target_port,
+                            opts = ssh_opts,
+                            src = sources_joined,
+                            dst = target_dest
+                        );
+                        let shown = format!(
+                            "sshpass -f <secure-temp-file> scp -P {} -r {} {} {}",
+                            task.target_port, ssh_opts, sources_joined, target_dest
+                        );
+                        (cmd, shown)
                     } else {
-                        format!("scp -P {} -r -o BatchMode=yes -o StrictHostKeyChecking=no {} {}", task.target_port, sources_joined, target_dest)
+                        let cmd = format!(
+                            "scp -P {} -r {} {} {}",
+                            task.target_port, ssh_opts, sources_joined, target_dest
+                        );
+                        (cmd.clone(), cmd)
                     };
 
                     let total_files = task.sources.len();
@@ -549,7 +580,7 @@ pub fn execute_transfer_thread(
                     }
 
                     emit_progress(&first_file, 0, total_files, 0, total_bytes, "Connecting to target...", Some(0.0));
-                    emit_log(&format!("Executing: {}", direct_cmd), "info");
+                    emit_log(&format!("Executing: {}", display_cmd), "info");
 
                     let direct_start_time = Instant::now();
                     let mut last_progress_tick = Instant::now();

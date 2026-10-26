@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use crate::ftp_client::FtpClient;
+use crate::ftp_client::{self, FtpBackend};
 use crate::models::FileItem;
 use crate::sftp_client::SftpClient;
 
 #[allow(dead_code)]
 pub enum RemoteClient {
-    Ftp(FtpClient),
+    Ftp(Box<dyn FtpBackend>),
     Sftp(SftpClient),
 }
 
@@ -24,9 +24,17 @@ impl RemoteClient {
         trust_host: bool,
     ) -> Result<Self, String> {
         match protocol.to_lowercase().as_str() {
-            "ftp" | "ftps" => {
+            "ftp" => {
                 let actual_port = if port == 0 { 21 } else { port };
-                let client = FtpClient::connect(host, actual_port, user, pass)?;
+                let client = ftp_client::connect_plain(host, actual_port, user, pass)?;
+                Ok(RemoteClient::Ftp(client))
+            }
+            "ftps" | "ftpes" => {
+                // Explicit FTPS (AUTH TLS). Never falls back to cleartext: if the
+                // handshake fails the connection fails loudly instead of silently
+                // sending the password over an unencrypted channel.
+                let actual_port = if port == 0 { 21 } else { port };
+                let client = ftp_client::connect_secure(host, actual_port, user, pass)?;
                 Ok(RemoteClient::Ftp(client))
             }
             "sftp" | "ssh" | "scp" => {
@@ -42,8 +50,16 @@ impl RemoteClient {
 
     pub fn pwd(&self) -> String {
         match self {
-            RemoteClient::Ftp(c) => c.current_dir.clone(),
+            RemoteClient::Ftp(c) => c.current_dir().to_string(),
             RemoteClient::Sftp(c) => c.current_dir.clone(),
+        }
+    }
+
+    /// True when the control channel is encrypted (SFTP, or FTPS after AUTH TLS).
+    pub fn is_encrypted(&self) -> bool {
+        match self {
+            RemoteClient::Ftp(c) => c.is_secure(),
+            RemoteClient::Sftp(_) => true,
         }
     }
 

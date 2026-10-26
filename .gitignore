@@ -12,7 +12,12 @@ WinSCP-*.exe
 # Private keys & certificates (sensitive)
 *.key
 *.pfx
+*.pfx.bak
+assets/certs/.pfxpass
 
 # Temporary extraction files
 /extracted_resources
 *.log
+
+# Local agent workspace / notes
+.workbuddy-ai/

@@ -2,6 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src https://api.github.com; media-src data: blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <title>90FTP - Modern Site Manager</title>
   <style>
     html, body {
@@ -3576,7 +3577,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.62</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.63</span>
         </div>
       </div>
 
@@ -6838,7 +6839,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.62';
+    let APP_CURRENT_VERSION = '0.0.0.63';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -7096,10 +7097,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       addLog('Console cleared.', 'info');
     }
 
+    // Escapes text for BOTH element and attribute context. The previous version
+    // round-tripped through innerText/innerHTML, which leaves `"` and `'` intact —
+    // any remote-controlled name interpolated into a `title="..."` could therefore
+    // break out of the attribute and inject markup.
     function escapeHtml(text) {
-      const d = document.createElement('div');
-      d.innerText = text;
-      return d.innerHTML;
+      if (text === null || text === undefined) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     function formatBytes(bytes) {
@@ -8124,6 +8133,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           const tr = document.createElement('tr');
           tr.draggable = true;
           tr.setAttribute('data-idx', idx);
+          tr.setAttribute('data-path', f.path || fileName);
           tr.setAttribute('data-is-dir', f.is_dir ? '1' : '0');
           tr.classList.add(f.is_dir ? 'row-folder' : 'row-file');
 
@@ -8253,6 +8263,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       }
 
       updatePaneStatsBadge(false);
+      updateFsWatcher();
     }
 
     function selectLocalRow(idx) {
@@ -9566,6 +9577,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           const tr = document.createElement('tr');
           tr.draggable = true;
           tr.setAttribute('data-idx', idx);
+          tr.setAttribute('data-path', f.path || fileName);
           tr.setAttribute('data-is-dir', f.is_dir ? '1' : '0');
           tr.classList.add(f.is_dir ? 'row-folder' : 'row-file');
 
@@ -9695,6 +9707,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       }
 
       updatePaneStatsBadge(true);
+      updateFsWatcher();
     }
 
     function selectRemoteRow(idx) {
@@ -10468,6 +10481,148 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       navigateRemote(currentRemotePath || '/', true);
     }
 
+    // ========================================================
+    // Live pane synchronisation (background change detector)
+    // --------------------------------------------------------
+    // Rust fingerprints the visible local and remote directories and pushes
+    // `onFsChanged` whenever something outside the app modifies them. The panes
+    // are then re-read in place: selection, scroll position and quick filters are
+    // preserved, so the refresh is invisible except for the new data.
+    // ========================================================
+    let fsWatcherKey = '';
+    let fsWatcherTimer = null;
+    let fsLocalRefreshBusy = false;
+    let fsRemoteRefreshBusy = false;
+    const fsLastRefreshAt = { local: 0, remote: 0 };
+
+    function selectedPathsInPane(isRemote) {
+      const selector = isRemote
+        ? '#remoteFileList tr.selected:not(.parent-dir-row)'
+        : '#localFileList tr.selected:not(.parent-dir-row)';
+      const out = [];
+      document.querySelectorAll(selector).forEach(r => {
+        const p = r.getAttribute('data-path');
+        if (p) out.push(p);
+      });
+      return out;
+    }
+
+    function restorePaneSelection(isRemote, paths) {
+      if (!paths || !paths.length) return;
+      const wanted = new Set(paths);
+      const tbody = document.getElementById(isRemote ? 'remoteFileList' : 'localFileList');
+      if (!tbody) return;
+      const list = isRemote ? remoteFiles : localFiles;
+      let firstItem = null;
+      tbody.querySelectorAll('tr[data-path]').forEach(r => {
+        if (!wanted.has(r.getAttribute('data-path'))) return;
+        r.classList.add('selected');
+        const idx = parseInt(r.getAttribute('data-idx'));
+        if (firstItem === null && !isNaN(idx) && list[idx]) firstItem = list[idx];
+      });
+      if (firstItem) {
+        if (isRemote) {
+          selectedRemoteFile = firstItem;
+        } else {
+          selectedLocalFile = firstItem;
+        }
+      }
+    }
+
+    // A cached recursive folder size becomes a lie the moment anything inside
+    // that folder changes, so drop every cached entry at or below `dirPath`.
+    // Anything outside the refreshed directory is untouched.
+    function invalidateFolderSizeCache(dirPath) {
+      if (!dirPath || typeof calculatedFolderSizes === 'undefined') return;
+      const norm = dirPath.replace(/[\\/]+$/, '');
+      Array.from(calculatedFolderSizes.keys()).forEach(key => {
+        const k = key.replace(/[\\/]+$/, '');
+        if (k === norm || k.startsWith(norm + '\\') || k.startsWith(norm + '/')) {
+          calculatedFolderSizes.delete(key);
+        }
+      });
+    }
+
+    async function silentRefreshLocal() {
+      if (fsLocalRefreshBusy) return;
+      const path = currentLocalPath;
+      if (!path) return;
+      fsLocalRefreshBusy = true;
+      try {
+        const tbody = document.getElementById('localFileList');
+        const scroller = tbody ? tbody.parentElement : null;
+        const scrollTop = scroller ? scroller.scrollTop : 0;
+        const selected = selectedPathsInPane(false);
+        const data = await sendRust('local_list', { path });
+        if (!data || !Array.isArray(data.files)) return;
+        if ((currentLocalPath || '') !== path) return;
+        invalidateFolderSizeCache(path);
+        renderLocalFiles(data.files);
+        restorePaneSelection(false, selected);
+        if (scroller) scroller.scrollTop = scrollTop;
+        updatePaneStatsBadge(false);
+      } catch (_) {
+        // A transient failure must stay silent — the next tick retries.
+      } finally {
+        fsLocalRefreshBusy = false;
+      }
+    }
+
+    async function silentRefreshRemote() {
+      if (fsRemoteRefreshBusy) return;
+      if (!isConnected) return;
+      const path = currentRemotePath;
+      if (!path) return;
+      fsRemoteRefreshBusy = true;
+      try {
+        const tbody = document.getElementById('remoteFileList');
+        const scroller = tbody ? tbody.parentElement : null;
+        const scrollTop = scroller ? scroller.scrollTop : 0;
+        const selected = selectedPathsInPane(true);
+        const data = await sendRust('remote_list', { path });
+        if (!data || !Array.isArray(data.files)) return;
+        if ((currentRemotePath || '') !== path) return;
+        invalidateFolderSizeCache(path);
+        renderRemoteFiles(data.files);
+        restorePaneSelection(true, selected);
+        if (scroller) scroller.scrollTop = scrollTop;
+        updatePaneStatsBadge(true);
+      } catch (_) {
+        // Silent by design.
+      } finally {
+        fsRemoteRefreshBusy = false;
+      }
+    }
+
+    window.onFsChanged = function (scope) {
+      const now = Date.now();
+      if (scope === 'local') {
+        if (now - fsLastRefreshAt.local < 300) return;
+        fsLastRefreshAt.local = now;
+        silentRefreshLocal();
+      } else if (scope === 'remote') {
+        if (now - fsLastRefreshAt.remote < 500) return;
+        fsLastRefreshAt.remote = now;
+        silentRefreshRemote();
+      }
+    };
+
+    function updateFsWatcher(force) {
+      const localDir = currentLocalPath || '';
+      const remoteDir = (isConnected && currentRemotePath) ? currentRemotePath : '';
+      const key = localDir + '\u0000' + remoteDir;
+      if (!force && key === fsWatcherKey) return;
+      fsWatcherKey = key;
+      if (fsWatcherTimer) clearTimeout(fsWatcherTimer);
+      fsWatcherTimer = setTimeout(() => {
+        sendRust('watch_start', {
+          local_dir: localDir,
+          remote_dir: remoteDir,
+          interval_ms: 1200
+        }).catch(() => {});
+      }, 200);
+    }
+
     // Connect & Disconnect Logic with Host Key Verification Support
     let pendingConnection = null;
 
@@ -10544,6 +10699,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         setConnectedState(true, label);
         startKeepAliveTimer();
         addLog(`Connected successfully to ${params.host}! Remote directory: ${currentRemotePath}`, 'success');
+        if (res.encrypted === false) {
+          addLog('WARNING: this session is NOT encrypted. Credentials and file contents travel in cleartext — switch the protocol to SFTP or FTPS.', 'error');
+        } else if (res.encrypted === true) {
+          addLog(`Secure channel established (${params.protocol.toUpperCase()}).`, 'info');
+        }
         pendingConnection = null;
         finishConnectionSuccess(res.pwd);
         try {
@@ -10937,6 +11097,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       }
       if (typeof syncCurrentRemoteTabState === 'function') {
         syncCurrentRemoteTabState();
+      }
+      // Start or stop remote polling as soon as the connection state flips.
+      if (typeof updateFsWatcher === 'function') {
+        updateFsWatcher(true);
       }
     }
 
@@ -12581,9 +12745,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       menu.innerHTML = html;
     }
 
+    // Used exclusively inside inline `onclick="fn('...')"` handlers, so it must
+    // escape BOTH the JS string literal and the surrounding HTML attribute.
+    // `"` becomes &quot; so a path containing a double quote cannot terminate the
+    // attribute and inject a new one (onmouseover=...).
     function escapeJsString(str) {
       if (!str) return '';
-      return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '&quot;')
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n');
     }
 
     async function promptNewFile(isRemote) {
