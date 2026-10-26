@@ -4902,8 +4902,17 @@ window.onerror = function(msg, url, line, col, error) {
         document.getElementById('editorTextarea').value = res.logs;
         document.getElementById('editorStatus').innerText = 'Persistent Error Log';
         onEditorInput();
-        closeToolsModal();
-        document.getElementById('editorModal').classList.add('active');
+        // The tools window stays open behind the editor so closing it lands on
+        // the tool's page instead of dismissing the whole suite. The editor
+        // sits at the default overlay depth, which is below the tools window,
+        // so it has to be lifted while it is the one on top.
+        const editorEl = document.getElementById('editorModal');
+        if (editorEl) {
+          const toolsEl = document.getElementById('toolsModal');
+          const toolsOpen = !!toolsEl && toolsEl.classList.contains('active');
+          editorEl.style.zIndex = toolsOpen ? '1085' : '';
+          editorEl.classList.add('active');
+        }
       } catch (err) {
         addLog('Failed to read error logs: ' + (err.message || err), 'error');
         alert('Could not read error logs: ' + (err.message || err));
@@ -10008,10 +10017,143 @@ window.onerror = function(msg, url, line, col, error) {
       }
     }
 
+    /// The tools window is a two-level stack: the grid, then one tool's own
+    /// page. Opening a tool pushes a page instead of dismissing the window, so
+    /// Back pops it and the grid keeps its filter and scroll position.
+    let toolsActiveTool = null;
+
+    function toolsDetailIsOpen() {
+      const pane = document.getElementById('toolsDetailPane');
+      return !!pane && !pane.hidden;
+    }
+
+    /// True when the tools window is the front-most overlay. Escape has to know
+    /// this: with a tool's own dialog open on top, Esc must close that dialog
+    /// first, not step back to the grid underneath it.
+    function toolsIsTopModal() {
+      const tools = document.getElementById('toolsModal');
+      if (!tools || !tools.classList.contains('active')) return false;
+      const own = parseInt(tools.style.zIndex || '0', 10) || 0;
+      let top = own;
+      document.querySelectorAll('.modal-overlay.active').forEach((m) => {
+        const z = parseInt(m.style.zIndex || '0', 10) || 0;
+        if (z > top) top = z;
+      });
+      return own >= top;
+    }
+
+    /// Pushes a tool page, taking its title, icon, badge and description from
+    /// the card itself so the grid stays the only place they are written down.
+    function openToolDetail(card) {
+      if (!card) return;
+
+      const title = card.querySelector('.tool-card-title');
+      const desc = card.querySelector('.tool-card-desc');
+      const icon = card.querySelector('.tool-card-icon');
+      const badge = card.querySelector('.tool-card-badge');
+
+      const titleHost = document.getElementById('toolDetailTitle');
+      if (titleHost) titleHost.textContent = title ? title.textContent : 'Tool';
+      const descHost = document.getElementById('toolDetailDesc');
+      if (descHost) descHost.textContent = desc ? desc.textContent : '';
+
+      const iconHost = document.getElementById('toolDetailIcon');
+      if (iconHost) iconHost.innerHTML = icon ? icon.innerHTML : '';
+
+      const badgeHost = document.getElementById('toolDetailBadge');
+      if (badgeHost) {
+        badgeHost.textContent = badge ? badge.textContent : 'READY';
+        // A shortcut badge keeps its monospace treatment on the tool page.
+        badgeHost.classList.toggle(
+          'tool-card-badge-kbd',
+          !!badge && badge.classList.contains('tool-card-badge-kbd')
+        );
+      }
+
+      const pointsHost = document.getElementById('toolDetailPoints');
+      if (pointsHost) {
+        pointsHost.textContent = '';
+        (card.dataset.points || '').split('|').forEach((point) => {
+          if (!point.trim()) return;
+          const li = document.createElement('li');
+          li.textContent = point.trim();
+          pointsHost.appendChild(li);
+        });
+        pointsHost.hidden = pointsHost.children.length === 0;
+      }
+
+      toolsActiveTool = {
+        action: card.dataset.action || '',
+        arg: card.dataset.arg || '',
+        closeOnRun: card.dataset.closeOnRun === 'true'
+      };
+
+      const run = document.getElementById('toolDetailRun');
+      if (run) run.textContent = card.dataset.run || 'Open';
+
+      const home = document.getElementById('toolsBody');
+      const head = document.getElementById('toolsHead');
+      const pane = document.getElementById('toolsDetailPane');
+      if (home) home.hidden = true;
+      if (head) head.hidden = true;
+      if (pane) {
+        pane.hidden = false;
+        pane.scrollTop = 0;
+      }
+
+      const hint = document.getElementById('toolsFooterHint');
+      if (hint) hint.innerHTML = '<kbd>Esc</kbd> back to tools';
+    }
+
+    /// Runs the tool's real action. The tools window deliberately stays open
+    /// behind it: closing the tool drops you back on its page, and Back from
+    /// there returns to the grid.
+    function runToolAction() {
+      if (!toolsActiveTool || !toolsActiveTool.action) return;
+      const fn = window[toolsActiveTool.action];
+      if (typeof fn !== 'function') return;
+      try {
+        if (toolsActiveTool.arg === 'true') fn(true);
+        else fn();
+      } catch (err) {
+        console.error('Tool action failed: ' + toolsActiveTool.action, err);
+      }
+      // A few tools act on the main window rather than opening a dialog of
+      // their own. Leaving the suite open would hide the result, so those
+      // hand control back instead of stacking.
+      if (toolsActiveTool && toolsActiveTool.closeOnRun) closeToolsModal();
+    }
+
+    function backToTools(restoreFocus) {
+      const home = document.getElementById('toolsBody');
+      const head = document.getElementById('toolsHead');
+      const pane = document.getElementById('toolsDetailPane');
+      if (pane) pane.hidden = true;
+      if (home) home.hidden = false;
+      if (head) head.hidden = false;
+      toolsActiveTool = null;
+
+      const hint = document.getElementById('toolsFooterHint');
+      if (hint) hint.innerHTML = '<kbd>Esc</kbd> close &middot; <kbd>Ctrl</kbd>+<kbd>K</kbd> command palette';
+
+      if (restoreFocus !== false) {
+        const search = document.getElementById('toolsSearchInput');
+        if (search) setTimeout(() => { try { search.focus(); } catch (_) {} }, 40);
+      }
+    }
+
+    /// Clicking the dimmed area steps back one level rather than dismissing the
+    /// window outright, so it does what Escape does.
+    function toolsBackdropClick() {
+      if (toolsDetailIsOpen()) backToTools();
+      else closeToolsModal();
+    }
+
     function openToolsModal() {
       closeAllMenus();
       const modal = document.getElementById('toolsModal');
       if (!modal) return;
+      backToTools(false);
       modal.classList.add('active');
 
       const search = document.getElementById('toolsSearchInput');
@@ -10028,6 +10170,9 @@ window.onerror = function(msg, url, line, col, error) {
     function closeToolsModal() {
       const modal = document.getElementById('toolsModal');
       if (modal) modal.classList.remove('active');
+      // Reset the stack so the next open starts on the grid rather than on
+      // whichever tool happened to be open last time.
+      backToTools(false);
     }
 
     /// Filters the tool cards by name, description or keyword. Sections whose
@@ -12501,6 +12646,12 @@ window.onerror = function(msg, url, line, col, error) {
     document.addEventListener('keydown', (e) => {
       const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
       if (e.key === 'Escape') {
+        // Inside a tool page, Escape steps back to the grid instead of
+        // dismissing everything — but only when no tool dialog is on top of it.
+        if (toolsDetailIsOpen() && toolsIsTopModal()) {
+          backToTools();
+          return;
+        }
         closeAllMenus();
         closeContextMenu();
         closeOptionsModal();

@@ -1958,6 +1958,10 @@
     .tools-shell {
       width: min(1060px, 94vw);
       max-height: min(88vh, 820px);
+      /* The grid and a tool page differ a lot in height. Without a floor the
+         window would resize on every navigation, which reads as a flicker
+         rather than as moving between pages. */
+      min-height: min(600px, 88vh);
     }
     .tools-head {
       padding: 11px 16px 10px;
@@ -2185,6 +2189,147 @@
     [data-theme="light"] .tool-card:hover { background: #f8fafc; border-color: #bfdbfe; }
     [data-theme="light"] .tool-card-icon { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
     [data-theme="light"] .tools-hint kbd { background: #ffffff; }
+
+    /* ── Tools Suite: tool page (second level) ─────────────────────────────
+       Opening a tool used to dismiss the whole window, so trying three tools
+       in a row meant reopening the suite three times and losing the search.
+       The grid now pushes a tool page into the same window and Back pops it,
+       leaving the grid's filter and scroll position untouched underneath. */
+    .tools-detail {
+      padding: 14px 16px 16px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    /* A class that sets `display` beats the UA rule for [hidden], so every
+       pane needs its own explicit rule or the hidden one keeps showing. */
+    .tools-detail[hidden],
+    .tools-body[hidden],
+    .tools-head[hidden] { display: none; }
+    .tools-detail-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .tools-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 11px 4px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      font-family: inherit;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .tools-back:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-subtle-border);
+      color: var(--text-main);
+    }
+    .tools-back:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .tools-back svg {
+      width: 13px;
+      height: 13px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .tools-detail-hero {
+      display: flex;
+      align-items: flex-start;
+      gap: 13px;
+    }
+    .tools-detail-icon {
+      flex-shrink: 0;
+      width: 46px;
+      height: 46px;
+      border-radius: 11px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-subtle);
+      border: 1px solid var(--accent-subtle-border);
+      color: var(--accent-badge-text);
+    }
+    .tools-detail-icon svg {
+      width: 22px;
+      height: 22px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .tools-detail-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--text-main);
+    }
+    .tools-detail-desc {
+      margin: 4px 0 0;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-dim);
+    }
+    .tools-detail-points {
+      margin: 0;
+      padding: 11px 14px 11px 30px;
+      list-style: disc;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-dim);
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      /* The page is a fixed-height window, so the panel takes the slack rather
+         than leaving a gap between the bullets and the buttons. */
+      flex: 1 1 auto;
+    }
+    .tools-detail-points[hidden] { display: none; }
+    .tools-detail-points li::marker { color: var(--accent); }
+    .tools-detail-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 2px;
+    }
+    [data-theme="light"] .tools-detail-points { background: #f8fafc; border-color: #e2e8f0; }
+    [data-theme="light"] .tools-detail-icon { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    [data-theme="light"] .tools-back { background: #ffffff; }
+
+    /* A short rise makes the level change read as a page push rather than a
+       repaint. Suppressed for anyone who asked the OS for less motion. */
+    @keyframes toolsPaneIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: none; }
+    }
+    .tools-body:not([hidden]),
+    .tools-detail:not([hidden]) { animation: toolsPaneIn 0.15s ease-out; }
+    @media (prefers-reduced-motion: reduce) {
+      .tools-body:not([hidden]),
+      .tools-detail:not([hidden]) { animation: none; }
+    }
 
     /* Native Code Editor Menubar & Canvas */
     .editor-native-menubar {
@@ -5635,7 +5780,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   </div>
 
   <!-- Native OS Window Style Dialog: Tools Suite & Diagnostics -->
-  <div class="modal-overlay" id="toolsModal" style="z-index: 1060;" onclick="if (event.target === this) closeToolsModal();">
+  <div class="modal-overlay" id="toolsModal" style="z-index: 1060;" onclick="if (event.target === this) toolsBackdropClick();">
     <div class="native-window-dialog tools-shell">
       <div class="native-titlebar">
         <div class="native-title-left">
@@ -5647,7 +5792,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         <button type="button" class="native-win-close" onclick="closeToolsModal()" title="Close (Esc)">&#10005;</button>
       </div>
 
-      <div class="tools-head">
+      <div class="tools-head" id="toolsHead">
         <div class="tools-search-row">
           <div class="tools-search-wrap">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
@@ -5662,7 +5807,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       <section class="tools-section">
         <div class="tools-section-label">Diagnostic &amp; Debugging</div>
         <div class="tools-grid">
-          <button type="button" class="tool-card" data-tool="error log logs diagnostics debug history" onclick="closeToolsModal(); viewErrorLogs();">
+          <button type="button" class="tool-card" data-tool="error log logs diagnostics debug history" onclick="openToolDetail(this)" data-action="viewErrorLogs" data-run="Open Log" data-points="Every connection and transfer failure, timestamped|History is kept across sessions, not just this run|Opens in the built-in editor so you can copy lines out">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">View Persistent Error Logs</span>
@@ -5670,7 +5815,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge">READY</span>
           </button>
-          <button type="button" class="tool-card" data-tool="storage folder explorer appdata config vault cache files open" onclick="openStorageFolder(); closeToolsModal();">
+          <button type="button" class="tool-card" data-tool="storage folder explorer appdata config vault cache files open" onclick="openToolDetail(this)" data-action="openStorageFolder" data-run="Open Folder" data-points="Config, saved sessions, the key vault, cache and logs all live here|Opens the folder in Windows Explorer|Handy before a backup or when attaching files to a bug report">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Open App Storage Folder</span>
@@ -5678,7 +5823,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge">READY</span>
           </button>
-          <button type="button" class="tool-card" data-tool="host key fingerprint known_hosts reset clear security ssh" onclick="clearKnownHostsCache(); closeToolsModal();">
+          <button type="button" class="tool-card" data-tool="host key fingerprint known_hosts reset clear security ssh" onclick="openToolDetail(this)" data-action="clearKnownHostsCache" data-run="Clear Fingerprints" data-points="Wipes every trusted server host key|The next connection to each server asks you to verify its fingerprint again|Use this after rebuilding a server or when a host key legitimately changed">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Clear Host Key Fingerprints</span>
@@ -5692,7 +5837,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       <section class="tools-section">
         <div class="tools-section-label">Power Tools &amp; Server Utilities</div>
         <div class="tools-grid">
-          <button type="button" class="tool-card" data-tool="command palette omni search ctrl+k quick actions" onclick="closeToolsModal(); openCommandPalette();">
+          <button type="button" class="tool-card" data-tool="command palette omni search ctrl+k quick actions" onclick="openToolDetail(this)" data-action="openCommandPalette" data-run="Open Palette" data-points="Searches sites, files, bookmarks and every system action at once|Jumps to a command by name instead of hunting through menus|Reachable from anywhere with Ctrl+K">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Omni Command Palette</span>
@@ -5700,7 +5845,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge tool-card-badge-kbd">Ctrl+K</span>
           </button>
-          <button type="button" class="tool-card" data-tool="process htop pid kill port tcp udp service systemd manager remote" onclick="closeToolsModal(); openProcessManagerModal();">
+          <button type="button" class="tool-card" data-tool="process htop pid kill port tcp udp service systemd manager remote" onclick="openToolDetail(this)" data-action="openProcessManagerModal" data-run="Open Manager" data-points="Live process list with PID, CPU and memory|Kill a runaway PID without leaving the app|TCP/UDP listeners and systemd services in the same window">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Remote Process, Port &amp; Service Manager</span>
@@ -5708,7 +5853,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge">READY</span>
           </button>
-          <button type="button" class="tool-card" data-tool="grep search inside files content find text ctrl+shift+f" onclick="closeToolsModal(); openContentGrepModal();">
+          <button type="button" class="tool-card" data-tool="grep search inside files content find text ctrl+shift+f" onclick="openToolDetail(this)" data-action="openContentGrepModal" data-run="Open Grep" data-points="Searches inside files rather than just file names|Runs against the remote server or the local disk|Filter by extension, case sensitivity and regex">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Full-Text Content Grep</span>
@@ -5716,7 +5861,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge tool-card-badge-kbd">Ctrl+Shift+F</span>
           </button>
-          <button type="button" class="tool-card" data-tool="batch rename regex counter numbering prefix suffix case mass" onclick="closeToolsModal(); openBatchRenameModal();">
+          <button type="button" class="tool-card" data-tool="batch rename regex counter numbering prefix suffix case mass" onclick="openToolDetail(this)" data-action="openBatchRenameModal" data-run="Open Renamer" data-points="Find and replace, regex, prefix/suffix and auto-numbering|Case conversion and extension changes in the same pass|Live preview of every new name before anything is written">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Batch Multi-Rename Engine</span>
@@ -5724,7 +5869,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge tool-card-badge-kbd">Ctrl+M</span>
           </button>
-          <button type="button" class="tool-card" data-tool="health disk cpu ram memory usage analyzer server stats" onclick="closeToolsModal(); openServerHealthModal();">
+          <button type="button" class="tool-card" data-tool="health disk cpu ram memory usage analyzer server stats" onclick="openToolDetail(this)" data-action="openServerHealthModal" data-run="Open Analyzer" data-points="CPU load, RAM usage and kernel version at a glance|Disk partitions with usage bars|Refreshes while the window stays open">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Remote Server Health &amp; Disk Analyzer</span>
@@ -5732,7 +5877,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge">READY</span>
           </button>
-          <button type="button" class="tool-card" data-tool="directory sync synchronize mirror diff compare shift+f1" onclick="closeToolsModal(); toggleCompareDirectories(true);">
+          <button type="button" class="tool-card" data-tool="directory sync synchronize mirror diff compare shift+f1" onclick="openToolDetail(this)" data-action="toggleCompareDirectories" data-arg="true" data-run="Start Comparing" data-close-on-run="true" data-points="Bi-directional mirroring or a one-way push/pull|A dry-run preview lists every planned change first|Exclusion masks keep caches, logs and temp files out of the plan|Turns on compare mode in the main window, so the suite steps aside">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Directory Synchronization Engine</span>
@@ -5740,7 +5885,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge tool-card-badge-kbd">Shift+F1</span>
           </button>
-          <button type="button" class="tool-card" data-tool="ping port probe network latency jitter dns banner tcp test" onclick="closeToolsModal(); openNetworkProbeModal();">
+          <button type="button" class="tool-card" data-tool="ping port probe network latency jitter dns banner tcp test" onclick="openToolDetail(this)" data-action="openNetworkProbeModal" data-run="Open Probe" data-points="DNS resolution speed and TCP round-trip latency|Jitter measured across repeated probes|Reads the SSH or FTP banner to confirm what is actually listening">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Network Ping &amp; Port Probe</span>
@@ -5748,7 +5893,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge">READY</span>
           </button>
-          <button type="button" class="tool-card" data-tool="ssh keypair key generator ed25519 rsa authorized_keys deploy vault" onclick="closeToolsModal(); openSshKeygenModal();">
+          <button type="button" class="tool-card" data-tool="ssh keypair key generator ed25519 rsa authorized_keys deploy vault" onclick="openToolDetail(this)" data-action="openSshKeygenModal" data-run="Open Generator" data-points="Generates Ed25519 or RSA keypairs locally|The public key is kept in the vault for reuse|Deploy straight into authorized_keys on the connected server">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">SSH Keypair Generator &amp; Vault</span>
@@ -5756,7 +5901,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge">READY</span>
           </button>
-          <button type="button" class="tool-card" data-tool="remote transfer server to server scp rsync relay dispatcher move" onclick="closeToolsModal(); openRemoteTransferModal();">
+          <button type="button" class="tool-card" data-tool="remote transfer server to server scp rsync relay dispatcher move" onclick="openToolDetail(this)" data-action="openRemoteTransferModal" data-run="Open Transfer" data-points="Server-to-server moves without a local round trip|Direct SCP/Rsync or a streamed relay when the two hosts cannot see each other|Runs through the transfer queue, so progress and retries are tracked">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Remote Transfer &amp; Server-to-Server</span>
@@ -5764,7 +5909,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </span>
             <span class="tool-card-badge">READY</span>
           </button>
-          <button type="button" class="tool-card" data-tool="sshpass install apt yum dnf apk package remote server linux" onclick="closeToolsModal(); promptInstallSshpassOnServer();">
+          <button type="button" class="tool-card" data-tool="sshpass install apt yum dnf apk package remote server linux" onclick="openToolDetail(this)" data-action="promptInstallSshpassOnServer" data-run="Install sshpass" data-points="Detects the distribution's package manager first|Installs with the right command for apt, dnf, yum or apk|Required by the server-to-server relay when it falls back to SSH">
             <span class="tool-card-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></span>
             <span class="tool-card-text">
               <span class="tool-card-title">Install sshpass on Remote Server</span>
@@ -5778,8 +5923,36 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         <div class="tools-empty" id="toolsEmptyState">No tool matches that filter.</div>
       </div>
 
+      <!-- Second level of the tools window: one tool's own page. Filled from
+           the card that was clicked, so the grid stays the single source of
+           truth for titles, icons and badges. -->
+      <div class="tools-detail" id="toolsDetailPane" hidden>
+        <div class="tools-detail-top">
+          <button type="button" class="tools-back" onclick="backToTools()" title="Back to the tools grid (Esc)">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            Back to Tools
+          </button>
+          <span class="tool-card-badge" id="toolDetailBadge">READY</span>
+        </div>
+
+        <div class="tools-detail-hero">
+          <span class="tools-detail-icon" id="toolDetailIcon"></span>
+          <div style="min-width: 0;">
+            <h3 class="tools-detail-title" id="toolDetailTitle">Tool</h3>
+            <p class="tools-detail-desc" id="toolDetailDesc"></p>
+          </div>
+        </div>
+
+        <ul class="tools-detail-points" id="toolDetailPoints"></ul>
+
+        <div class="tools-detail-actions">
+          <button type="button" class="btn btn-primary" id="toolDetailRun" onclick="runToolAction()" style="font-size: 11.5px; padding: 3px 18px; height: 28px;">Open</button>
+          <button type="button" class="btn btn-secondary" onclick="backToTools()" style="font-size: 11.5px; padding: 3px 16px; height: 28px;">Back</button>
+        </div>
+      </div>
+
       <div class="tools-footer">
-        <span class="tools-hint"><kbd>Esc</kbd> close &middot; <kbd>Ctrl</kbd>+<kbd>K</kbd> command palette</span>
+        <span class="tools-hint" id="toolsFooterHint"><kbd>Esc</kbd> close &middot; <kbd>Ctrl</kbd>+<kbd>K</kbd> command palette</span>
         <button type="button" class="btn btn-secondary" onclick="closeToolsModal()" style="font-size: 11.5px; padding: 3px 18px; height: 26px;">Close</button>
       </div>
     </div>
