@@ -620,9 +620,21 @@ mod tests {
     }
 
     /// A queue whose worker can never connect, so `enqueue` exercises the
-    /// bookkeeping without touching the network.
+    /// bookkeeping without touching the network. Workers *do* spawn, which is
+    /// what the retry test needs — but it also means a worker may claim a task
+    /// between `enqueue` and an assertion, so use `frozen_queue` for anything
+    /// that inspects state right after enqueueing.
     fn offline_queue() -> TestQueue {
         TestQueue(Queue::new(Arc::new(|| Err("offline in tests".to_string())), None))
+    }
+
+    /// A queue with workers permanently disabled. `shutdown` makes
+    /// `ensure_workers` a no-op, so a task stays exactly where the test put it
+    /// and the state assertions below are deterministic rather than racy.
+    fn frozen_queue() -> TestQueue {
+        let queue = offline_queue();
+        queue.shutdown();
+        queue
     }
 
     fn state_of(queue: &Queue, id: u64) -> State {
@@ -638,7 +650,7 @@ mod tests {
 
     #[test]
     fn enqueue_assigns_increasing_ids_and_starts_pending() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         let a = queue.enqueue(Kind::Upload, "C:/a.txt", "/a.txt", 10);
         let b = queue.enqueue(Kind::Download, "/b.txt", "C:/b.txt", 20);
 
@@ -683,7 +695,7 @@ mod tests {
 
     #[test]
     fn pausing_a_pending_task_stops_a_worker_claiming_it() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         queue.set_settings(Settings {
             max_parallel: 1,
             ..Default::default()
@@ -696,7 +708,7 @@ mod tests {
 
     #[test]
     fn resuming_a_paused_pending_task_returns_it_to_the_queue() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         let id = queue.enqueue(Kind::Upload, "C:/a.txt", "/a.txt", 10);
 
         queue.pause(id);
@@ -706,7 +718,7 @@ mod tests {
 
     #[test]
     fn cancelling_a_pending_task_is_immediate() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         let id = queue.enqueue(Kind::Upload, "C:/a.txt", "/a.txt", 10);
 
         assert!(queue.cancel(id));
@@ -715,7 +727,7 @@ mod tests {
 
     #[test]
     fn a_terminal_task_cannot_be_paused_or_cancelled_again() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         let id = queue.enqueue(Kind::Upload, "C:/a.txt", "/a.txt", 10);
         queue.cancel(id);
 
@@ -725,7 +737,7 @@ mod tests {
 
     #[test]
     fn requeue_resets_attempts_and_progress() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         let id = queue.enqueue(Kind::Upload, "C:/a.txt", "/a.txt", 10);
         queue.cancel(id);
 
@@ -746,7 +758,7 @@ mod tests {
 
     #[test]
     fn clear_finished_removes_only_terminal_tasks() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         let keep = queue.enqueue(Kind::Upload, "C:/a.txt", "/a.txt", 10);
         let drop_it = queue.enqueue(Kind::Upload, "C:/b.txt", "/b.txt", 10);
         queue.cancel(drop_it);
@@ -757,7 +769,7 @@ mod tests {
 
     #[test]
     fn cancel_all_stops_pending_and_running_tasks_alike() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         let a = queue.enqueue(Kind::Upload, "C:/a.txt", "/a.txt", 1);
         let b = queue.enqueue(Kind::Download, "/b.txt", "C:/b.txt", 1);
 
@@ -768,7 +780,7 @@ mod tests {
 
     #[test]
     fn settings_are_clamped_to_a_sane_range() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         queue.set_settings(Settings {
             max_parallel: 9999,
             max_attempts: 0,
@@ -784,7 +796,7 @@ mod tests {
 
     #[test]
     fn the_snapshot_exposes_every_field_the_ui_needs() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         let id = queue.enqueue(Kind::Upload, "C:/a.txt", "/a.txt", 1234);
 
         let snap = queue.snapshot();
@@ -806,7 +818,7 @@ mod tests {
 
     #[test]
     fn an_idle_queue_reports_itself_idle() {
-        let queue = offline_queue();
+        let queue = frozen_queue();
         assert!(queue.is_idle(), "a fresh queue has nothing to do");
 
         let id = queue.enqueue(Kind::Upload, "C:/a.txt", "/a.txt", 1);
