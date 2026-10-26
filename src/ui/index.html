@@ -3577,7 +3577,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.63</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.64</span>
         </div>
       </div>
 
@@ -6839,7 +6839,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.63';
+    let APP_CURRENT_VERSION = '0.0.0.64';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -7509,12 +7509,30 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         // 2. External drag & drop from Windows Explorer / Desktop
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-          for (let i = 0; i < e.dataTransfer.files.length; i++) {
-            const f = e.dataTransfer.files[i];
-            const resolvedPath = f.path || (currentLocalPath ? (currentLocalPath.endsWith('\\') ? currentLocalPath + f.name : currentLocalPath + '\\' + f.name) : '');
-            if (resolvedPath) {
-              await uploadFileDirect(resolvedPath, f.name);
+          const dropped = Array.from(e.dataTransfer.files);
+          for (const f of dropped) {
+            // WebView2 does not expose File.path for externally dropped files.
+            // The old code guessed "<current local folder>/<name>", which
+            // silently uploaded a *different* file that happened to share the
+            // name. Only trust the guess when it points at a real file of the
+            // same size; otherwise say so instead of transferring the wrong data.
+            let resolvedPath = f.path || '';
+            if (!resolvedPath && currentLocalPath) {
+              const guess = currentLocalPath.endsWith('\\')
+                ? currentLocalPath + f.name
+                : currentLocalPath + '\\' + f.name;
+              try {
+                const st = await sendRust('local_stat', { path: guess });
+                if (st && st.exists && !st.is_dir && st.size === f.size) {
+                  resolvedPath = guess;
+                }
+              } catch (_) {}
             }
+            if (!resolvedPath) {
+              addLog(`Dropped item '${f.name}': its local path could not be resolved. Drag it from the 90FTP local pane, or use the Upload button.`, 'error');
+              continue;
+            }
+            await uploadFileDirect(resolvedPath, f.name);
           }
         }
       });
@@ -8156,6 +8174,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
               is_dir: f.is_dir,
               items: batchItems.map(it => ({ path: it.path, name: it.name, is_dir: !!it.is_dir }))
             };
+            e.dataTransfer.effectAllowed = 'copyMove';
             e.dataTransfer.setData('text/plain', JSON.stringify(activeDragPayload));
             tr.classList.add('dragging');
           };
@@ -9600,6 +9619,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
               is_dir: f.is_dir,
               items: batchItems.map(it => ({ path: it.path, name: it.name, is_dir: !!it.is_dir }))
             };
+            e.dataTransfer.effectAllowed = 'copyMove';
             e.dataTransfer.setData('text/plain', JSON.stringify(activeDragPayload));
             tr.classList.add('dragging');
           };
@@ -9839,9 +9859,43 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       }
 
       const sources = items.map(it => it.path);
+      const sep = isRemote ? '/' : '\\';
+      const baseDir = cleanTarget.replace(/[\\/]+$/, '');
+      // Explicit (old_path -> new_path) pairs. The backend accepts this shape as
+      // well as `sources` + `target_dir`, so a contract drift between the two
+      // sides can never again turn a drag-and-drop move into a silent no-op.
+      const moveItems = items.map(it => {
+        const base = it.name || (it.path || '').split(/[\\/]/).filter(Boolean).pop() || '';
+        return {
+          old_path: it.path,
+          new_path: baseDir ? `${baseDir}${sep}${base}` : `${sep}${base}`
+        };
+      });
       const actionVerb = isCopy ? 'Copying' : 'Moving';
       const pastVerb = isCopy ? 'Copied' : 'Moved';
       const shortDest = cleanTarget.split(/[\\/]/).filter(Boolean).pop() || cleanTarget;
+
+      // Turn a backend response into an honest verdict. `res.moved_count || n`
+      // used to treat a real 0 as "falsy" and print a success message for a
+      // batch that moved nothing.
+      const reportOutcome = (res) => {
+        const requested = typeof res.requested_count === 'number' ? res.requested_count : sources.length;
+        const movedCount = typeof res.moved_count === 'number' ? res.moved_count : requested;
+        const errs = Array.isArray(res.errors) ? res.errors : [];
+        if (movedCount === 0) {
+          addLog(`${actionVerb} failed: no item was ${pastVerb.toLowerCase()}. ${errs.join(' | ') || 'No reason reported by the server.'}`, 'error');
+          return 0;
+        }
+        if (movedCount < requested) {
+          addLog(`${pastVerb} ${movedCount} of ${requested} item(s) to ${cleanTarget} — ${errs.join(' | ')}`, 'warning');
+        } else {
+          addLog(`${pastVerb} ${movedCount} item(s) to ${cleanTarget}`, 'success');
+        }
+        if (errs.length > 0 && movedCount >= requested) {
+          addLog(`Notes: ${errs.join(' | ')}`, 'warning');
+        }
+        return movedCount;
+      };
 
       addLog(`${actionVerb} ${sources.length} ${isRemote ? 'remote' : 'local'} item(s) to '${cleanTarget}'...`, 'cmd');
 
@@ -9852,6 +9906,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (!ok) return;
           }
           const res = await sendRust('remote_move_batch', {
+            items: moveItems,
             sources,
             target_dir: cleanTarget,
             copy: !!isCopy
@@ -9875,12 +9930,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           } else {
             await refreshRemote();
           }
-          const movedCount = res.moved_count || sources.length;
-          addLog(`${pastVerb} ${movedCount} remote item(s) to ${cleanTarget}`, 'success');
-          if (res.errors && res.errors.length > 0) {
-            addLog(`Notice during remote operation: ${res.errors.join(' | ')}`, 'warning');
-          }
-          showInteractiveActionToast(
+          const movedCount = reportOutcome(res);
+          if (movedCount > 0) showInteractiveActionToast(
             `${isCopy ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Copied' : '⤴ Moved'} ${movedCount} item${movedCount === 1 ? '' : 's'} to "${shortDest}"`,
             `Destination: ${cleanTarget}`,
             cleanTarget,
@@ -9889,6 +9940,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           );
         } else {
           const res = await sendRust('local_move_batch', {
+            items: moveItems,
             sources,
             target_dir: cleanTarget,
             copy: !!isCopy
@@ -9910,12 +9962,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           } else {
             await refreshLocal();
           }
-          const movedCount = res.moved_count || sources.length;
-          addLog(`${pastVerb} ${movedCount} local item(s) to ${cleanTarget}`, 'success');
-          if (res.errors && res.errors.length > 0) {
-            addLog(`Notice during local operation: ${res.errors.join(' | ')}`, 'warning');
-          }
-          showInteractiveActionToast(
+          const movedCount = reportOutcome(res);
+          if (movedCount > 0) showInteractiveActionToast(
             `${isCopy ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Copied' : '⤴ Moved'} ${movedCount} item${movedCount === 1 ? '' : 's'} to "${shortDest}"`,
             `Destination: ${cleanTarget}`,
             cleanTarget,
@@ -9926,7 +9974,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       } catch (err) {
         addLog(`${actionVerb} failed: ${err.message || err}`, 'error');
         alert(`Failed to ${isCopy ? 'copy' : 'move'} items:\n${err.message || err}`);
+        return false;
       }
+      return true;
     }
 
     async function executeTargetedCrossPaneTransfer(items, isRemoteTarget, targetDirPath) {
@@ -9943,6 +9993,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         const savedRemotePath = currentRemotePath;
         currentRemotePath = targetDirPath;
+        fsWatcherSuspended = true;
         try {
           addLog(`Targeted Upload: Sending ${items.length} item(s) directly into remote '${targetDirPath}'...`, 'cmd');
           for (const it of items) {
@@ -9960,12 +10011,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             false
           );
         } finally {
+          fsWatcherSuspended = false;
           currentRemotePath = savedRemotePath;
           await navigateRemote(savedRemotePath);
         }
       } else {
         const savedLocalPath = currentLocalPath;
         currentLocalPath = targetDirPath;
+        fsWatcherSuspended = true;
         try {
           addLog(`Targeted Download: Saving ${items.length} item(s) directly into local '${targetDirPath}'...`, 'cmd');
           for (const it of items) {
@@ -9983,6 +10036,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             false
           );
         } finally {
+          fsWatcherSuspended = false;
           currentLocalPath = savedLocalPath;
           await navigateLocal(savedLocalPath);
         }
@@ -10201,7 +10255,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     function clipboardCutSelected(isRemote) {
       closeContextMenu();
       const items = isRemote ? getSelectedRemoteItems() : getSelectedLocalItems();
-      if (items.length === 0) return;
+      if (items.length === 0) {
+        addLog(`Cut: nothing selected in the ${isRemote ? 'remote' : 'local'} pane.`, 'warning');
+        return;
+      }
       interactiveClipboard = {
         isRemote: !!isRemote,
         mode: 'cut',
@@ -10216,7 +10273,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     function clipboardCopySelected(isRemote) {
       closeContextMenu();
       const items = isRemote ? getSelectedRemoteItems() : getSelectedLocalItems();
-      if (items.length === 0) return;
+      if (items.length === 0) {
+        addLog(`Copy: nothing selected in the ${isRemote ? 'remote' : 'local'} pane.`, 'warning');
+        return;
+      }
       interactiveClipboard = {
         isRemote: !!isRemote,
         mode: 'copy',
@@ -10231,6 +10291,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     async function clipboardPasteHere(isRemoteTarget) {
       closeContextMenu();
       if (!interactiveClipboard || !interactiveClipboard.items || interactiveClipboard.items.length === 0) {
+        addLog(`Paste: the clipboard is empty. Use Ctrl+X or Ctrl+C on a file first.`, 'warning');
         return;
       }
       const clip = interactiveClipboard;
@@ -10242,8 +10303,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           await duplicateItemsInPlace(isRemoteTarget, clip.items);
           return;
         }
-        await executeInteractiveMove(isRemoteTarget, clip.items, targetDir, clip.mode === 'copy', false);
-        if (clip.mode === 'cut') {
+        const ok = await executeInteractiveMove(isRemoteTarget, clip.items, targetDir, clip.mode === 'copy', false);
+        // Keep the clipboard alive when the operation failed, so the user can retry
+        // instead of losing the cut selection.
+        if (clip.mode === 'cut' && ok) {
           interactiveClipboard = null;
         }
       } else {
@@ -10255,50 +10318,37 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       }
     }
 
-    function buildDuplicateName(originalName) {
-      const dotIdx = originalName.lastIndexOf('.');
-      if (dotIdx > 0) {
-        return originalName.substring(0, dotIdx) + '_copy' + originalName.substring(dotIdx);
-      }
-      return originalName + '_copy';
-    }
-
     async function duplicateItemsInPlace(isRemote, items) {
       closeContextMenu();
       if (!items || items.length === 0) return;
-      for (const it of items) {
-        const dupName = buildDuplicateName(it.name);
-        if (isRemote) {
-          const parent = getRemoteParentDir(it.path);
-          const newPath = parent === '/' ? '/' + dupName : parent + '/' + dupName;
-          const qSrc = "'" + it.path.replace(/'/g, "'\\''") + "'";
-          const qDst = "'" + newPath.replace(/'/g, "'\\''") + "'";
-          try {
-            const res = await sendRust('remote_exec_ssh', {
-              command: `cp -rf ${qSrc} ${qDst}`,
-              cwd: currentRemotePath
-            });
-            if (res && res.exit_code === 0) {
-              addLog(`Duplicated remote item '${it.name}' -> '${dupName}'`, 'success');
-            } else {
-              const readRes = await sendRust('remote_read', { path: it.path });
-              await sendRust('remote_write', { path: newPath, content: readRes.content || '' });
-              addLog(`Duplicated remote file '${it.name}' -> '${dupName}'`, 'success');
-            }
-          } catch (err) {
-            addLog(`Failed to duplicate '${it.name}': ${err.message || err}`, 'error');
-          }
+
+      const targetDir = isRemote ? currentRemotePath : currentLocalPath;
+      const sources = items.map(it => it.path);
+      addLog(`Duplicating ${sources.length} ${isRemote ? 'remote' : 'local'} item(s) in '${targetDir}'...`, 'cmd');
+
+      // Route through the batch copy endpoints: they handle directories and
+      // binary files, and the backend appends " (2)" when the name is taken.
+      // The previous local implementation used local_read/local_write, which is
+      // text-only and silently failed on binaries and folders.
+      try {
+        const res = await sendRust(isRemote ? 'remote_move_batch' : 'local_move_batch', {
+          sources,
+          target_dir: targetDir,
+          copy: true
+        });
+        const made = typeof res.moved_count === 'number' ? res.moved_count : sources.length;
+        const errs = Array.isArray(res.errors) ? res.errors : [];
+        if (made === 0) {
+          addLog(`Duplicate failed: ${errs.join(' | ') || 'nothing was copied'}.`, 'error');
         } else {
-          try {
-            const readRes = await sendRust('local_read', { path: it.path });
-            const newPath = joinLocalPath(currentLocalPath, dupName);
-            await sendRust('local_write', { path: newPath, content: readRes.content || '' });
-            addLog(`Duplicated local file '${it.name}' -> '${dupName}'`, 'success');
-          } catch (err) {
-            addLog(`Failed to duplicate '${it.name}': ${err.message || err}`, 'error');
-          }
+          addLog(`Created ${made} duplicate(s) in '${targetDir}'.`, 'success');
+          if (errs.length > 0) addLog(`Notes: ${errs.join(' | ')}`, 'warning');
         }
+      } catch (err) {
+        addLog(`Duplicate failed: ${err.message || err}`, 'error');
+        alert('Duplicate failed:\n' + (err.message || err));
       }
+
       if (isRemote) await refreshRemote();
       else await refreshLocal();
     }
@@ -10490,6 +10540,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     // preserved, so the refresh is invisible except for the new data.
     // ========================================================
     let fsWatcherKey = '';
+    // Set while a targeted cross-pane transfer temporarily swaps the pane paths,
+    // so the live watcher cannot re-target or repaint mid-operation.
+    let fsWatcherSuspended = false;
     let fsWatcherTimer = null;
     let fsLocalRefreshBusy = false;
     let fsRemoteRefreshBusy = false;
@@ -10595,6 +10648,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     window.onFsChanged = function (scope) {
+      // Targeted drag-and-drop temporarily retargets the pane paths; a watcher
+      // tick landing in that window would repaint the wrong directory.
+      if (fsWatcherSuspended) return;
       const now = Date.now();
       if (scope === 'local') {
         if (now - fsLastRefreshAt.local < 300) return;
@@ -10608,6 +10664,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     };
 
     function updateFsWatcher(force) {
+      if (fsWatcherSuspended) return;
       const localDir = currentLocalPath || '';
       const remoteDir = (isConnected && currentRemotePath) ? currentRemotePath : '';
       const key = localDir + '\u0000' + remoteDir;
@@ -19287,10 +19344,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           clipboardCopySelected(lastActivePaneIsRemote);
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-        if (interactiveClipboard && interactiveClipboard.items && interactiveClipboard.items.length > 0) {
-          e.preventDefault();
-          clipboardPasteHere(lastActivePaneIsRemote);
-        }
+        e.preventDefault();
+        clipboardPasteHere(lastActivePaneIsRemote);
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         if (lastInteractiveMoveUndo) {
           e.preventDefault();

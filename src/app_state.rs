@@ -194,6 +194,105 @@ fn js_literal(value: &str) -> String {
         .replace('\u{2029}', "\\u2029")
 }
 
+/// Joins a directory and a child name using `sep`, tolerating trailing
+/// separators and empty/root directories (`/`, `C:\`).
+fn join_child(dir: &str, name: &str, sep: char) -> String {
+    let trimmed = dir.trim_end_matches(['/', '\\']);
+    if trimmed.is_empty() {
+        format!("{}{}", sep, name)
+    } else {
+        format!("{}{}{}", trimmed, sep, name)
+    }
+}
+
+/// Normalises a batch move/copy request into explicit `(source, destination)`
+/// pairs.
+///
+/// Two shapes are accepted on purpose:
+///   * `items: [{ old_path, new_path }]` — explicit pairs (batch rename, undo);
+///   * `sources: [path, ...]` + `target_dir` — "move these into that folder",
+///     which is what drag-and-drop and the clipboard send.
+///
+/// The UI used to send the second shape while these handlers only understood
+/// the first, so every drag-and-drop move resolved to zero items and quietly
+/// reported success. Accepting both makes that class of mismatch impossible.
+fn resolve_move_pairs(payload: &serde_json::Value, sep: char) -> Vec<(String, String)> {
+    let mut pairs: Vec<(String, String)> = Vec::new();
+
+    if let Some(items) = payload.get("items").and_then(|v| v.as_array()) {
+        for item in items {
+            let old_p = item.get("old_path").and_then(|v| v.as_str()).unwrap_or("").trim();
+            let new_p = item.get("new_path").and_then(|v| v.as_str()).unwrap_or("").trim();
+            if !old_p.is_empty() && !new_p.is_empty() {
+                pairs.push((old_p.to_string(), new_p.to_string()));
+            }
+        }
+    }
+
+    if pairs.is_empty() {
+        let target_dir = payload
+            .get("target_dir")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+
+        if !target_dir.is_empty() {
+            if let Some(sources) = payload.get("sources").and_then(|v| v.as_array()) {
+                for src in sources {
+                    let Some(src) = src.as_str().map(str::trim).filter(|s| !s.is_empty()) else {
+                        continue;
+                    };
+                    let base = src
+                        .rsplit(['/', '\\'])
+                        .next()
+                        .unwrap_or("")
+                        .trim();
+                    if base.is_empty() {
+                        continue;
+                    }
+                    pairs.push((src.to_string(), join_child(target_dir, base, sep)));
+                }
+            }
+        }
+    }
+
+    pairs
+}
+
+/// Finds a free remote path by appending " (2)", " (3)" … so a batch move or
+/// copy never overwrites an existing remote file.
+fn unique_remote_destination(client: &mut RemoteClient, path: &str) -> String {
+    if !matches!(client.stat(path), Ok(Some(_))) {
+        return path.to_string();
+    }
+
+    let (dir, name) = match path.rfind('/') {
+        Some(0) => ("/".to_string(), path[1..].to_string()),
+        Some(i) => (path[..i].to_string(), path[i + 1..].to_string()),
+        None => (String::new(), path.to_string()),
+    };
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 => (name[..i].to_string(), Some(name[i + 1..].to_string())),
+        _ => (name.clone(), None),
+    };
+
+    for n in 2..=999u32 {
+        let candidate_name = match &ext {
+            Some(e) if !e.is_empty() => format!("{} ({}).{}", stem, n, e),
+            _ => format!("{} ({})", stem, n),
+        };
+        let candidate = if dir.is_empty() {
+            candidate_name
+        } else {
+            join_child(&dir, &candidate_name, '/')
+        };
+        if !matches!(client.stat(&candidate), Ok(Some(_))) {
+            return candidate;
+        }
+    }
+    path.to_string()
+}
+
 fn compute_local_checksum(path: &str, algo: &str) -> Result<String, String> {
     use std::io::Read;
     use sha2::{Sha256, Digest};
@@ -477,64 +576,64 @@ impl AppState {
 
             "local_move_batch" => {
                 let is_copy = payload["copy"].as_bool().unwrap_or(false);
-                let items = payload["items"].as_array().cloned().unwrap_or_default();
+                let pairs = resolve_move_pairs(&payload, '\\');
+
+                if pairs.is_empty() {
+                    return IpcResponse::err(
+                        id,
+                        action,
+                        "Nothing to move: the request contained no usable source paths.",
+                    );
+                }
+
+                let requested = pairs.len();
                 let mut moves = Vec::new();
                 let mut errors = Vec::new();
 
-                fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
-                    if !dst.exists() {
-                        std::fs::create_dir_all(dst).map_err(|e| format!("Failed to create dir {:?}: {}", dst, e))?;
-                    }
-                    let entries = std::fs::read_dir(src).map_err(|e| format!("Failed to read dir {:?}: {}", src, e))?;
-                    for entry in entries.flatten() {
-                        let p = entry.path();
-                        let target = dst.join(entry.file_name());
-                        if p.is_dir() {
-                            copy_dir_recursive(&p, &target)?;
-                        } else {
-                            std::fs::copy(&p, &target).map_err(|e| format!("Failed to copy {:?} to {:?}: {}", p, target, e))?;
-                        }
-                    }
-                    Ok(())
-                }
-
-                for item in items {
-                    let old_p = item["old_path"].as_str().unwrap_or("").trim();
-                    let new_p = item["new_path"].as_str().unwrap_or("").trim();
-                    if old_p.is_empty() || new_p.is_empty() || old_p.eq_ignore_ascii_case(new_p) {
+                for (old_p, new_p) in pairs {
+                    if old_p.eq_ignore_ascii_case(&new_p) {
                         continue;
                     }
-                    let res = if is_copy {
-                        let sp = std::path::Path::new(old_p);
-                        let dp = std::path::Path::new(new_p);
-                        if sp.is_dir() {
-                            copy_dir_recursive(sp, dp)
-                        } else {
-                            if let Some(parent) = dp.parent() {
-                                let _ = std::fs::create_dir_all(parent);
-                            }
-                            std::fs::copy(sp, dp).map(|_| ()).map_err(|e| format!("Failed to copy: {}", e))
-                        }
+                    if !std::path::Path::new(&old_p).exists() {
+                        errors.push(format!("{}: source no longer exists", old_p));
+                        continue;
+                    }
+
+                    // Never clobber an existing destination — pick a free name instead.
+                    let final_new = if std::path::Path::new(&new_p).exists() {
+                        local_fs::unique_destination(&new_p)
                     } else {
-                        local_fs::rename_path(old_p, new_p)
+                        new_p.clone()
+                    };
+
+                    let res = if is_copy {
+                        local_fs::copy_path(&old_p, &final_new)
+                    } else {
+                        local_fs::move_path(&old_p, &final_new)
                     };
 
                     match res {
-                        Ok(_) => moves.push(json!({ "from": old_p, "to": new_p })),
+                        Ok(_) => moves.push(json!({ "from": old_p, "to": final_new })),
                         Err(e) => errors.push(format!("{}: {}", old_p, e)),
                     }
                 }
 
-                if moves.is_empty() && !errors.is_empty() {
-                    IpcResponse::err(id, action, &errors.join("; "))
-                } else {
-                    IpcResponse::ok(id, action, json!({
-                        "status": if is_copy { "copied" } else { "moved" },
-                        "moved_count": moves.len(),
-                        "moves": moves,
-                        "errors": errors,
-                    }))
+                if moves.is_empty() {
+                    let detail = if errors.is_empty() {
+                        "source and destination are identical".to_string()
+                    } else {
+                        errors.join("; ")
+                    };
+                    return IpcResponse::err(id, action, &detail);
                 }
+
+                IpcResponse::ok(id, action, json!({
+                    "status": if is_copy { "copied" } else { "moved" },
+                    "requested_count": requested,
+                    "moved_count": moves.len(),
+                    "moves": moves,
+                    "errors": errors,
+                }))
             }
 
             "local_compress" => {
@@ -1194,16 +1293,23 @@ impl AppState {
 
             "remote_move_batch" => {
                 let is_copy = payload["copy"].as_bool().unwrap_or(false);
-                let items = payload["items"].as_array().cloned().unwrap_or_default();
+                let pairs = resolve_move_pairs(&payload, '/');
+
+                if pairs.is_empty() {
+                    return IpcResponse::err(
+                        id,
+                        action,
+                        "Nothing to move: the request contained no usable source paths.",
+                    );
+                }
+                let requested = pairs.len();
 
                 match self.with_remote_retry(|client| {
                     let mut moves = Vec::new();
                     let mut errors = Vec::new();
 
-                    for item in &items {
-                        let old_p = item["old_path"].as_str().unwrap_or("").trim();
-                        let new_p = item["new_path"].as_str().unwrap_or("").trim();
-                        if old_p.is_empty() || new_p.is_empty() || old_p == new_p {
+                    for (old_p, new_p) in &pairs {
+                        if old_p == new_p {
                             continue;
                         }
 
@@ -1214,31 +1320,42 @@ impl AppState {
                             }
                         }
 
+                        // Never clobber an existing remote file.
+                        let final_new = if matches!(client.stat(new_p), Ok(Some(_))) {
+                            unique_remote_destination(&mut *client, new_p)
+                        } else {
+                            new_p.clone()
+                        };
+
                         let op_res = if is_copy {
-                            let sq_old = format!("'{}'", old_p.replace('\'', "'\\''"));
-                            let sq_new = format!("'{}'", new_p.replace('\'', "'\\''"));
-                            match client.exec_command_clean(&format!("cp -rf {} {}", sq_old, sq_new)) {
+                            let cmd = format!("cp -rf {} {}", sq(old_p), sq(&final_new));
+                            match client.exec_command_clean(&cmd) {
                                 Ok((0, _)) => Ok(()),
                                 _ => {
                                     // Fallback for regular files via SFTP/FTP buffer
                                     match client.download_file(old_p) {
-                                        Ok(bytes) => client.upload_file(new_p, &bytes),
+                                        Ok(bytes) => client.upload_file(&final_new, &bytes),
                                         Err(e) => Err(e),
                                     }
                                 }
                             }
                         } else {
-                            client.rename(old_p, new_p)
+                            client.rename(old_p, &final_new)
                         };
 
                         match op_res {
-                            Ok(_) => moves.push(json!({ "from": old_p, "to": new_p })),
+                            Ok(_) => moves.push(json!({ "from": old_p, "to": final_new })),
                             Err(e) => errors.push(format!("{}: {}", old_p, e)),
                         }
                     }
 
-                    if moves.is_empty() && !errors.is_empty() {
-                        return Err(errors.join("; "));
+                    if moves.is_empty() {
+                        let detail = if errors.is_empty() {
+                            "source and destination are identical".to_string()
+                        } else {
+                            errors.join("; ")
+                        };
+                        return Err(detail);
                     }
 
                     let files = client.list(None).unwrap_or_default();
@@ -1246,6 +1363,7 @@ impl AppState {
                 }) {
                     Ok(((moves, errors, files), reconnected)) => IpcResponse::ok(id, action, json!({
                         "status": if is_copy { "copied" } else { "moved" },
+                        "requested_count": requested,
                         "moved_count": moves.len(),
                         "moves": moves,
                         "errors": errors,
@@ -3549,5 +3667,68 @@ fn format_hex_dump(bytes: &[u8]) -> String {
         "(Empty file - 0 bytes)".to_string()
     } else {
         out
+    }
+}
+
+#[cfg(test)]
+mod move_request_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Windows path separator, written without a literal backslash so this test
+    /// survives any shell/editor escaping round-trip.
+    const SEP: char = '\u{5c}';
+
+    fn win(parts: &[&str]) -> String {
+        parts.join(&SEP.to_string())
+    }
+
+    #[test]
+    fn explicit_pairs_are_used_as_is() {
+        let src = win(&["C:", "a", "one.txt"]);
+        let dst = win(&["C:", "b", "one.txt"]);
+        let payload = json!({ "items": [{ "old_path": src, "new_path": dst }] });
+
+        let pairs = resolve_move_pairs(&payload, SEP);
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, src);
+        assert_eq!(pairs[0].1, dst);
+    }
+
+    /// The exact shape the UI sends for drag-and-drop and for paste.
+    #[test]
+    fn sources_and_target_dir_are_expanded() {
+        let target = win(&["C:", "archive", "2026"]);
+        let payload = json!({
+            "sources": [win(&["C:", "work", "report.txt"]), win(&["C:", "work", "assets"])],
+            "target_dir": target,
+            "copy": false
+        });
+
+        let pairs = resolve_move_pairs(&payload, SEP);
+        assert_eq!(pairs.len(), 2, "both sources must survive resolution");
+        assert_eq!(pairs[0].1, win(&["C:", "archive", "2026", "report.txt"]));
+        assert_eq!(pairs[1].1, win(&["C:", "archive", "2026", "assets"]));
+    }
+
+    #[test]
+    fn remote_root_target_is_joined_without_doubling_the_slash() {
+        let payload = json!({ "sources": ["/home/u/file.txt"], "target_dir": "/" });
+        let pairs = resolve_move_pairs(&payload, '/');
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].1, "/file.txt");
+    }
+
+    #[test]
+    fn trailing_separators_do_not_produce_double_separators() {
+        let payload = json!({ "sources": ["/srv/a.txt"], "target_dir": "/srv/backup/" });
+        let pairs = resolve_move_pairs(&payload, '/');
+        assert_eq!(pairs[0].1, "/srv/backup/a.txt");
+    }
+
+    #[test]
+    fn an_unusable_request_yields_no_pairs_instead_of_a_silent_noop() {
+        let payload = json!({ "copy": false });
+        assert!(resolve_move_pairs(&payload, SEP).is_empty());
     }
 }

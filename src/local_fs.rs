@@ -283,9 +283,175 @@ pub fn rename_path(old_str: &str, new_str: &str) -> Result<(), String> {
     fs::rename(old_str, new_str).map_err(|e| format!("Failed to rename: {}", e))
 }
 
+/// True when the OS error means "source and destination live on different
+/// volumes". Windows reports ERROR_NOT_SAME_DEVICE (17), Unix reports EXDEV (18).
+fn is_cross_device_error(e: &std::io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(17) | Some(18))
+}
+
+/// Recursively copy a file or a directory tree. Symlinks are copied as plain
+/// files/directories (the app does not need to preserve link semantics).
+pub fn copy_path(src_str: &str, dst_str: &str) -> Result<(), String> {
+    let src = Path::new(src_str);
+    let dst = Path::new(dst_str);
+
+    let meta = fs::symlink_metadata(src)
+        .map_err(|e| format!("Cannot read source {}: {}", src_str, e))?;
+
+    if meta.file_type().is_dir() {
+        fs::create_dir_all(dst)
+            .map_err(|e| format!("Failed to create folder {}: {}", dst_str, e))?;
+        let entries = fs::read_dir(src)
+            .map_err(|e| format!("Failed to read folder {}: {}", src_str, e))?;
+        for entry in entries.flatten() {
+            let child_src = entry.path();
+            let child_dst = dst.join(entry.file_name());
+            copy_path(&child_src.to_string_lossy(), &child_dst.to_string_lossy())?;
+        }
+        Ok(())
+    } else {
+        if let Some(parent) = dst.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create folder: {}", e))?;
+            }
+        }
+        fs::copy(src, dst)
+            .map(|_| ())
+            .map_err(|e| format!("Failed to copy {}: {}", src_str, e))
+    }
+}
+
+/// Move a file or directory, falling back to copy + delete when the two paths
+/// are on different volumes.
+///
+/// `fs::rename` cannot cross volumes — dragging a folder from `C:` to `D:`
+/// used to fail with a bare "Failed to rename". The fallback keeps the move
+/// semantics (source disappears) instead of degrading to a silent copy.
+pub fn move_path(old_str: &str, new_str: &str) -> Result<(), String> {
+    match fs::rename(old_str, new_str) {
+        Ok(()) => Ok(()),
+        Err(e) if is_cross_device_error(&e) => {
+            copy_path(old_str, new_str)?;
+            delete_path(old_str).map_err(|del| {
+                format!(
+                    "Copied to the destination but the original could not be removed ({}). Please delete it manually.",
+                    del
+                )
+            })
+        }
+        Err(e) => Err(format!("Failed to move: {}", e)),
+    }
+}
+
+/// Return `path_str` if it is free, otherwise append " (2)", " (3)" … until an
+/// unused name is found. Used so batch move/copy never silently overwrites.
+pub fn unique_destination(path_str: &str) -> String {
+    let path = Path::new(path_str);
+    if !path.exists() {
+        return path_str.to_string();
+    }
+
+    let parent = path.parent();
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let ext = path
+        .extension()
+        .map(|s| s.to_string_lossy().to_string())
+        .filter(|e| !e.is_empty());
+
+    for n in 2..=999u32 {
+        let name = match &ext {
+            Some(e) => format!("{} ({}).{}", stem, n, e),
+            None => format!("{} ({})", stem, n),
+        };
+        let candidate = match parent {
+            Some(p) if !p.as_os_str().is_empty() => p.join(&name),
+            _ => Path::new(&name).to_path_buf(),
+        };
+        if !candidate.exists() {
+            return candidate.to_string_lossy().to_string();
+        }
+    }
+    path_str.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_move_path_moves_files_and_folders() {
+        let root = std::env::temp_dir().join(format!("90ftp_move_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let src = root.join("src");
+        let dst = root.join("dst");
+        fs::create_dir_all(&src).unwrap();
+        fs::create_dir_all(&dst).unwrap();
+        fs::write(src.join("a.txt"), b"hello").unwrap();
+        fs::create_dir_all(src.join("nested")).unwrap();
+        fs::write(src.join("nested").join("b.txt"), b"world").unwrap();
+
+        let folder = src.join("nested");
+        let moved_folder = dst.join("nested");
+        move_path(&folder.to_string_lossy(), &moved_folder.to_string_lossy()).unwrap();
+        assert!(!folder.exists(), "source folder should be gone after a move");
+        assert_eq!(fs::read_to_string(moved_folder.join("b.txt")).unwrap(), "world");
+
+        let file = src.join("a.txt");
+        let moved_file = dst.join("a.txt");
+        move_path(&file.to_string_lossy(), &moved_file.to_string_lossy()).unwrap();
+        assert!(!file.exists(), "source file should be gone after a move");
+        assert_eq!(fs::read_to_string(&moved_file).unwrap(), "hello");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_copy_path_leaves_source_in_place() {
+        let root = std::env::temp_dir().join(format!("90ftp_copy_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let src = root.join("tree");
+        fs::create_dir_all(src.join("inner")).unwrap();
+        fs::write(src.join("inner").join("c.txt"), b"deep").unwrap();
+
+        let dst = root.join("tree_copy");
+        copy_path(&src.to_string_lossy(), &dst.to_string_lossy()).unwrap();
+        assert!(src.join("inner").join("c.txt").exists(), "copy must not remove the source");
+        assert_eq!(fs::read_to_string(dst.join("inner").join("c.txt")).unwrap(), "deep");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_unique_destination_avoids_overwrite() {
+        let root = std::env::temp_dir().join(format!("90ftp_unique_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+
+        let taken = root.join("report.txt");
+        fs::write(&taken, b"1").unwrap();
+
+        let first = unique_destination(&taken.to_string_lossy());
+        assert_eq!(
+            Path::new(&first).file_name().unwrap().to_string_lossy(),
+            "report (2).txt"
+        );
+
+        fs::write(&first, b"2").unwrap();
+        let second = unique_destination(&taken.to_string_lossy());
+        assert_eq!(
+            Path::new(&second).file_name().unwrap().to_string_lossy(),
+            "report (3).txt"
+        );
+
+        let free = root.join("fresh.txt");
+        assert_eq!(unique_destination(&free.to_string_lossy()), free.to_string_lossy());
+
+        let _ = fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn test_desktop_listing() {
