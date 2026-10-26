@@ -23,6 +23,14 @@ pub struct WatchConfig {
 
 pub struct AppState {
     pub remote: Arc<Mutex<Option<RemoteClient>>>,
+    /// Dedicated connection used only for uploads and downloads.
+    ///
+    /// The shared connection used to be locked for the whole duration of a
+    /// transfer, so keepalive pings, directory listings and the change watcher
+    /// all stalled behind a large file and the UI reported a false disconnect.
+    /// Keeping bulk traffic on its own session fixes that without weakening any
+    /// of the existing reconnect logic.
+    pub transfer_client: Arc<Mutex<Option<RemoteClient>>>,
     pub exec_script: Option<ScriptCallback>,
     pub open_terminal_window: Option<TerminalWindowCallback>,
     pub current_connection: Arc<Mutex<Option<serde_json::Value>>>,
@@ -42,6 +50,7 @@ impl AppState {
     ) -> Self {
         Self {
             remote: Arc::new(Mutex::new(None)),
+            transfer_client: Arc::new(Mutex::new(None)),
             exec_script,
             open_terminal_window,
             current_connection: Arc::new(Mutex::new(None)),
@@ -57,8 +66,11 @@ impl AppState {
 
     /// Starts the single background change-detector thread (idempotent).
     ///
-    /// The remote probe uses `try_lock`, so a long upload or a running terminal
-    /// command can never be blocked — or block the watcher — by this loop.
+    /// Local directories use the OS change notification API when it is
+    /// available, so a modification is reported within milliseconds and an idle
+    /// folder is never re-read. The remote pane has no push channel, so it is
+    /// still sampled — with `try_lock`, so a long upload or a running terminal
+    /// command can never be blocked, or block the watcher, by this loop.
     pub fn ensure_watcher(&self) {
         if self.watch_started.swap(true, Ordering::SeqCst) {
             return;
@@ -70,16 +82,26 @@ impl AppState {
         let exec_script = self.exec_script.clone();
 
         std::thread::spawn(move || {
-            let mut last_local: u64 = 0;
-            let mut last_remote: u64 = 0;
+            let mut last_local_sig: u64 = 0;
+            let mut last_remote_sig: u64 = 0;
             let mut last_generation: u64 = 0;
-            let mut tick: u64 = 0;
             let mut remote_backoff: u64 = 1;
+            let mut last_remote_probe: Option<std::time::Instant> = None;
+
+            // `None` means the platform watcher could not be created; the loop
+            // then degrades to fingerprint polling for the local pane.
+            let mut native = watcher::NativeWatcher::new().ok();
+            let mut native_dir = String::new();
+            let mut native_failed = String::new();
+            let mut seen_events: u64 = 0;
 
             loop {
                 if !running.load(Ordering::Relaxed) {
-                    last_local = 0;
-                    last_remote = 0;
+                    last_local_sig = 0;
+                    last_remote_sig = 0;
+                    native_dir.clear();
+                    native_failed.clear();
+                    last_remote_probe = None;
                     std::thread::sleep(std::time::Duration::from_millis(400));
                     continue;
                 }
@@ -96,38 +118,83 @@ impl AppState {
 
                 if generation != last_generation {
                     last_generation = generation;
-                    last_local = 0;
-                    last_remote = 0;
-                    tick = 0;
+                    last_local_sig = 0;
+                    last_remote_sig = 0;
+                    native_dir.clear();
+                    native_failed.clear();
+                    last_remote_probe = None;
                 }
+
+                let mut native_active = false;
 
                 if !local_dir.is_empty() {
-                    let sig = watcher::local_signature(&local_dir);
-                    if last_local != 0 && sig != 0 && sig != last_local {
-                        if let Some(ref cb) = exec_script {
-                            cb("if(window.onFsChanged)window.onFsChanged('local');".to_string());
+                    if let Some(ref mut nw) = native {
+                        if native_dir != local_dir && native_failed != local_dir {
+                            if nw.retarget(&local_dir) {
+                                native_dir = local_dir.clone();
+                                // Baseline the counter so switching directories is
+                                // not itself reported as a change.
+                                seen_events = nw.events.load(Ordering::Relaxed);
+                            } else {
+                                // Network shares and exotic filesystems refuse the
+                                // OS watcher; remember that so we do not retry every
+                                // tick and fall back to fingerprinting instead.
+                                native_dir.clear();
+                                native_failed = local_dir.clone();
+                            }
+                        }
+                        if !native_dir.is_empty() {
+                            native_active = true;
+                            let current_events = nw.events.load(Ordering::Relaxed);
+                            if current_events != seen_events {
+                                let quiet_for = watcher::now_ms()
+                                    .saturating_sub(nw.last_event_ms.load(Ordering::Relaxed));
+                                if quiet_for >= watcher::DEBOUNCE_MS {
+                                    seen_events = current_events;
+                                    if let Some(ref cb) = exec_script {
+                                        cb("if(window.onFsChanged)window.onFsChanged('local');".to_string());
+                                    }
+                                }
+                            }
                         }
                     }
-                    last_local = sig;
+
+                    if !native_active {
+                        let sig = watcher::local_signature(&local_dir);
+                        if last_local_sig != 0 && sig != 0 && sig != last_local_sig {
+                            if let Some(ref cb) = exec_script {
+                                cb("if(window.onFsChanged)window.onFsChanged('local');".to_string());
+                            }
+                        }
+                        last_local_sig = sig;
+                    }
+                } else if let Some(ref mut nw) = native {
+                    nw.release();
+                    native_dir.clear();
                 }
 
-                tick = tick.wrapping_add(1);
-                // Remote probing costs a round-trip, so sample it less often than
-                // the local disk. `remote_backoff` stretches the interval when the
-                // server answers slowly, so a hung connection is not hammered and
-                // the mutex is not held in a tight loop.
-                let remote_every = ((4000 * remote_backoff) / interval_ms).max(1);
-                if !remote_dir.is_empty() && tick % remote_every == 0 {
+                // Remote probing costs a round-trip, so sample it on a wall-clock
+                // schedule rather than on the loop tick. `remote_backoff` stretches
+                // the interval when the server answers slowly, so a hung connection
+                // is not hammered and the mutex is not held in a tight loop.
+                let remote_every = std::time::Duration::from_millis(4000 * remote_backoff);
+                let due = match last_remote_probe {
+                    None => true,
+                    Some(t) => t.elapsed() >= remote_every,
+                };
+
+                if !remote_dir.is_empty() && due {
+                    last_remote_probe = Some(std::time::Instant::now());
                     if let Ok(mut lock) = remote.try_lock() {
                         if let Some(client) = lock.as_mut() {
                             let probe_started = std::time::Instant::now();
                             if let Ok(sig) = watcher::remote_signature(client, &remote_dir) {
-                                if last_remote != 0 && sig != 0 && sig != last_remote {
+                                if last_remote_sig != 0 && sig != 0 && sig != last_remote_sig {
                                     if let Some(ref cb) = exec_script {
                                         cb("if(window.onFsChanged)window.onFsChanged('remote');".to_string());
                                     }
                                 }
-                                last_remote = sig;
+                                last_remote_sig = sig;
                             }
                             if probe_started.elapsed() > std::time::Duration::from_millis(1500) {
                                 remote_backoff = (remote_backoff * 2).min(8);
@@ -138,7 +205,11 @@ impl AppState {
                     }
                 }
 
-                std::thread::sleep(std::time::Duration::from_millis(interval_ms));
+                // With a native watcher the loop only compares a counter, which is
+                // nearly free, so it can run fast enough to hit the sub-100 ms
+                // target. Without one, keep the original polling cadence.
+                let sleep_ms = if native_active { 100 } else { interval_ms };
+                std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
             }
         });
     }
@@ -293,6 +364,180 @@ fn unique_remote_destination(client: &mut RemoteClient, path: &str) -> String {
     path.to_string()
 }
 
+/// Parses the timestamp a server listing produced into epoch seconds.
+///
+/// SFTP formats `%Y-%m-%d %H:%M`; FTP listings vary, so a couple of shapes are
+/// accepted and anything unrecognised yields `None` — the planner then falls
+/// back to size and, if that is ambiguous too, reports a conflict instead of
+/// guessing.
+fn parse_remote_mtime(raw: &str) -> Option<i64> {
+    let s = raw.trim();
+    if s.is_empty() || s == "-" {
+        return None;
+    }
+    for fmt in ["%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"] {
+        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, fmt) {
+            return Some(dt.and_utc().timestamp());
+        }
+    }
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        return d.and_hms_opt(0, 0, 0).map(|dt| dt.and_utc().timestamp());
+    }
+    None
+}
+
+/// Builds a local path from a `/`-separated relative path.
+///
+/// Plan entries always use `/` so the same key works on both sides; the whole
+/// result is then normalised to the platform separator. Normalising only the
+/// relative part would still leave the base directory's slashes behind, giving
+/// the mixed `C:/site\assets\img\logo.png` form that Windows tolerates but which
+/// makes logs and error messages confusing.
+fn join_local_rel(dir: &str, rel: &str) -> String {
+    let sep = std::path::MAIN_SEPARATOR;
+    join_child(dir, rel, sep).replace('/', &sep.to_string())
+}
+
+fn collect_local_snapshot(
+    base: &std::path::Path,
+    dir: &std::path::Path,
+    exclude: &[String],
+    out: &mut std::collections::BTreeMap<String, crate::sync::FileMeta>,
+) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        let Ok(rel) = path.strip_prefix(base) else {
+            continue;
+        };
+        let rel = rel.to_string_lossy().replace('\\', "/");
+        if !exclude.is_empty() && matches_exclude(&name, &rel, exclude) {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        if meta.is_dir() {
+            collect_local_snapshot(base, &path, exclude, out);
+        } else {
+            let mtime = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs() as i64);
+            out.insert(
+                rel,
+                crate::sync::FileMeta {
+                    size: meta.len(),
+                    mtime,
+                },
+            );
+        }
+    }
+}
+
+fn collect_remote_snapshot(
+    client: &mut RemoteClient,
+    base: &str,
+    dir: &str,
+    exclude: &[String],
+    out: &mut std::collections::BTreeMap<String, crate::sync::FileMeta>,
+) -> Result<(), String> {
+    let listing = client.list(Some(dir))?;
+    let base_trimmed = base.trim_end_matches('/');
+
+    for item in listing {
+        if item.name == "." || item.name == ".." || item.name.is_empty() {
+            continue;
+        }
+        let full = if dir.ends_with('/') {
+            format!("{}{}", dir, item.name)
+        } else {
+            format!("{}/{}", dir, item.name)
+        };
+        let rel = full
+            .strip_prefix(base_trimmed)
+            .unwrap_or(&item.name)
+            .trim_start_matches('/')
+            .to_string();
+        if !exclude.is_empty() && matches_exclude(&item.name, &rel, exclude) {
+            continue;
+        }
+
+        if item.is_dir {
+            collect_remote_snapshot(client, base, &full, exclude, out)?;
+        } else {
+            out.insert(
+                rel,
+                crate::sync::FileMeta {
+                    size: item.size,
+                    mtime: parse_remote_mtime(&item.modified),
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Reads the sync options out of an IPC payload.
+///
+/// Validation lives here rather than at each call site so `sync_plan` and
+/// `sync_apply` cannot drift apart on what they consider a usable request —
+/// the two must agree exactly, because `sync_apply` recomputes the plan instead
+/// of trusting the one the user previewed.
+fn sync_options_from(payload: &serde_json::Value) -> Result<crate::sync::SyncOptions, String> {
+    let local_dir = payload["local_dir"].as_str().unwrap_or("").trim();
+    let remote_dir = payload["remote_dir"].as_str().unwrap_or("").trim();
+    if local_dir.is_empty() || remote_dir.is_empty() {
+        return Err("Both a local folder and a remote folder are required to plan a sync.".to_string());
+    }
+
+    Ok(crate::sync::SyncOptions {
+        direction: crate::sync::Direction::parse(
+            payload["direction"].as_str().unwrap_or("both"),
+        ),
+        delete_extraneous: payload["delete_extraneous"].as_bool().unwrap_or(false),
+        size_only: payload["size_only"].as_bool().unwrap_or(false),
+    })
+}
+
+/// Reads the exclude list. Accepts an array of patterns, or a single string with
+/// one pattern per line/comma — the settings field stores the latter, and
+/// rejecting it would silently sync `node_modules` and `.git`.
+fn exclude_from(payload: &serde_json::Value) -> Vec<String> {
+    match payload.get("exclude") {
+        Some(serde_json::Value::Array(items)) => items
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect(),
+        Some(serde_json::Value::String(raw)) => raw
+            .split(['\n', ',', ';'])
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Serialises one plan entry for the preview table. `effective` is sent so the
+/// UI can grey out unchanged rows without re-deriving the rule in JavaScript.
+fn entry_to_json(entry: &crate::sync::SyncEntry) -> serde_json::Value {
+    json!({
+        "rel_path": entry.rel_path,
+        "action": entry.action.as_str(),
+        "effective": entry.action.is_effective(),
+        "local_size": entry.local.map(|m| m.size),
+        "remote_size": entry.remote.map(|m| m.size),
+        "local_mtime": entry.local.and_then(|m| m.mtime),
+        "remote_mtime": entry.remote.and_then(|m| m.mtime),
+    })
+}
+
 fn compute_local_checksum(path: &str, algo: &str) -> Result<String, String> {
     use std::io::Read;
     use sha2::{Sha256, Digest};
@@ -441,6 +686,141 @@ impl AppState {
                 Err(first_err)
             }
         }
+    }
+
+    /// Opens a second connection for bulk transfers, reusing the stored profile.
+    ///
+    /// Returns `Err` when no profile is stored or the server refuses another
+    /// session; the caller then degrades to the shared connection.
+    fn connect_transfer_client(&self) -> Result<RemoteClient, String> {
+        let info = {
+            let conn_lock = self.current_connection.lock().unwrap();
+            conn_lock.clone()
+        }
+        .ok_or_else(|| "No connection profile available for a transfer session".to_string())?;
+
+        let protocol = info["protocol"].as_str().unwrap_or("ftp");
+        let host = info["host"].as_str().unwrap_or("");
+        let port = info["port"].as_u64().unwrap_or(0) as u16;
+        let user = info["username"].as_str().unwrap_or("");
+        let pass = info["password"].as_str().unwrap_or("");
+        let auth_type = info["auth_type"].as_str().unwrap_or("password");
+        let key_path = info["key_path"].as_str();
+        let passphrase = info["passphrase"].as_str();
+
+        if host.is_empty() {
+            return Err("No host stored in connection state".to_string());
+        }
+
+        let client = RemoteClient::connect(
+            protocol,
+            host,
+            port,
+            user,
+            pass,
+            auth_type,
+            key_path,
+            passphrase,
+            true,
+        )?;
+
+        crate::logger::log_info(&format!(
+            "Opened dedicated transfer session to {}://{}:{}",
+            protocol, host, port
+        ));
+        Ok(client)
+    }
+
+    /// Runs `op` on the dedicated transfer connection, so the shared connection
+    /// stays free for pings, listings and the watcher while a file is in flight.
+    ///
+    /// Falls back to the shared connection when a second session cannot be
+    /// established — servers commonly cap concurrent logins, and a transfer
+    /// should never fail merely because this optimisation is unavailable.
+    pub fn with_transfer_client<T, F>(&self, mut op: F) -> Result<(T, bool), String>
+    where
+        F: FnMut(&mut RemoteClient) -> Result<T, String>,
+    {
+        let mut lock = self.transfer_client.lock().unwrap();
+
+        // Drop a half-open session instead of retrying against a dead socket.
+        if let Some(existing) = lock.as_mut() {
+            if existing.ping().is_err() {
+                *lock = None;
+            }
+        }
+
+        let mut fresh = false;
+        if lock.is_none() {
+            match self.connect_transfer_client() {
+                Ok(client) => {
+                    *lock = Some(client);
+                    fresh = true;
+                }
+                Err(e) => {
+                    drop(lock);
+                    crate::logger::log_info(&format!(
+                        "Dedicated transfer session unavailable ({}); using the shared connection.",
+                        e
+                    ));
+                    return self.with_remote_retry(op);
+                }
+            }
+        }
+
+        let client = lock.as_mut().expect("transfer client was just created");
+        match op(client) {
+            Ok(value) => Ok((value, fresh)),
+            Err(err) => {
+                // A partially written file is worse than a clear failure, so the
+                // error is surfaced rather than silently retried. Dropping the
+                // session makes the next call reconnect cleanly.
+                let dead = client.ping().is_err();
+                if dead {
+                    *lock = None;
+                }
+                Err(err)
+            }
+        }
+    }
+
+    /// Snapshots both folders and turns them into an action list.
+    ///
+    /// Returns `(entries, local_count, remote_count, reconnected)`. Both sides
+    /// are walked with the same exclude rules and stored under `/`-separated
+    /// relative paths, so `sync::build_plan` can compare them without knowing
+    /// which side is which. Nothing is written here — this is the dry run, and
+    /// `sync_apply` calls it again rather than trusting a client-held preview.
+    fn build_sync_plan(
+        &self,
+        local_dir: &str,
+        remote_dir: &str,
+        exclude: &[String],
+        options: crate::sync::SyncOptions,
+    ) -> Result<(Vec<crate::sync::SyncEntry>, usize, usize, bool), String> {
+        let local_root = std::path::Path::new(local_dir);
+        if !local_root.is_dir() {
+            return Err(format!("The local folder '{}' does not exist.", local_dir));
+        }
+
+        let mut local: std::collections::BTreeMap<String, crate::sync::FileMeta> =
+            std::collections::BTreeMap::new();
+        collect_local_snapshot(local_root, local_root, exclude, &mut local);
+
+        // `with_transfer_client` yields the closure's `Ok` value directly, so a
+        // snapshot failure surfaces as the outer `Err` and needs no second `?`.
+        let (remote, reconnected) = self.with_transfer_client(|client| {
+            let mut map: std::collections::BTreeMap<String, crate::sync::FileMeta> =
+                std::collections::BTreeMap::new();
+            collect_remote_snapshot(client, remote_dir, remote_dir, exclude, &mut map)?;
+            Ok(map)
+        })?;
+
+        let local_count = local.len();
+        let remote_count = remote.len();
+        let entries = crate::sync::build_plan(&local, &remote, options);
+
+        Ok((entries, local_count, remote_count, reconnected))
     }
 
     pub fn handle_request(&self, req: IpcRequest) -> IpcResponse {
@@ -982,6 +1362,8 @@ impl AppState {
                 let wipe = payload["wipe_credentials"].as_bool().unwrap_or(false);
                 let mut lock = self.remote.lock().unwrap();
                 *lock = None;
+                // The transfer session belongs to the profile being closed.
+                *self.transfer_client.lock().unwrap() = None;
                 if wipe {
                     let mut conn_lock = self.current_connection.lock().unwrap();
                     *conn_lock = None;
@@ -997,6 +1379,9 @@ impl AppState {
                 if old_tab_id != new_tab_id {
                     let old_client = self.remote.lock().unwrap().take();
                     let old_conn = self.current_connection.lock().unwrap().take();
+                    // Each tab has its own profile, so the transfer session must
+                    // not survive a tab switch.
+                    *self.transfer_client.lock().unwrap() = None;
                     let mut sessions_lock = self.tab_sessions.lock().unwrap();
                     sessions_lock.insert(old_tab_id, (old_client, old_conn));
                     let (new_client, new_conn) = sessions_lock.remove(&new_tab_id).unwrap_or((None, None));
@@ -1499,7 +1884,7 @@ impl AppState {
                 let remote_path = payload["remote_path"].as_str().unwrap_or("");
                 let skip_list = payload["skip_list"].as_bool().unwrap_or(false);
 
-                match self.with_remote_retry(|client| {
+                match self.with_transfer_client(|client| {
                     let bytes = client.upload_from_local_file(local_path, remote_path)?;
                     let files = if skip_list {
                         Vec::new()
@@ -1649,7 +2034,7 @@ impl AppState {
                 let remote_path = payload["remote_path"].as_str().unwrap_or("");
                 let local_path = payload["local_path"].as_str().unwrap_or("");
 
-                match self.with_remote_retry(|client| client.download_to_local_file(remote_path, local_path)) {
+                match self.with_transfer_client(|client| client.download_to_local_file(remote_path, local_path)) {
                     Ok((bytes, reconnected)) => {
                         IpcResponse::ok(
                             id,
@@ -1667,6 +2052,152 @@ impl AppState {
                         IpcResponse::err(id, action, &e)
                     }
                 }
+            }
+
+            "sync_plan" => {
+                let options = match sync_options_from(&payload) {
+                    Ok(o) => o,
+                    Err(e) => return IpcResponse::err(id, action, &e),
+                };
+                let local_dir = payload["local_dir"].as_str().unwrap_or("").trim().to_string();
+                let remote_dir = payload["remote_dir"].as_str().unwrap_or("").trim().to_string();
+                let exclude = exclude_from(&payload);
+
+                match self.build_sync_plan(&local_dir, &remote_dir, &exclude, options) {
+                    Ok((entries, local_count, remote_count, reconnected)) => {
+                        let summary = crate::sync::summarise(&entries);
+                        let items: Vec<serde_json::Value> =
+                            entries.iter().map(entry_to_json).collect();
+
+                        crate::logger::log_info(&format!(
+                            "Sync plan '{}' <-> '{}': {} local, {} remote, {} action(s)",
+                            local_dir,
+                            remote_dir,
+                            local_count,
+                            remote_count,
+                            entries.iter().filter(|e| e.action.is_effective()).count()
+                        ));
+
+                        IpcResponse::ok(
+                            id,
+                            action,
+                            json!({
+                                "local_dir": local_dir,
+                                "remote_dir": remote_dir,
+                                "local_count": local_count,
+                                "remote_count": remote_count,
+                                "summary": summary,
+                                "entries": items,
+                                "reconnected": reconnected,
+                            }),
+                        )
+                    }
+                    Err(e) => IpcResponse::err(id, action, &e),
+                }
+            }
+
+            "sync_apply" => {
+                let options = match sync_options_from(&payload) {
+                    Ok(o) => o,
+                    Err(e) => return IpcResponse::err(id, action, &e),
+                };
+                let local_dir = payload["local_dir"].as_str().unwrap_or("").trim().to_string();
+                let remote_dir = payload["remote_dir"].as_str().unwrap_or("").trim().to_string();
+                let exclude = exclude_from(&payload);
+
+                // The plan is recomputed rather than trusted from the client, so a
+                // stale preview can never move a file the user did not see.
+                let (entries, _, _, _) =
+                    match self.build_sync_plan(&local_dir, &remote_dir, &exclude, options) {
+                        Ok(v) => v,
+                        Err(e) => return IpcResponse::err(id, action, &e),
+                    };
+
+                let ((mut done, mut errors), _) = match self.with_transfer_client(|client| {
+                    let mut done_inner: Vec<serde_json::Value> = Vec::new();
+                    let mut errors_inner: Vec<String> = Vec::new();
+
+                    for entry in entries.iter().filter(|e| e.action.is_effective()) {
+                        let remote_path = join_child(&remote_dir, &entry.rel_path, '/');
+                        let local_path = join_local_rel(&local_dir, &entry.rel_path);
+
+                        let outcome: Result<(), String> = match entry.action {
+                            crate::sync::SyncAction::UploadNew
+                            | crate::sync::SyncAction::UploadUpdate => {
+                                if let Some(idx) = remote_path.rfind('/') {
+                                    if idx > 0 {
+                                        let _ = client.make_dir_all(&remote_path[..idx]);
+                                    }
+                                }
+                                client
+                                    .upload_from_local_file(&local_path, &remote_path)
+                                    .map(|_| ())
+                            }
+                            crate::sync::SyncAction::DownloadNew
+                            | crate::sync::SyncAction::DownloadUpdate => {
+                                if let Some(parent) = std::path::Path::new(&local_path).parent() {
+                                    let _ = std::fs::create_dir_all(parent);
+                                }
+                                client
+                                    .download_to_local_file(&remote_path, &local_path)
+                                    .map(|_| ())
+                            }
+                            crate::sync::SyncAction::DeleteRemote => {
+                                client.remove_file(&remote_path)
+                            }
+                            // Local deletions are performed after the remote session
+                            // closes, and unchanged/conflict entries are skipped.
+                            _ => continue,
+                        };
+
+                        match outcome {
+                            Ok(()) => done_inner.push(json!({
+                                "rel_path": entry.rel_path,
+                                "action": entry.action.as_str(),
+                            })),
+                            Err(e) => errors_inner.push(format!("{}: {}", entry.rel_path, e)),
+                        }
+                    }
+
+                    Ok((done_inner, errors_inner))
+                }) {
+                    Ok(v) => v,
+                    Err(e) => return IpcResponse::err(id, action, &e),
+                };
+
+                // Local deletions never need the server, so they run regardless of
+                // the transfer session's fate.
+                for entry in entries.iter().filter(|e| {
+                    matches!(e.action, crate::sync::SyncAction::DeleteLocal)
+                }) {
+                    let local_path = join_local_rel(&local_dir, &entry.rel_path);
+                    match local_fs::delete_path(&local_path) {
+                        Ok(()) => done.push(json!({
+                            "rel_path": entry.rel_path,
+                            "action": entry.action.as_str(),
+                        })),
+                        Err(e) => errors.push(format!("{}: {}", entry.rel_path, e)),
+                    }
+                }
+
+                crate::logger::log_info(&format!(
+                    "Sync applied '{}' <-> '{}': {} succeeded, {} failed",
+                    local_dir,
+                    remote_dir,
+                    done.len(),
+                    errors.len()
+                ));
+
+                IpcResponse::ok(
+                    id,
+                    action,
+                    json!({
+                        "applied_count": done.len(),
+                        "failed_count": errors.len(),
+                        "applied": done,
+                        "errors": errors,
+                    }),
+                )
             }
 
             "local_stat" => {
@@ -3730,5 +4261,166 @@ mod move_request_tests {
     fn an_unusable_request_yields_no_pairs_instead_of_a_silent_noop() {
         let payload = json!({ "copy": false });
         assert!(resolve_move_pairs(&payload, SEP).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod sync_request_tests {
+    use super::*;
+    use crate::sync::{Direction, FileMeta, SyncAction, SyncEntry};
+    use serde_json::json;
+
+    #[test]
+    fn a_request_without_both_folders_is_rejected() {
+        let err = sync_options_from(&json!({ "local_dir": "C:/a", "remote_dir": "  " }))
+            .expect_err("a blank remote folder must not be accepted");
+        assert!(err.contains("local folder"), "unexpected message: {}", err);
+
+        assert!(sync_options_from(&json!({ "local_dir": "", "remote_dir": "/srv" })).is_err());
+    }
+
+    /// Defaults matter: a preview must not propose deletions unless the user
+    /// asked for them, and must not be upload-only.
+    #[test]
+    fn defaults_are_bidirectional_and_non_destructive() {
+        let opts = sync_options_from(&json!({ "local_dir": "C:/a", "remote_dir": "/srv" }))
+            .expect("both folders were supplied");
+
+        assert_eq!(opts.direction, Direction::Both);
+        assert!(!opts.delete_extraneous);
+        assert!(!opts.size_only);
+    }
+
+    #[test]
+    fn flags_and_direction_are_read_from_the_payload() {
+        let opts = sync_options_from(&json!({
+            "local_dir": "C:/a",
+            "remote_dir": "/srv",
+            "direction": "push",
+            "delete_extraneous": true,
+            "size_only": true
+        }))
+        .expect("both folders were supplied");
+
+        assert_eq!(opts.direction, Direction::Upload);
+        assert!(opts.delete_extraneous);
+        assert!(opts.size_only);
+    }
+
+    #[test]
+    fn exclude_accepts_an_array() {
+        let list = exclude_from(&json!({ "exclude": ["node_modules", " *.log "] }));
+        assert_eq!(list, vec!["node_modules".to_string(), "*.log".to_string()]);
+    }
+
+    /// The settings field stores a newline-separated string; rejecting that shape
+    /// would silently sync `node_modules` and `.git`.
+    #[test]
+    fn exclude_accepts_a_newline_or_comma_separated_string() {
+        let list = exclude_from(&json!({ "exclude": ".git\nnode_modules, *.tmp;" }));
+        assert_eq!(
+            list,
+            vec![
+                ".git".to_string(),
+                "node_modules".to_string(),
+                "*.tmp".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn a_missing_exclude_list_is_empty_not_an_error() {
+        assert!(exclude_from(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn local_rel_join_uses_one_separator_style() {
+        let sep = std::path::MAIN_SEPARATOR;
+        let joined = join_local_rel("C:/site", "assets/img/logo.png");
+        assert_eq!(
+            joined,
+            format!("C:{sep}site{sep}assets{sep}img{sep}logo.png")
+        );
+        assert!(!joined.contains('/'), "no forward slashes should survive: {joined}");
+    }
+
+    #[test]
+    fn entry_json_marks_unchanged_rows_as_ineffective() {
+        let entry = SyncEntry {
+            rel_path: "docs/a.txt".to_string(),
+            action: SyncAction::Unchanged,
+            local: Some(FileMeta { size: 10, mtime: Some(100) }),
+            remote: Some(FileMeta { size: 10, mtime: Some(100) }),
+        };
+
+        let value = entry_to_json(&entry);
+        assert_eq!(value["rel_path"], "docs/a.txt");
+        assert_eq!(value["action"], "unchanged");
+        assert_eq!(value["effective"], false);
+        assert_eq!(value["local_size"], 10);
+        assert_eq!(value["remote_size"], 10);
+    }
+
+    /// A one-sided file must serialise the missing side as `null` rather than 0,
+    /// so the preview can show "—" instead of a misleading zero-byte file.
+    #[test]
+    fn entry_json_leaves_the_missing_side_null() {
+        let entry = SyncEntry {
+            rel_path: "new.bin".to_string(),
+            action: SyncAction::UploadNew,
+            local: Some(FileMeta { size: 42, mtime: None }),
+            remote: None,
+        };
+
+        let value = entry_to_json(&entry);
+        assert_eq!(value["action"], "upload_new");
+        assert_eq!(value["effective"], true);
+        assert_eq!(value["local_size"], 42);
+        assert!(value["remote_size"].is_null());
+        assert!(value["remote_mtime"].is_null());
+    }
+
+    /// Walks a real directory tree. Relative paths must use `/` even on Windows,
+    /// because `sync::build_plan` compares them against remote POSIX paths — a
+    /// backslash here would make every file look like it exists only locally.
+    #[test]
+    fn local_snapshot_walks_nested_folders_with_forward_slashes() {
+        let root = std::env::temp_dir().join(format!("90ftp_sync_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("assets").join("img")).unwrap();
+        std::fs::write(root.join("index.php"), b"<?php echo 1;").unwrap();
+        std::fs::write(root.join("assets").join("site.css"), b"body{}").unwrap();
+        std::fs::write(root.join("assets").join("img").join("logo.png"), b"PNG").unwrap();
+
+        let mut snap = std::collections::BTreeMap::new();
+        collect_local_snapshot(&root, &root, &[], &mut snap);
+
+        let keys: Vec<&str> = snap.keys().map(|s| s.as_str()).collect();
+        assert_eq!(keys, vec!["assets/img/logo.png", "assets/site.css", "index.php"]);
+        assert_eq!(snap["index.php"].size, 13);
+        assert!(snap["index.php"].mtime.is_some(), "a local file always has an mtime");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Excludes must prune whole subtrees, not just filter file names — the
+    /// point of `node_modules` is to avoid walking it at all.
+    #[test]
+    fn local_snapshot_prunes_excluded_folders() {
+        let root = std::env::temp_dir().join(format!("90ftp_syncex_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("node_modules").join("pkg")).unwrap();
+        std::fs::write(root.join("keep.js"), b"ok").unwrap();
+        std::fs::write(root.join("node_modules").join("pkg").join("dep.js"), b"no").unwrap();
+        std::fs::write(root.join("debug.log"), b"no").unwrap();
+
+        let exclude = vec!["node_modules".to_string(), "*.log".to_string()];
+        let mut snap = std::collections::BTreeMap::new();
+        collect_local_snapshot(&root, &root, &exclude, &mut snap);
+
+        let keys: Vec<&str> = snap.keys().map(|s| s.as_str()).collect();
+        assert_eq!(keys, vec!["keep.js"], "excluded folders and masks must not appear");
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

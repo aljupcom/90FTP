@@ -10,6 +10,7 @@ mod remote;
 mod remote_transfer;
 mod sessions;
 mod sftp_client;
+mod sync;
 mod watcher;
 
 use std::sync::Arc;
@@ -85,7 +86,11 @@ fn main() {
     };
     let app_state = Arc::new(AppState::new(Some(proxy_cb), Some(term_cb)));
 
+    // The application script lives in `ui/app.js` and is injected here so the
+    // page stays a single self-contained document: WebView2 loads it through
+    // NavigateToString, where a relative <script src> would not resolve.
     let html_content = include_str!("ui/index.html")
+        .replace("// __APP_JS__", include_str!("ui/app.js"))
         .replace("/* __XTERM_CSS__ */", include_str!("ui/xterm.css"))
         .replace("// __XTERM_JS__", include_str!("ui/xterm.js"))
         .replace("// __XTERM_FIT_JS__", include_str!("ui/xterm-addon-fit.js"));
