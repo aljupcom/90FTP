@@ -91,6 +91,17 @@ $html = $html -replace 'Current:\s+v[0-9\.]+', ('Current: v' + $Version)
 $html = $html -replace 'Modern Site Manager v[0-9\.]+', ('Modern Site Manager v' + $Version)
 Set-Content $htmlPath $html -NoNewline
 
+# 3b. src/ui/app.js — APP_CURRENT_VERSION actually lives here. The index.html
+# substitution above is kept for the other version strings, but the constant the
+# update checker reads is in app.js; missing it leaves the baked default one
+# release behind, which makes the startup update check report a phantom update.
+$appJsPath = Join-Path $Root "src\ui\app.js"
+if (Test-Path $appJsPath) {
+    $appJs = Get-Content $appJsPath -Raw
+    $appJs = $appJs -replace "(?m)^(\s*let\s+APP_CURRENT_VERSION\s*=\s*')[^']*(';)", ('${1}' + $Version + '${2}')
+    Set-Content $appJsPath $appJs -NoNewline
+}
+
 Write-Host ">>> [2/8] Running test suite..." -ForegroundColor Cyan
 cargo test --bin ninety_ftp
 if ($LASTEXITCODE -ne 0) {
