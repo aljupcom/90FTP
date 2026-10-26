@@ -11,6 +11,8 @@ mod remote_transfer;
 mod sessions;
 mod sftp_client;
 mod sync;
+mod transfer_control;
+mod transfer_queue;
 mod watcher;
 
 use std::sync::Arc;

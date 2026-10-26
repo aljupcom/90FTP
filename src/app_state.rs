@@ -38,6 +38,10 @@ pub struct AppState {
     pub tab_sessions: Arc<Mutex<std::collections::HashMap<String, (Option<RemoteClient>, Option<serde_json::Value>)>>>,
     pub archive_cancelled: Arc<std::sync::atomic::AtomicBool>,
     pub remote_transfer_cancelled: Arc<std::sync::atomic::AtomicBool>,
+    /// Per-task upload/download queue with pause, cancel, retry and a shared
+    /// speed limit. Replaces the old one-shot IPC call whose progress bar was a
+    /// `setInterval` guess and whose only control stopped every transfer at once.
+    pub transfer_queue: crate::transfer_queue::Queue,
     pub watch: Arc<Mutex<WatchConfig>>,
     pub watch_running: Arc<AtomicBool>,
     pub watch_started: Arc<AtomicBool>,
@@ -48,16 +52,38 @@ impl AppState {
         exec_script: Option<ScriptCallback>,
         open_terminal_window: Option<TerminalWindowCallback>,
     ) -> Self {
+        let current_connection: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
+
+        // The queue opens one session per task from whatever profile is current,
+        // so reconnecting to a different server mid-queue cannot leave a worker
+        // pointed at the old host.
+        let queue_connection = current_connection.clone();
+        let queue_connect: crate::transfer_queue::ConnectFn = Arc::new(move || {
+            let info = {
+                let guard = queue_connection.lock().unwrap();
+                guard.clone()
+            }
+            .ok_or_else(|| "No connection profile available".to_string())?;
+            connect_from_profile(&info)
+        });
+        let queue_emit: Option<crate::transfer_queue::EmitFn> = exec_script
+            .as_ref()
+            .map(|cb| {
+                let cb = cb.clone();
+                Arc::new(move |script: String| cb(script)) as crate::transfer_queue::EmitFn
+            });
+
         Self {
             remote: Arc::new(Mutex::new(None)),
             transfer_client: Arc::new(Mutex::new(None)),
             exec_script,
             open_terminal_window,
-            current_connection: Arc::new(Mutex::new(None)),
+            current_connection,
             active_tab_id: Arc::new(Mutex::new("rtab_1".to_string())),
             tab_sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             archive_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             remote_transfer_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            transfer_queue: crate::transfer_queue::Queue::new(queue_connect, queue_emit),
             watch: Arc::new(Mutex::new(WatchConfig::default())),
             watch_running: Arc::new(AtomicBool::new(false)),
             watch_started: Arc::new(AtomicBool::new(false)),
@@ -213,6 +239,30 @@ impl AppState {
             }
         });
     }
+}
+
+/// Opens a new session from a stored connection profile.
+///
+/// Shared by the dedicated transfer connection and the queue's per-task
+/// connections, so both stay in step whenever a protocol or credential field
+/// changes — duplicating this mapping is how one of them silently starts
+/// connecting with a stale port or the wrong auth type.
+fn connect_from_profile(info: &serde_json::Value) -> Result<RemoteClient, String> {
+    let protocol = info["protocol"].as_str().unwrap_or("ftp");
+    let host = info["host"].as_str().unwrap_or("");
+    if host.is_empty() {
+        return Err("No host stored in connection state".to_string());
+    }
+    let port = info["port"].as_u64().unwrap_or(0) as u16;
+    let user = info["username"].as_str().unwrap_or("");
+    let pass = info["password"].as_str().unwrap_or("");
+    let auth_type = info["auth_type"].as_str().unwrap_or("password");
+    let key_path = info["key_path"].as_str();
+    let passphrase = info["passphrase"].as_str();
+
+    RemoteClient::connect(
+        protocol, host, port, user, pass, auth_type, key_path, passphrase, true,
+    )
 }
 
 fn matches_exclude(name: &str, rel_path: &str, patterns: &[String]) -> bool {
@@ -699,34 +749,13 @@ impl AppState {
         }
         .ok_or_else(|| "No connection profile available for a transfer session".to_string())?;
 
-        let protocol = info["protocol"].as_str().unwrap_or("ftp");
-        let host = info["host"].as_str().unwrap_or("");
-        let port = info["port"].as_u64().unwrap_or(0) as u16;
-        let user = info["username"].as_str().unwrap_or("");
-        let pass = info["password"].as_str().unwrap_or("");
-        let auth_type = info["auth_type"].as_str().unwrap_or("password");
-        let key_path = info["key_path"].as_str();
-        let passphrase = info["passphrase"].as_str();
-
-        if host.is_empty() {
-            return Err("No host stored in connection state".to_string());
-        }
-
-        let client = RemoteClient::connect(
-            protocol,
-            host,
-            port,
-            user,
-            pass,
-            auth_type,
-            key_path,
-            passphrase,
-            true,
-        )?;
+        let client = connect_from_profile(&info)?;
 
         crate::logger::log_info(&format!(
             "Opened dedicated transfer session to {}://{}:{}",
-            protocol, host, port
+            info["protocol"].as_str().unwrap_or("ftp"),
+            info["host"].as_str().unwrap_or(""),
+            info["port"].as_u64().unwrap_or(0)
         ));
         Ok(client)
     }
@@ -1877,6 +1906,151 @@ impl AppState {
                     })),
                     Err(e) => IpcResponse::err(id, action, &e),
                 }
+            }
+
+            // ── Transfer queue ───────────────────────────────────────────────
+            // Each action returns the full snapshot, so the UI never has to
+            // guess at state from an incremental reply.
+            "transfer_enqueue" => {
+                let kind = match crate::transfer_queue::Kind::parse(
+                    payload["kind"].as_str().unwrap_or("upload"),
+                ) {
+                    Some(k) => k,
+                    None => return IpcResponse::err(id, action, "Unknown transfer kind"),
+                };
+                let local_path = payload["local_path"].as_str().unwrap_or("").trim().to_string();
+                let remote_path = payload["remote_path"].as_str().unwrap_or("").trim().to_string();
+
+                if local_path.is_empty() || remote_path.is_empty() {
+                    return IpcResponse::err(
+                        id,
+                        action,
+                        "Both a local path and a remote path are required.",
+                    );
+                }
+                if self.current_connection.lock().unwrap().is_none() {
+                    return IpcResponse::err(id, action, "Connect to a server first.");
+                }
+
+                // The size drives the progress bar, so it is read here rather
+                // than guessed by the UI. An upload's source is local; a
+                // download's source is remote and needs a round trip.
+                let size: Result<u64, String> = match kind {
+                    crate::transfer_queue::Kind::Upload => std::fs::metadata(&local_path)
+                        .map(|m| m.len())
+                        .map_err(|e| format!("Cannot read '{}': {}", local_path, e)),
+                    crate::transfer_queue::Kind::Download => {
+                        let remote_for_stat = remote_path.clone();
+                        // An unknown size is not fatal: the row then reports
+                        // bytes transferred with no percentage instead of
+                        // refusing to queue at all.
+                        match self.with_remote_retry(|client| client.stat(&remote_for_stat)) {
+                            Ok((Some(item), _)) => Ok(item.size),
+                            _ => Ok(0),
+                        }
+                    }
+                };
+
+                let size = match size {
+                    Ok(s) => s,
+                    Err(e) => return IpcResponse::err(id, action, &e),
+                };
+
+                let task_id = self
+                    .transfer_queue
+                    .enqueue(kind, &local_path, &remote_path, size);
+
+                IpcResponse::ok(
+                    id,
+                    action,
+                    json!({
+                        "task_id": task_id,
+                        "queue": self.transfer_queue.snapshot(),
+                    }),
+                )
+            }
+
+            "transfer_list" => IpcResponse::ok(
+                id,
+                action,
+                json!({
+                    "queue": self.transfer_queue.snapshot(),
+                    "idle": self.transfer_queue.is_idle(),
+                }),
+            ),
+
+            "transfer_pause" => {
+                let task_id = payload["task_id"].as_u64().unwrap_or(0);
+                let changed = self.transfer_queue.pause(task_id);
+                IpcResponse::ok(id, action, json!({
+                    "changed": changed,
+                    "queue": self.transfer_queue.snapshot(),
+                }))
+            }
+
+            "transfer_resume" => {
+                let task_id = payload["task_id"].as_u64().unwrap_or(0);
+                let changed = self.transfer_queue.resume(task_id);
+                IpcResponse::ok(id, action, json!({
+                    "changed": changed,
+                    "queue": self.transfer_queue.snapshot(),
+                }))
+            }
+
+            "transfer_cancel_task" => {
+                let task_id = payload["task_id"].as_u64().unwrap_or(0);
+                let changed = self.transfer_queue.cancel(task_id);
+                IpcResponse::ok(id, action, json!({
+                    "changed": changed,
+                    "queue": self.transfer_queue.snapshot(),
+                }))
+            }
+
+            "transfer_cancel_all" => {
+                let count = self.transfer_queue.cancel_all();
+                IpcResponse::ok(id, action, json!({
+                    "cancelled": count,
+                    "queue": self.transfer_queue.snapshot(),
+                }))
+            }
+
+            "transfer_requeue" => {
+                let task_id = payload["task_id"].as_u64().unwrap_or(0);
+                let changed = self.transfer_queue.requeue(task_id);
+                IpcResponse::ok(id, action, json!({
+                    "changed": changed,
+                    "queue": self.transfer_queue.snapshot(),
+                }))
+            }
+
+            "transfer_clear_finished" => {
+                let removed = self.transfer_queue.clear_finished();
+                IpcResponse::ok(id, action, json!({
+                    "removed": removed,
+                    "queue": self.transfer_queue.snapshot(),
+                }))
+            }
+
+            "transfer_settings" => {
+                let current = self.transfer_queue.settings();
+                let next = crate::transfer_queue::Settings {
+                    max_parallel: payload["max_parallel"]
+                        .as_u64()
+                        .map(|v| v as usize)
+                        .unwrap_or(current.max_parallel),
+                    speed_limit_bps: payload["speed_limit_bps"]
+                        .as_u64()
+                        .unwrap_or(current.speed_limit_bps),
+                    max_attempts: payload["max_attempts"]
+                        .as_u64()
+                        .map(|v| v as u32)
+                        .unwrap_or(current.max_attempts),
+                    retry_delay_ms: payload["retry_delay_ms"]
+                        .as_u64()
+                        .unwrap_or(current.retry_delay_ms),
+                };
+                self.transfer_queue.set_settings(next);
+                IpcResponse::ok(id, action, json!({ "queue": self.transfer_queue.snapshot() }))
             }
 
             "upload" => {

@@ -287,13 +287,13 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     function copyAllTransferQueueErrors() {
-      if (!transferQueue || transferQueue.length === 0) {
+      if (!transferTasks || transferTasks.length === 0) {
         alert('Transfer queue is empty.');
         return;
       }
-      const errorLines = transferQueue
-        .filter(t => t.status === 'failed' || t.status === 'error' || t.error)
-        .map(t => `[${t.type.toUpperCase()}] ${t.name}: ${t.error || 'Failed'} (${t.src} -> ${t.dest})`);
+      const errorLines = transferTasks
+        .filter(t => t.state === 'failed' && t.error)
+        .map(t => `[${t.kind.toUpperCase()}] ${transferName(t)}: ${t.error} (${transferSource(t)} -> ${transferDestination(t)})`);
       if (errorLines.length === 0) {
         alert('No transfer errors in the queue.');
         return;
@@ -4531,14 +4531,11 @@ window.onerror = function(msg, url, line, col, error) {
           ? currentRemotePath + folderName 
           : currentRemotePath + '/' + folderName;
 
-        // Ensure remote root folder exists and show in queue
-        const rootTx = addTransferItem('dir_upload', folderName, localFolderPath, baseRemote, 'Directory');
+        // The root folder must exist before any file is queued into it; the
+        // queue itself only moves files.
         try {
           await sendRust('remote_create_dir', { path: baseRemote });
-          updateTransferItem(rootTx.id, { percent: 100, status: 'completed' });
-        } catch (_) {
-          updateTransferItem(rootTx.id, { percent: 100, status: 'completed' });
-        }
+        } catch (_) {}
 
         if (items.length === 0) {
           addLog(`Created empty remote directory: ${baseRemote}`, 'success');
@@ -4558,13 +4555,11 @@ window.onerror = function(msg, url, line, col, error) {
           }
           let itemDest = baseRemote + '/' + item.rel_path;
           if (item.is_dir) {
-            const dirTx = addTransferItem('dir_upload', item.rel_path, item.abs_path, itemDest, 'Directory');
             try {
               await sendRust('remote_create_dir', { path: itemDest });
               createdDirs++;
-              updateTransferItem(dirTx.id, { percent: 100, status: 'completed' });
             } catch (dirErr) {
-              updateTransferItem(dirTx.id, { status: 'failed', error: dirErr.message || dirErr });
+              addLog(`Could not create remote folder ${itemDest}: ${dirErr.message || dirErr}`, 'error');
             }
           } else {
             let fileName = item.rel_path.split('/').pop();
@@ -4604,31 +4599,16 @@ window.onerror = function(msg, url, line, col, error) {
               }
             }
 
-            const tx = addTransferItem('upload', fileName, item.abs_path, itemDest, formatBytes(item.size));
-            try {
-              const res = await sendRust('upload', {
-                local_path: item.abs_path,
-                remote_path: itemDest,
-                skip_list: true
-              });
-              updateTransferItem(tx.id, {
-                percent: 100,
-                status: 'completed',
-                size: formatBytes(res.bytes || item.size)
-              });
-              uploadedFiles++;
-            } catch (err) {
-              updateTransferItem(tx.id, {
-                status: 'failed',
-                error: err.message || err
-              });
-              addLog(`Failed to upload ${item.rel_path}: ${err.message || err}`, 'error');
-            }
+            // Queued rather than awaited: the queue runs them with the
+            // configured parallelism, so a folder of 200 files no longer uploads
+            // strictly one at a time while the UI sits idle.
+            const queued = await enqueueTransfer('upload', item.abs_path, itemDest);
+            if (queued) uploadedFiles++;
           }
         }
 
         refreshRemote();
-        addLog(`Folder upload completed: '${folderName}' (${uploadedFiles} files, ${createdDirs} folders)`, 'success');
+        addLog(`Folder upload queued: '${folderName}' (${uploadedFiles} files, ${createdDirs} folders) — progress is in the File Transfers tab`, 'success');
       } catch (err) {
         addLog(`Folder upload error: ${err.message || err}`, 'error');
         alert(`Folder Upload Failed:\n${err.message || err}`);
@@ -4652,14 +4632,10 @@ window.onerror = function(msg, url, line, col, error) {
           ? currentLocalPath + folderName 
           : currentLocalPath + '\\' + folderName;
 
-        // Ensure local root folder exists and show in queue
-        const rootTx = addTransferItem('dir_download', folderName, remoteFolderPath, baseLocal, 'Directory');
+        // The destination tree has to exist before any file is queued into it.
         try {
           await sendRust('local_create_dir', { path: baseLocal });
-          updateTransferItem(rootTx.id, { percent: 100, status: 'completed' });
-        } catch (_) {
-          updateTransferItem(rootTx.id, { percent: 100, status: 'completed' });
-        }
+        } catch (_) {}
 
         if (items.length === 0) {
           addLog(`Created empty local directory: ${baseLocal}`, 'success');
@@ -4681,13 +4657,11 @@ window.onerror = function(msg, url, line, col, error) {
           let itemDest = baseLocal + '\\' + localRel;
 
           if (item.is_dir) {
-            const dirTx = addTransferItem('dir_download', item.rel_path, item.remote_path, itemDest, 'Directory');
             try {
               await sendRust('local_create_dir', { path: itemDest });
               createdDirs++;
-              updateTransferItem(dirTx.id, { percent: 100, status: 'completed' });
             } catch (dirErr) {
-              updateTransferItem(dirTx.id, { status: 'failed', error: dirErr.message || dirErr });
+              addLog(`Could not create local folder ${itemDest}: ${dirErr.message || dirErr}`, 'error');
             }
           } else {
             // Ensure parent directory exists locally
@@ -4733,30 +4707,13 @@ window.onerror = function(msg, url, line, col, error) {
               }
             }
 
-            const tx = addTransferItem('download', fileName, item.remote_path, itemDest, formatBytes(item.size));
-            try {
-              const res = await sendRust('download', {
-                remote_path: item.remote_path,
-                local_path: itemDest,
-              });
-              updateTransferItem(tx.id, {
-                percent: 100,
-                status: 'completed',
-                size: formatBytes(res.bytes || item.size)
-              });
-              downloadedFiles++;
-            } catch (err) {
-              updateTransferItem(tx.id, {
-                status: 'failed',
-                error: err.message || err
-              });
-              addLog(`Failed to download ${item.rel_path}: ${err.message || err}`, 'error');
-            }
+            const queued = await enqueueTransfer('download', itemDest, item.remote_path);
+            if (queued) downloadedFiles++;
           }
         }
 
         refreshLocal();
-        addLog(`Folder download completed: '${folderName}' (${downloadedFiles} files, ${createdDirs} folders)`, 'success');
+        addLog(`Folder download queued: '${folderName}' (${downloadedFiles} files, ${createdDirs} folders) — progress is in the File Transfers tab`, 'success');
       } catch (err) {
         addLog(`Folder download error: ${err.message || err}`, 'error');
         alert(`Folder Download Failed:\n${err.message || err}`);
@@ -4826,40 +4783,10 @@ window.onerror = function(msg, url, line, col, error) {
         }
       }
 
-      addLog("Uploading '" + fileName + "' to " + remoteDest + "...", 'cmd');
-      const tx = addTransferItem('upload', fileName, localPath, remoteDest, 'Processing...');
-
-      let simPercent = 20;
-      const progressTimer = setInterval(() => {
-        if (simPercent < 85) {
-          simPercent += 15;
-          updateTransferItem(tx.id, { percent: simPercent });
-        }
-      }, 250);
-
-      try {
-        const res = await sendRust('upload', {
-          local_path: localPath,
-          remote_path: remoteDest,
-        });
-        clearInterval(progressTimer);
-        const formattedSize = formatBytes(res.bytes);
-        updateTransferItem(tx.id, { 
-          percent: 100, 
-          status: 'completed', 
-          size: formattedSize 
-        });
-        renderRemoteFiles(res.files || []);
-        addLog("Upload completed: " + fileName + " (" + formattedSize + ")", 'success');
-      } catch (err) {
-        clearInterval(progressTimer);
-        updateTransferItem(tx.id, { 
-          status: 'failed', 
-          error: err.message || err 
-        });
-        addLog("Upload failed: " + (err.message || err), 'error');
-        alert("Upload Error:\n" + (err.message || err));
-      }
+      addLog("Queued upload: '" + fileName + "' to " + remoteDest, 'cmd');
+      // The queue owns the transfer from here: real byte progress, retries and a
+      // per-row pause all come from the backend, so nothing is simulated.
+      await enqueueTransfer('upload', localPath, remoteDest);
     }
 
     async function downloadFileDirect(remotePath, fileName) {
@@ -4913,40 +4840,8 @@ window.onerror = function(msg, url, line, col, error) {
         }
       }
 
-      addLog("Downloading '" + fileName + "' to " + localDest + "...", 'cmd');
-      const tx = addTransferItem('download', fileName, remotePath, localDest, 'Processing...');
-
-      let simPercent = 20;
-      const progressTimer = setInterval(() => {
-        if (simPercent < 85) {
-          simPercent += 15;
-          updateTransferItem(tx.id, { percent: simPercent });
-        }
-      }, 250);
-
-      try {
-        const res = await sendRust('download', {
-          remote_path: remotePath,
-          local_path: localDest,
-        });
-        clearInterval(progressTimer);
-        const formattedSize = formatBytes(res.bytes);
-        updateTransferItem(tx.id, { 
-          percent: 100, 
-          status: 'completed', 
-          size: formattedSize 
-        });
-        refreshLocal();
-        addLog("Download completed: " + fileName + " (" + formattedSize + ")", 'success');
-      } catch (err) {
-        clearInterval(progressTimer);
-        updateTransferItem(tx.id, { 
-          status: 'failed', 
-          error: err.message || err 
-        });
-        addLog("Download failed: " + (err.message || err), 'error');
-        alert("Download Error:\n" + (err.message || err));
-      }
+      addLog("Queued download: '" + fileName + "' to " + localDest, 'cmd');
+      await enqueueTransfer('download', localDest, remotePath);
     }
 
 
@@ -5637,39 +5532,59 @@ window.onerror = function(msg, url, line, col, error) {
 
       if (type === 'transfer_item') {
         const tr = item;
-        let html = `<div class="context-menu-header">Transfer Queue Item</div>`;
-        if (tr && tr.error) {
-          html += `
-            <div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(tr.error)}')">
-              <svg class="icon" viewBox="0 0 24 24" style="color: #ef4444;"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span style="font-weight: 600; color: #ef4444;">Copy Error Details</span>
-            </div>
-          `;
+        if (!tr) { menu.innerHTML = ''; return; }
+        const name = transferName(tr);
+        const src  = transferSource(tr);
+        const dst  = transferDestination(tr);
+        let html = '<div class="context-menu-header">' + escapeHtml(name) + '</div>';
+
+        if (tr.error) {
+          html += `<div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(tr.error)}')">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #ef4444;"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style="font-weight: 600; color: #ef4444;">Copy Error Details</span>
+          </div>`;
         }
-        if (tr && tr.name) {
-          html += `
-            <div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(tr.name)}')">
-              <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              <span>Copy File Name</span>
-            </div>
-          `;
+        html += `<div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(name)}')">
+          <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Copy File Name</span>
+        </div>`;
+        html += `<div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(src + ' -> ' + dst)}')">
+          <svg class="icon" viewBox="0 0 24 24"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Copy Full Transfer Route</span>
+        </div>`;
+
+        html += '<div class="context-menu-separator"></div>';
+
+        if (tr.state === 'running' || tr.state === 'pending') {
+          html += `<div class="context-menu-item" onclick="closeContextMenu(); transferAction('transfer_pause', ${tr.id})">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            <span>Pause</span>
+          </div>`;
+          html += `<div class="context-menu-item" onclick="closeContextMenu(); transferAction('transfer_cancel_task', ${tr.id})" style="color: #ef4444;">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #ef4444;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            <span>Cancel</span>
+          </div>`;
+        } else if (tr.state === 'paused') {
+          html += `<div class="context-menu-item" onclick="closeContextMenu(); transferAction('transfer_resume', ${tr.id})" style="color: #22c55e;">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #22c55e;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>Resume</span>
+          </div>`;
+          html += `<div class="context-menu-item" onclick="closeContextMenu(); transferAction('transfer_cancel_task', ${tr.id})" style="color: #ef4444;">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #ef4444;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            <span>Cancel</span>
+          </div>`;
+        } else if (tr.state === 'failed' || tr.state === 'cancelled') {
+          html += `<div class="context-menu-item" onclick="closeContextMenu(); transferAction('transfer_requeue', ${tr.id})" style="color: #38bdf8;">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            <span>Retry</span>
+          </div>`;
         }
-        if (tr && (tr.src || tr.dest)) {
-          const pathSummary = `${tr.src || ''} -> ${tr.dest || ''}`;
-          html += `
-            <div class="context-menu-item" onclick="closeContextMenu(); copyTextToClipboard('${escapeJsString(pathSummary)}')">
-              <svg class="icon" viewBox="0 0 24 24"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span>Copy Full Transfer Route</span>
-            </div>
-          `;
-        }
-        html += `
-          <div class="context-menu-separator"></div>
+
+        html += `<div class="context-menu-separator"></div>
           <div class="context-menu-item" onclick="closeContextMenu(); copyAllTransferQueueErrors()">
             <svg class="icon" viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <span>Copy All Queue Errors</span>
-          </div>
-        `;
+          </div>`;
         menu.innerHTML = html;
         return;
       }
@@ -8118,127 +8033,189 @@ window.onerror = function(msg, url, line, col, error) {
 
     // Dual-Tab Bottom Panel Management (Transfers & Activity Log)
     let activeBottomTab = 'transfers';
-    let transferQueue = [];
-    let transferSeq = 0;
+    // ── Transfer queue (backend-driven) ─────────────────────────────────────
+    //
+    // The queue itself lives in Rust: it owns parallelism, retries and the speed
+    // limit, and pushes a full snapshot on every change. The UI keeps no state
+    // beyond the last snapshot, so the table cannot drift from reality — which
+    // is exactly what used to happen when the progress bar was animated by a
+    // `setInterval` guess while the transfer was one blocking IPC call.
 
-    function switchBottomTab(tab, event) {
-      if (event) {
-        event.stopPropagation();
-      }
-      activeBottomTab = tab;
-      const isTransfers = tab === 'transfers';
-      const isLog = tab === 'log';
-      const isTerminal = tab === 'terminal';
-      
-      const tabTx = document.getElementById('tabTransfers');
-      const tabLog = document.getElementById('tabActivityLog');
-      const tabTerm = document.getElementById('tabTerminal');
-      const bodyTx = document.getElementById('transfersBodyContainer');
-      const bodyLog = document.getElementById('logBodyContainer');
-      const bodyTerm = document.getElementById('terminalBodyContainer');
-      const actTx = document.getElementById('transfersActions');
-      const actLog = document.getElementById('logActions');
-      const actTerm = document.getElementById('terminalActions');
+    let transferTasks = [];
+    let transferSettings = { max_parallel: 2, speed_limit_bps: 0, max_attempts: 3, retry_delay_ms: 900 };
+    let transferAutoClearTimer = null;
+    let transferPaneRefreshTimer = null;
 
-      if (tabTx) tabTx.classList.toggle('active', isTransfers);
-      if (tabLog) tabLog.classList.toggle('active', isLog);
-      if (tabTerm) tabTerm.classList.toggle('active', isTerminal);
+    window.onTransferEvent = function (snap) {
+      applyTransferSnapshot(snap);
+    };
 
-      if (bodyTx) {
-        bodyTx.classList.toggle('active', isTransfers);
-        bodyTx.style.display = isTransfers ? 'flex' : 'none';
-      }
-      if (bodyLog) {
-        bodyLog.classList.toggle('active', isLog);
-        bodyLog.style.display = isLog ? 'flex' : 'none';
-      }
-      if (bodyTerm) {
-        bodyTerm.classList.toggle('active', isTerminal);
-        bodyTerm.style.display = isTerminal ? 'flex' : 'none';
-      }
-
-      if (actTx) actTx.style.display = isTransfers ? 'flex' : 'none';
-      if (actLog) actLog.style.display = isLog ? 'flex' : 'none';
-      if (actTerm) actTerm.style.display = isTerminal ? 'flex' : 'none';
-
-      // If panel is collapsed, expand it when user clicks tab
-      const panel = document.getElementById('logPanel');
-      if (panel && panel.classList.contains('collapsed')) {
-        toggleLogPanel();
-      }
-      if (isTerminal) {
-        if (terminalSessions.length === 0) {
-          initTerminalSession();
-        }
-        const curHeight = parseInt(panel.style.height) || 0;
-        if (curHeight < 260) {
-          panel.style.height = '300px';
-          lastLogHeight = 300;
-        }
-        setTimeout(focusTerminalInput, 50);
-      }
+    function transferName(task) {
+      const source = task.kind === 'upload' ? task.local_path : task.remote_path;
+      return String(source || '').split(/[\\/]/).pop() || source || '(unnamed)';
     }
 
-    function handleLogHeaderClick(e) {
-      if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
-      toggleLogPanel();
+    function transferSource(task) {
+      return task.kind === 'upload' ? task.local_path : task.remote_path;
     }
 
-    function addTransferItem(type, fileName, src, dest, sizeStr) {
-      transferSeq++;
-      const item = {
-        id: 'tx_' + transferSeq,
-        type: type, // 'upload' or 'download'
-        name: fileName,
-        src: src,
-        dest: dest,
-        size: sizeStr || '...',
-        percent: 15,
-        status: 'running', // 'running', 'completed', 'failed'
-        error: null,
-        startedAt: Date.now()
-      };
-      transferQueue.unshift(item);
+    function transferDestination(task) {
+      return task.kind === 'upload' ? task.remote_path : task.local_path;
+    }
+
+    function transferPercent(task) {
+      if (task.state === 'completed') return 100;
+      if (!task.size) return 0;
+      return Math.min(100, Math.round((task.bytes || 0) * 100 / task.size));
+    }
+
+    function applyTransferSnapshot(snap) {
+      if (!snap) return;
+
+      const previous = new Map();
+      for (const task of transferTasks) previous.set(task.id, task.state);
+
+      transferTasks = Array.isArray(snap.tasks) ? snap.tasks : [];
+      if (snap.settings) transferSettings = snap.settings;
+
+      let sawCompletion = false;
+      for (const task of transferTasks) {
+        const was = previous.get(task.id);
+        if (task.state === 'completed' && was !== 'completed') {
+          sawCompletion = true;
+          addLog('Transfer complete: ' + transferName(task), 'success');
+        }
+        if (task.state === 'failed' && was !== 'failed') {
+          addLog('Transfer failed: ' + transferName(task) + ' — ' + (task.error || 'unknown error'), 'error');
+        }
+      }
+
       renderTransfersTable();
       updateTransfersBadge();
+      syncTransferSettingsControls();
 
-      if (appOptions && appOptions.autoSwitchTransfers !== false) {
-        switchBottomTab('transfers');
+      if (sawCompletion) {
+        // The pane listings are stale now. Refreshing on every file would thrash
+        // the server during a folder upload, so it is debounced.
+        scheduleTransferPaneRefresh();
+        if (appOptions && appOptions.delFinished) scheduleTransferAutoClear();
       }
-      return item;
     }
 
-    function updateTransferItem(id, updates) {
-      const item = transferQueue.find(t => t.id === id);
-      if (!item) return;
-      Object.assign(item, updates);
-      renderTransfersTable();
-      updateTransfersBadge();
-
-      if (item.status === 'completed' && appOptions && appOptions.delFinished) {
-        setTimeout(() => {
-          const idx = transferQueue.findIndex(t => t.id === id);
-          if (idx !== -1 && transferQueue[idx].status === 'completed') {
-            transferQueue.splice(idx, 1);
-            renderTransfersTable();
-            updateTransfersBadge();
+    function scheduleTransferPaneRefresh() {
+      if (transferPaneRefreshTimer) clearTimeout(transferPaneRefreshTimer);
+      transferPaneRefreshTimer = setTimeout(() => {
+        transferPaneRefreshTimer = null;
+        if (isQueueIdle()) {
+          try { refreshLocal(); } catch (_) {}
+          if (isConnected) {
+            try { refreshRemote(); } catch (_) {}
           }
-        }, 4000);
+        } else {
+          // Still busy: check again shortly so the panes catch up at the end.
+          scheduleTransferPaneRefresh();
+        }
+      }, 700);
+    }
+
+    function scheduleTransferAutoClear() {
+      if (transferAutoClearTimer) return;
+      transferAutoClearTimer = setTimeout(async () => {
+        transferAutoClearTimer = null;
+        if (!isQueueIdle()) {
+          scheduleTransferAutoClear();
+          return;
+        }
+        try {
+          const res = await sendRust('transfer_clear_finished', {});
+          if (res && res.queue) applyTransferSnapshot(res.queue);
+        } catch (_) {}
+      }, 4000);
+    }
+
+    function isQueueIdle() {
+      return !transferTasks.some(t => t.state === 'running' || t.state === 'pending' || t.state === 'paused');
+    }
+
+    async function enqueueTransfer(kind, localPath, remotePath) {
+      if (!isConnected) {
+        alert('Please connect to a server first');
+        return null;
+      }
+      try {
+        const res = await sendRust('transfer_enqueue', {
+          kind: kind,
+          local_path: localPath,
+          remote_path: remotePath
+        });
+        if (res && res.queue) applyTransferSnapshot(res.queue);
+
+        if (appOptions && appOptions.autoSwitchTransfers !== false) {
+          switchBottomTab('transfers');
+        }
+        return res ? res.task_id : null;
+      } catch (err) {
+        addLog('Could not queue ' + kind + ' of ' + localPath + ': ' + (err.message || err), 'error');
+        alert('Could not queue transfer:/n' + (err.message || err));
+        return null;
       }
     }
 
-    function clearCompletedTransfers() {
-      transferQueue = transferQueue.filter(t => t.status === 'running');
-      renderTransfersTable();
-      updateTransfersBadge();
+    async function transferAction(action, taskId) {
+      try {
+        const res = await sendRust(action, { task_id: taskId });
+        if (res && res.queue) applyTransferSnapshot(res.queue);
+      } catch (err) {
+        addLog('Transfer action "' + action + '" failed: ' + (err.message || err), 'error');
+      }
+    }
+
+    async function pauseAllTransfers() {
+      for (const task of transferTasks) {
+        if (task.state === 'running' || task.state === 'pending') {
+          await transferAction('transfer_pause', task.id);
+        }
+      }
+    }
+
+    async function resumeAllTransfers() {
+      for (const task of transferTasks) {
+        if (task.state === 'paused') {
+          await transferAction('transfer_resume', task.id);
+        }
+      }
+    }
+
+    async function cancelAllTransfers() {
+      if (!transferTasks.some(t => t.state === 'running' || t.state === 'pending' || t.state === 'paused')) {
+        return;
+      }
+      if (!confirm('Cancel every queued and running transfer?')) return;
+      try {
+        const res = await sendRust('transfer_cancel_all', {});
+        if (res && res.queue) applyTransferSnapshot(res.queue);
+      } catch (err) {
+        addLog('Cancel-all failed: ' + (err.message || err), 'error');
+      }
+    }
+
+    async function clearCompletedTransfers() {
+      try {
+        const res = await sendRust('transfer_clear_finished', {});
+        if (res && res.queue) applyTransferSnapshot(res.queue);
+      } catch (err) {
+        addLog('Clear finished failed: ' + (err.message || err), 'error');
+      }
     }
 
     function updateTransfersBadge() {
       const badge = document.getElementById('transfersBadge');
       const summary = document.getElementById('transfersSummaryText');
-      const activeCount = transferQueue.filter(t => t.status === 'running').length;
-      const completedCount = transferQueue.filter(t => t.status === 'completed').length;
-      const failedCount = transferQueue.filter(t => t.status === 'failed').length;
+      const activeCount = transferTasks.filter(t => t.state === 'running').length;
+      const pendingCount = transferTasks.filter(t => t.state === 'pending').length;
+      const pausedCount = transferTasks.filter(t => t.state === 'paused').length;
+      const completedCount = transferTasks.filter(t => t.state === 'completed').length;
+      const failedCount = transferTasks.filter(t => t.state === 'failed').length;
 
       const btnCopyErrs = document.getElementById('btnCopyTransferErrors');
       if (btnCopyErrs) {
@@ -8246,77 +8223,145 @@ window.onerror = function(msg, url, line, col, error) {
       }
 
       if (badge) {
-        badge.textContent = activeCount > 0 ? activeCount : transferQueue.length;
+        const live = activeCount + pendingCount + pausedCount;
+        badge.textContent = live > 0 ? live : transferTasks.length;
       }
       if (summary) {
-        if (activeCount > 0) {
-          summary.innerHTML = '<span style="color: var(--accent); font-weight: 600;"><svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ' + activeCount + ' transferring...</span>';
-        } else if (transferQueue.length > 0) {
-          summary.textContent = completedCount + ' completed' + (failedCount > 0 ? ', ' + failedCount + ' failed' : '');
+        if (activeCount > 0 || pendingCount > 0) {
+          let text = activeCount + ' transferring';
+          if (pendingCount > 0) text += ', ' + pendingCount + ' queued';
+          if (pausedCount > 0) text += ', ' + pausedCount + ' paused';
+          summary.innerHTML = '<span style="color: var(--accent); font-weight: 600;"><svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ' + text + '</span>';
+        } else if (transferTasks.length > 0) {
+          let text = completedCount + ' completed';
+          if (pausedCount > 0) text += ', ' + pausedCount + ' paused';
+          if (failedCount > 0) text += ', ' + failedCount + ' failed';
+          summary.textContent = text;
         } else {
           summary.textContent = 'Queue idle';
         }
       }
     }
 
+    function syncTransferSettingsControls() {
+      const parallel = document.getElementById('transferParallelSelect');
+      if (parallel && String(transferSettings.max_parallel) !== parallel.value) {
+        parallel.value = String(transferSettings.max_parallel);
+      }
+      const limit = document.getElementById('transferSpeedLimitSelect');
+      if (limit && String(transferSettings.speed_limit_bps) !== limit.value) {
+        limit.value = String(transferSettings.speed_limit_bps);
+      }
+    }
+
+    async function applyTransferSettings() {
+      const parallel = document.getElementById('transferParallelSelect');
+      const limit = document.getElementById('transferSpeedLimitSelect');
+      const payload = {};
+      if (parallel) payload.max_parallel = parseInt(parallel.value, 10) || 2;
+      if (limit) payload.speed_limit_bps = parseInt(limit.value, 10) || 0;
+
+      try {
+        const res = await sendRust('transfer_settings', payload);
+        if (res && res.queue) applyTransferSnapshot(res.queue);
+        addLog('Transfer settings updated: ' + (payload.max_parallel || '—') + ' parallel, '
+          + (payload.speed_limit_bps ? formatBytes(payload.speed_limit_bps) + '/s' : 'no speed limit'), 'info');
+      } catch (err) {
+        addLog('Could not update transfer settings: ' + (err.message || err), 'error');
+      }
+    }
+
+    function transferRowActions(task) {
+      const btn = (label, title, action, color) =>
+        '<button type="button" class="btn btn-secondary" style="padding: 1px 6px; font-size: 10px;'
+        + (color ? ' color: ' + color + '; border-color: ' + color + '55;' : '')
+        + '" title="' + title + '" onclick="transferAction(\'' + action + '\', ' + task.id + ')">'
+        + label + '</button>';
+
+      const parts = [];
+      if (task.state === 'running' || task.state === 'pending') {
+        parts.push(btn('Pause', 'Pause this transfer', 'transfer_pause'));
+        parts.push(btn('Stop', 'Cancel this transfer', 'transfer_cancel_task', '#ef4444'));
+      } else if (task.state === 'paused') {
+        parts.push(btn('Resume', 'Continue this transfer', 'transfer_resume', '#22c55e'));
+        parts.push(btn('Stop', 'Cancel this transfer', 'transfer_cancel_task', '#ef4444'));
+      } else if (task.state === 'failed' || task.state === 'cancelled') {
+        parts.push(btn('Retry', 'Queue this transfer again', 'transfer_requeue', '#38bdf8'));
+      } else {
+        parts.push('<span style="color: var(--text-dim); font-size: 11px;">—</span>');
+      }
+      return '<div style="display: flex; gap: 4px; justify-content: center;">' + parts.join('') + '</div>';
+    }
+
     function renderTransfersTable() {
       const tbody = document.getElementById('transfersList');
       if (!tbody) return;
-      if (transferQueue.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 22px 10px;">No active or queued file transfers</td></tr>';
+      if (transferTasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 22px 10px;">No active or queued file transfers</td></tr>';
         return;
       }
 
-      tbody.innerHTML = transferQueue.map((item, idx) => {
-        const isUpload = item.type === 'upload' || item.type === 'dir_upload';
-        const isDir = item.type === 'dir_upload' || item.type === 'dir_download';
+      tbody.innerHTML = transferTasks.map((task, idx) => {
+        const isUpload = task.kind === 'upload';
+        const typeBadge = isUpload
+          ? '<span style="color: #38bdf8; font-weight: 700; font-size: 11px;">▲ UP</span>'
+          : '<span style="color: #4ade80; font-weight: 700; font-size: 11px;">▼ DOWN</span>';
 
-        let typeBadge = '';
-        if (item.type === 'dir_upload') {
-          typeBadge = '<span style="color: #f59e0b; font-weight: 700; font-size: 11px;">▲ DIR</span>';
-        } else if (item.type === 'dir_download') {
-          typeBadge = '<span style="color: #f59e0b; font-weight: 700; font-size: 11px;">▼ DIR</span>';
-        } else if (isUpload) {
-          typeBadge = '<span style="color: #38bdf8; font-weight: 700; font-size: 11px;">▲ UP</span>';
-        } else {
-          typeBadge = '<span style="color: #4ade80; font-weight: 700; font-size: 11px;">▼ DOWN</span>';
-        }
-
+        const percent = transferPercent(task);
         let statusBadge = '';
         let barClass = '';
-        if (item.status === 'running') {
-          statusBadge = '<span class="badge-status running"><span class="spin-icon">↻</span> ' + item.percent + '%</span>';
-        } else if (item.status === 'completed') {
+        if (task.state === 'running') {
+          statusBadge = '<span class="badge-status running"><span class="spin-icon">↻</span> ' + percent + '%</span>';
+        } else if (task.state === 'pending') {
+          statusBadge = '<span class="badge-status" style="color: var(--text-muted);">⋯ Queued</span>';
+        } else if (task.state === 'paused') {
+          statusBadge = '<span class="badge-status" style="color: #f59e0b;">❙❙ Paused</span>';
+        } else if (task.state === 'completed') {
           statusBadge = '<span class="badge-status completed">✓ Done</span>';
           barClass = 'completed';
+        } else if (task.state === 'cancelled') {
+          statusBadge = '<span class="badge-status" style="color: var(--text-muted);">⊘ Stopped</span>';
+          barClass = 'failed';
         } else {
-          statusBadge = '<span class="badge-status failed" style="cursor: pointer;" onclick="copyTextToClipboard(\'' + escapeJsString(item.error || 'Transfer failed') + '\', \'Transfer error copied!\')" title="Click or right-click to copy error details: ' + escapeHtml(item.error || 'Transfer failed') + '">✕ Failed</span>';
+          const detail = escapeHtml(task.error || 'Transfer failed');
+          statusBadge = '<span class="badge-status failed" style="cursor: pointer;" onclick="copyTextToClipboard(\''
+            + escapeJsString(task.error || 'Transfer failed')
+            + '\', \'Transfer error copied!\')" title="Click to copy: ' + detail + '">✕ Failed'
+            + (task.attempts > 1 ? ' (' + task.attempts + '×)' : '') + '</span>';
           barClass = 'failed';
         }
 
-        const iconPrefix = isDir ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ' : (isUpload ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg> ' : '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ');
+        const iconPrefix = isUpload
+          ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg> '
+          : '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ';
 
-        return '<tr oncontextmenu="openContextMenu(event, \'transfer_item\', transferQueue[' + idx + '])" style="cursor: context-menu;">' +
-          '<td style="text-align: center; color: var(--text-dim); font-size: 11px;">' + (idx + 1) + '</td>' +
-          '<td>' + typeBadge + '</td>' +
-          '<td style="font-weight: 600; color: var(--text-main); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(item.name) + '">' +
-            iconPrefix + escapeHtml(item.name) +
-          '</td>' +
-          '<td style="color: var(--text-dim); font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(item.src) + ' ➔ ' + escapeHtml(item.dest) + '">' +
-            escapeHtml(item.src) + ' &rarr; ' + escapeHtml(item.dest) +
-          '</td>' +
-          '<td style="text-align: right; font-family: var(--font-mono); color: var(--text-muted); font-size: 11px;">' + escapeHtml(item.size) + '</td>' +
-          '<td>' +
-            '<div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);">' +
-              '<span>' + (item.status === 'running' ? item.percent + '%' : (item.status === 'completed' ? '100%' : 'Error')) + '</span>' +
-              '<span>' + (item.status === 'running' ? 'Active' : '') + '</span>' +
-            '</div>' +
-            '<div class="transfer-progress-track">' +
-              '<div class="transfer-progress-fill ' + barClass + '" style="width: ' + item.percent + '%;"></div>' +
-            '</div>' +
-          '</td>' +
-          '<td style="text-align: center;">' + statusBadge + '</td>' +
-        '</tr>';
+        const sizeText = task.size ? formatBytes(task.size) : (task.bytes ? formatBytes(task.bytes) : '—');
+        const progressLabel = task.state === 'completed' ? '100%'
+          : (task.state === 'failed' || task.state === 'cancelled') ? 'Stopped'
+          : (task.size ? percent + '%' : formatBytes(task.bytes || 0));
+
+        return '<tr oncontextmenu="openContextMenu(event, \'transfer_item\', transferTasks[' + idx + '])" style="cursor: context-menu;">'
+          + '<td style="text-align: center; color: var(--text-dim); font-size: 11px;">' + (idx + 1) + '</td>'
+          + '<td>' + typeBadge + '</td>'
+          + '<td style="font-weight: 600; color: var(--text-main); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(transferName(task)) + '">'
+          + iconPrefix + escapeHtml(transferName(task))
+          + '</td>'
+          + '<td style="color: var(--text-dim); font-size: 11px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(transferSource(task)) + ' ➔ ' + escapeHtml(transferDestination(task)) + '">'
+          + escapeHtml(transferSource(task)) + ' &rarr; ' + escapeHtml(transferDestination(task))
+          + '</td>'
+          + '<td style="text-align: right; font-family: var(--font-mono); color: var(--text-muted); font-size: 11px;">' + escapeHtml(sizeText) + '</td>'
+          + '<td>'
+          + '<div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);">'
+          + '<span>' + progressLabel + '</span>'
+          + '<span>' + (task.state === 'running' ? formatBytes(task.bytes || 0) : '') + '</span>'
+          + '</div>'
+          + '<div class="transfer-progress-track">'
+          + '<div class="transfer-progress-fill ' + barClass + '" style="width: ' + percent + '%;"></div>'
+          + '</div>'
+          + '</td>'
+          + '<td style="text-align: center;">' + statusBadge + '</td>'
+          + '<td>' + transferRowActions(task) + '</td>'
+          + '</tr>';
       }).join('');
     }
 

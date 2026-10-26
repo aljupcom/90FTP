@@ -7,6 +7,7 @@ use russh_sftp::client::{Config as SftpConfig, SftpSession};
 use chrono::{DateTime, Utc};
 use tokio::runtime::Runtime;
 use crate::models::FileItem;
+use crate::transfer_control::{CHUNK_SIZE, TransferControl};
 
 pub struct ClientHandler {
     pub host: String,
@@ -346,6 +347,18 @@ impl SftpClient {
     }
 
     pub fn download_to_local_file(&self, remote_file: &str, local_path: &str) -> Result<u64, String> {
+        self.download_to_local_file_ctl(remote_file, local_path, &TransferControl::unbounded())
+    }
+
+    /// Steerable download. `control.on_chunk` blocks the calling thread while the
+    /// task is paused, which stalls this future — and therefore the SFTP reads —
+    /// which is exactly what a pause has to do.
+    pub fn download_to_local_file_ctl(
+        &self,
+        remote_file: &str,
+        local_path: &str,
+        control: &TransferControl,
+    ) -> Result<u64, String> {
         let file_s = remote_file.to_string();
         let local_s = local_path.to_string();
         self.rt.block_on(async {
@@ -362,8 +375,7 @@ impl SftpClient {
             let mut local_f = tokio::fs::File::create(&local_s).await
                 .map_err(|e| format!("Failed to create local destination file {}: {}", local_s, e))?;
 
-            const BUF_SIZE: usize = 128 * 1024;
-            let mut chunk = vec![0u8; BUF_SIZE];
+            let mut chunk = vec![0u8; CHUNK_SIZE];
             let mut total_bytes = 0u64;
 
             loop {
@@ -375,6 +387,10 @@ impl SftpClient {
                 local_f.write_all(&chunk[..n]).await
                     .map_err(|e| format!("Failed writing to local file {}: {}", local_s, e))?;
                 total_bytes += n as u64;
+                if let Err(e) = control.on_chunk(n) {
+                    let _ = remote_f.close().await;
+                    return Err(e);
+                }
             }
 
             local_f.flush().await
@@ -386,6 +402,16 @@ impl SftpClient {
     }
 
     pub fn upload_from_local_file(&self, local_path: &str, remote_file: &str) -> Result<u64, String> {
+        self.upload_from_local_file_ctl(local_path, remote_file, &TransferControl::unbounded())
+    }
+
+    /// Steerable upload.
+    pub fn upload_from_local_file_ctl(
+        &self,
+        local_path: &str,
+        remote_file: &str,
+        control: &TransferControl,
+    ) -> Result<u64, String> {
         let local_s = local_path.to_string();
         let remote_s = remote_file.to_string();
         self.rt.block_on(async {
@@ -398,8 +424,7 @@ impl SftpClient {
             let mut remote_f = self.sftp.create(&remote_s).await
                 .map_err(|e| format!("Failed to create remote file {}: {}", remote_s, e))?;
 
-            const BUF_SIZE: usize = 128 * 1024;
-            let mut chunk = vec![0u8; BUF_SIZE];
+            let mut chunk = vec![0u8; CHUNK_SIZE];
             let mut total_bytes = 0u64;
 
             loop {
@@ -411,6 +436,12 @@ impl SftpClient {
                 remote_f.write_all(&chunk[..n]).await
                     .map_err(|e| format!("Failed writing to remote file {}: {}", remote_s, e))?;
                 total_bytes += n as u64;
+                if let Err(e) = control.on_chunk(n) {
+                    // Close the handle so the server does not keep a half-open
+                    // file descriptor for a transfer that will never continue.
+                    let _ = remote_f.close().await;
+                    return Err(e);
+                }
             }
 
             remote_f.flush().await

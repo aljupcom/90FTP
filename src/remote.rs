@@ -91,6 +91,19 @@ impl RemoteClient {
         }
     }
 
+    /// Steerable download, for the transfer queue.
+    pub fn download_to_local_file_ctl(
+        &mut self,
+        remote_file: &str,
+        local_path: &str,
+        control: &crate::transfer_control::TransferControl,
+    ) -> Result<u64, String> {
+        match self {
+            RemoteClient::Ftp(c) => c.download_to_local_file_ctl(remote_file, local_path, control),
+            RemoteClient::Sftp(c) => c.download_to_local_file_ctl(remote_file, local_path, control),
+        }
+    }
+
     pub fn upload_file(&mut self, remote_file: &str, data: &[u8]) -> Result<(), String> {
         match self {
             RemoteClient::Ftp(c) => c.upload_file(remote_file, data),
@@ -102,6 +115,19 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.upload_from_local_file(local_path, remote_file),
             RemoteClient::Sftp(c) => c.upload_from_local_file(local_path, remote_file),
+        }
+    }
+
+    /// Steerable upload, for the transfer queue.
+    pub fn upload_from_local_file_ctl(
+        &mut self,
+        local_path: &str,
+        remote_file: &str,
+        control: &crate::transfer_control::TransferControl,
+    ) -> Result<u64, String> {
+        match self {
+            RemoteClient::Ftp(c) => c.upload_from_local_file_ctl(local_path, remote_file, control),
+            RemoteClient::Sftp(c) => c.upload_from_local_file_ctl(local_path, remote_file, control),
         }
     }
 

@@ -1,6 +1,7 @@
 use std::io::Cursor;
 use suppaftp::{FtpStream, ImplFtpStream, NativeTlsConnector, NativeTlsFtpStream, TlsStream};
 use crate::models::FileItem;
+use crate::transfer_control::{CHUNK_SIZE, TransferControl};
 
 /// Transport-agnostic FTP surface consumed by `RemoteClient`.
 ///
@@ -21,9 +22,30 @@ pub trait FtpBackend: Send {
     #[allow(dead_code)]
     fn cdup(&mut self) -> Result<String, String>;
     fn download_file(&mut self, remote_file: &str) -> Result<Vec<u8>, String>;
-    fn download_to_local_file(&mut self, remote_file: &str, local_path: &str) -> Result<u64, String>;
+    /// Steerable download. `control` decides when to pause, stop or slow down.
+    fn download_to_local_file_ctl(
+        &mut self,
+        remote_file: &str,
+        local_path: &str,
+        control: &TransferControl,
+    ) -> Result<u64, String>;
     fn upload_file(&mut self, remote_file: &str, data: &[u8]) -> Result<(), String>;
-    fn upload_from_local_file(&mut self, local_path: &str, remote_file: &str) -> Result<u64, String>;
+    /// Steerable upload.
+    fn upload_from_local_file_ctl(
+        &mut self,
+        local_path: &str,
+        remote_file: &str,
+        control: &TransferControl,
+    ) -> Result<u64, String>;
+
+    /// Unsteerable wrappers, for callers with no queue behind them (archive
+    /// staging, the server-to-server dispatcher, tests).
+    fn download_to_local_file(&mut self, remote_file: &str, local_path: &str) -> Result<u64, String> {
+        self.download_to_local_file_ctl(remote_file, local_path, &TransferControl::unbounded())
+    }
+    fn upload_from_local_file(&mut self, local_path: &str, remote_file: &str) -> Result<u64, String> {
+        self.upload_from_local_file_ctl(local_path, remote_file, &TransferControl::unbounded())
+    }
     fn stat(&mut self, remote_path: &str) -> Result<Option<FileItem>, String>;
     fn make_dir(&mut self, dir_name: &str) -> Result<(), String>;
     fn remove_file(&mut self, file_name: &str) -> Result<(), String>;
@@ -181,7 +203,12 @@ impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
         Ok(cursor.into_inner())
     }
 
-    fn download_to_local_file(&mut self, remote_file: &str, local_path: &str) -> Result<u64, String> {
+    fn download_to_local_file_ctl(
+        &mut self,
+        remote_file: &str,
+        local_path: &str,
+        control: &TransferControl,
+    ) -> Result<u64, String> {
         use std::io::{Read, Write};
 
         if let Some(parent) = std::path::Path::new(local_path).parent() {
@@ -207,7 +234,7 @@ impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
         };
 
         let mut total = 0u64;
-        let mut chunk = vec![0u8; 128 * 1024];
+        let mut chunk = vec![0u8; CHUNK_SIZE];
         let copied = loop {
             match stream.read(&mut chunk) {
                 Ok(0) => break Ok(()),
@@ -216,6 +243,11 @@ impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
                         break Err(format!("Failed writing to local file {}: {}", local_path, e));
                     }
                     total += n as u64;
+                    // Checked after the write so a pause never loses bytes that
+                    // were already read off the socket.
+                    if let Err(e) = control.on_chunk(n) {
+                        break Err(e);
+                    }
                 }
                 Err(e) => break Err(format!("Failed reading remote file {}: {}", remote_file, e)),
             }
@@ -250,7 +282,12 @@ impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
         Ok(())
     }
 
-    fn upload_from_local_file(&mut self, local_path: &str, remote_file: &str) -> Result<u64, String> {
+    fn upload_from_local_file_ctl(
+        &mut self,
+        local_path: &str,
+        remote_file: &str,
+        control: &TransferControl,
+    ) -> Result<u64, String> {
         use std::io::{Read, Write};
 
         // Streamed for the same reason as downloads: reading the file into a Vec
@@ -264,7 +301,7 @@ impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
             .map_err(|e| format!("Failed to create remote file {}: {}", remote_file, e))?;
 
         let mut total = 0u64;
-        let mut chunk = vec![0u8; 128 * 1024];
+        let mut chunk = vec![0u8; CHUNK_SIZE];
         let copied = loop {
             match local_f.read(&mut chunk) {
                 Ok(0) => break Ok(()),
@@ -273,6 +310,9 @@ impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
                         break Err(format!("Failed uploading to {}: {}", remote_file, e));
                     }
                     total += n as u64;
+                    if let Err(e) = control.on_chunk(n) {
+                        break Err(e);
+                    }
                 }
                 Err(e) => break Err(format!("Failed reading local file {}: {}", local_path, e)),
             }
