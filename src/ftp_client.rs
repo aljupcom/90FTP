@@ -182,18 +182,64 @@ impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
     }
 
     fn download_to_local_file(&mut self, remote_file: &str, local_path: &str) -> Result<u64, String> {
+        use std::io::{Read, Write};
+
         if let Some(parent) = std::path::Path::new(local_path).parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let cursor = self
-            .stream
-            .retr_as_buffer(remote_file)
-            .map_err(|e| format!("Failed to download {}: {}", remote_file, e))?;
-        let bytes = cursor.into_inner();
-        let len = bytes.len() as u64;
-        std::fs::write(local_path, &bytes)
-            .map_err(|e| format!("Failed to write local file {}: {}", local_path, e))?;
-        Ok(len)
+
+        // Stream straight to disk. Buffering the whole payload first would need
+        // as much RAM as the file is large, which fails outright on multi-GB
+        // files and stalls the app for the duration of the download.
+        let mut local_f = std::fs::File::create(local_path)
+            .map_err(|e| format!("Failed to create local file {}: {}", local_path, e))?;
+
+        let mut stream = match self.stream.retr_as_stream(remote_file) {
+            Ok(s) => s,
+            Err(e) => {
+                // The destination was created above, so it must be removed here
+                // too: otherwise a missing remote file leaves an empty local file
+                // that looks like a successful zero-byte download.
+                drop(local_f);
+                let _ = std::fs::remove_file(local_path);
+                return Err(format!("Failed to download {}: {}", remote_file, e));
+            }
+        };
+
+        let mut total = 0u64;
+        let mut chunk = vec![0u8; 128 * 1024];
+        let copied = loop {
+            match stream.read(&mut chunk) {
+                Ok(0) => break Ok(()),
+                Ok(n) => {
+                    if let Err(e) = local_f.write_all(&chunk[..n]) {
+                        break Err(format!("Failed writing to local file {}: {}", local_path, e));
+                    }
+                    total += n as u64;
+                }
+                Err(e) => break Err(format!("Failed reading remote file {}: {}", remote_file, e)),
+            }
+        };
+
+        // `finish` closes the data connection and reads the server's completion
+        // reply. It must run even when the copy failed: skipping it leaves the
+        // control channel out of step for the next command on this session.
+        let finished = stream
+            .finish()
+            .map_err(|e| format!("Transfer of {} did not complete: {}", remote_file, e));
+
+        if let Err(e) = copied.and(finished) {
+            // A truncated file that looks complete is worse than no file, so the
+            // partial output is removed rather than left behind.
+            drop(local_f);
+            let _ = std::fs::remove_file(local_path);
+            return Err(e);
+        }
+
+        local_f
+            .flush()
+            .map_err(|e| format!("Failed to flush local file {}: {}", local_path, e))?;
+        Ok(total)
     }
 
     fn upload_file(&mut self, remote_file: &str, data: &[u8]) -> Result<(), String> {
@@ -205,14 +251,39 @@ impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
     }
 
     fn upload_from_local_file(&mut self, local_path: &str, remote_file: &str) -> Result<u64, String> {
-        let bytes = std::fs::read(local_path)
-            .map_err(|e| format!("Failed to read local file {}: {}", local_path, e))?;
-        let len = bytes.len() as u64;
-        let mut cursor = Cursor::new(&bytes);
-        self.stream
-            .put_file(remote_file, &mut cursor)
-            .map_err(|e| format!("Failed to upload {}: {}", remote_file, e))?;
-        Ok(len)
+        use std::io::{Read, Write};
+
+        // Streamed for the same reason as downloads: reading the file into a Vec
+        // first caps the transfer size at available RAM.
+        let mut local_f = std::fs::File::open(local_path)
+            .map_err(|e| format!("Failed to open local file {}: {}", local_path, e))?;
+
+        let mut stream = self
+            .stream
+            .put_with_stream(remote_file)
+            .map_err(|e| format!("Failed to create remote file {}: {}", remote_file, e))?;
+
+        let mut total = 0u64;
+        let mut chunk = vec![0u8; 128 * 1024];
+        let copied = loop {
+            match local_f.read(&mut chunk) {
+                Ok(0) => break Ok(()),
+                Ok(n) => {
+                    if let Err(e) = stream.write_all(&chunk[..n]) {
+                        break Err(format!("Failed uploading to {}: {}", remote_file, e));
+                    }
+                    total += n as u64;
+                }
+                Err(e) => break Err(format!("Failed reading local file {}: {}", local_path, e)),
+            }
+        };
+
+        let finished = stream
+            .finish()
+            .map_err(|e| format!("Upload of {} did not complete: {}", remote_file, e));
+
+        copied.and(finished)?;
+        Ok(total)
     }
 
     fn stat(&mut self, remote_path: &str) -> Result<Option<FileItem>, String> {
@@ -525,5 +596,88 @@ mod tests {
         assert_eq!(s_item.name, ".env_link");
         assert_eq!(s_item.path, "/home/backup/.env_link");
         assert!(s_item.is_symlink);
+    }
+
+    /// End-to-end check of the streamed transfer path against a real server.
+    ///
+    /// Ignored by default because it needs a live FTP server on 127.0.0.1:2121
+    /// (user/pass `test`/`test`). Run it with:
+    ///
+    /// ```text
+    /// python -m pyftpdlib -p 2121 -u test -P test -d <dir>
+    /// cargo test --bin ninety_ftp -- --ignored ftp_streaming
+    /// ```
+    ///
+    /// The payload is deliberately several buffers long and not a multiple of
+    /// the buffer size, so a loop that drops the tail or miscounts the last
+    /// partial chunk fails here rather than in production.
+    #[test]
+    #[ignore = "requires an FTP server on 127.0.0.1:2121"]
+    fn ftp_streaming_roundtrip_preserves_bytes_and_size() {
+        const SIZE: usize = 5 * 1024 * 1024 + 1234;
+
+        let dir = std::env::temp_dir().join(format!("90ftp_ftpxfer_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Deterministic but non-repeating-enough content to catch offset bugs.
+        let payload: Vec<u8> = (0..SIZE).map(|i| (i % 251) as u8).collect();
+        let src = dir.join("payload.bin");
+        let dst = dir.join("roundtrip.bin");
+        std::fs::write(&src, &payload).unwrap();
+
+        let mut client = connect_plain("127.0.0.1", 2121, "test", "test")
+            .expect("the test FTP server must be running on 127.0.0.1:2121");
+
+        let uploaded = client
+            .upload_from_local_file(&src.to_string_lossy(), "payload.bin")
+            .expect("streamed upload should succeed");
+        assert_eq!(uploaded, SIZE as u64, "upload must report every byte");
+
+        // The control channel must still be usable after the transfer, which is
+        // only true if the stream was finished properly.
+        let remote = client
+            .stat("payload.bin")
+            .expect("stat should work after a finished transfer")
+            .expect("the uploaded file should exist");
+        assert_eq!(remote.size, SIZE as u64, "remote size must match the source");
+
+        let downloaded = client
+            .download_to_local_file("payload.bin", &dst.to_string_lossy())
+            .expect("streamed download should succeed");
+        assert_eq!(downloaded, SIZE as u64, "download must report every byte");
+        assert_eq!(std::fs::read(&dst).unwrap(), payload, "round-trip must be byte-exact");
+
+        // A second transfer on the same session proves `finish()` left the
+        // control connection in step rather than one reply behind.
+        let again = client
+            .download_to_local_file("payload.bin", &dir.join("second.bin").to_string_lossy())
+            .expect("a second transfer on the same session should succeed");
+        assert_eq!(again, SIZE as u64);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A failed download must not leave a truncated file behind, because a
+    /// partial file looks exactly like a complete one to the user.
+    #[test]
+    #[ignore = "requires an FTP server on 127.0.0.1:2121"]
+    fn failed_download_removes_the_partial_file() {
+        let dir = std::env::temp_dir().join(format!("90ftp_ftpfail_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dst = dir.join("never.bin");
+
+        let mut client = connect_plain("127.0.0.1", 2121, "test", "test")
+            .expect("the test FTP server must be running on 127.0.0.1:2121");
+
+        let result = client.download_to_local_file("does-not-exist.bin", &dst.to_string_lossy());
+        assert!(result.is_err(), "downloading a missing file must fail");
+        assert!(!dst.exists(), "no partial file should survive a failed download");
+
+        // And the session must remain usable.
+        assert!(client.ping().is_ok(), "the session should still be healthy");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
