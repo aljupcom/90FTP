@@ -200,6 +200,27 @@
 
   <div id="terminalContainer"></div>
 
+  <!-- In-App Reboot Confirmation Dialog -->
+  <div id="termRebootModal" style="position:fixed; inset:0; background:rgba(2,6,23,0.72); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:9999;">
+    <div style="width:390px; max-width:92vw; background:#0f172a; border:1px solid rgba(255,255,255,0.14); border-radius:10px; box-shadow:0 20px 50px rgba(0,0,0,0.85); overflow:hidden; font-family:'Segoe UI',system-ui,sans-serif;">
+      <div style="padding:8px 12px; background:#1e293b; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:600; color:#f8fafc;">
+        <span>90FTP — Server Action Confirmation</span>
+        <button onclick="closeRebootModal()" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:12px;">✕</button>
+      </div>
+      <div style="padding:16px 18px; display:flex; gap:14px; align-items:flex-start;">
+        <div style="width:38px; height:38px; border-radius:9px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.35); color:#f87171; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:18px;">⚠️</div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+          <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Reboot Remote Server?</div>
+          <div style="font-size:12px; color:#cbd5e1; line-height:1.5;">Are you sure you want to execute <code style="color:#f87171;">reboot</code> on the remote server now? Active connections will be terminated.</div>
+        </div>
+      </div>
+      <div style="padding:10px 16px; background:rgba(2,6,23,0.5); border-top:1px solid rgba(255,255,255,0.08); display:flex; justify-content:flex-end; gap:8px;">
+        <button onclick="closeRebootModal()" style="padding:5px 14px; border-radius:6px; border:1px solid rgba(255,255,255,0.14); background:#1e293b; color:#e2e8f0; font-size:12px; cursor:pointer;">Cancel</button>
+        <button onclick="proceedReboot()" style="padding:5px 16px; border-radius:6px; border:1px solid #b91c1c; background:#dc2626; color:#ffffff; font-size:12px; font-weight:600; cursor:pointer;">Reboot Now</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // __XTERM_JS__
   </script>
@@ -331,9 +352,18 @@
 
     function confirmReboot() {
       closeAllDropdowns();
-      if (confirm("Are you sure you want to reboot the remote server now?")) {
-        executeQuick('reboot');
-      }
+      const modal = document.getElementById('termRebootModal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeRebootModal() {
+      const modal = document.getElementById('termRebootModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function proceedReboot() {
+      closeRebootModal();
+      executeQuick('reboot');
     }
 
     function applyParams(p) {

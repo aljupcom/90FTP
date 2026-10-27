@@ -48,7 +48,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.68';
+    let APP_CURRENT_VERSION = '0.0.69';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -199,6 +199,259 @@ window.onerror = function(msg, url, line, col, error) {
       document.body.removeChild(ta);
       addLog(notifyMsg, 'success');
     }
+
+    // =========================================================================
+    // Unified Professional Desktop Dialog Engine (Replaces native alert/confirm)
+    // =========================================================================
+    let activeAppDialogResolver = null;
+    let currentAppDialogRawCopyText = '';
+
+    function getAppDialogSvg(variant) {
+      if (variant === 'error') {
+        return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+      }
+      if (variant === 'danger') {
+        return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+      }
+      if (variant === 'warning') {
+        return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+      }
+      if (variant === 'success') {
+        return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+      }
+      return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+    }
+
+    function showAppDialog(opts = {}) {
+      const overlay = document.getElementById('appDesktopDialogOverlay');
+      if (!overlay) return Promise.resolve(false);
+
+      // If another dialog was open, settle it cleanly first
+      if (activeAppDialogResolver) {
+        const prev = activeAppDialogResolver;
+        activeAppDialogResolver = null;
+        try { prev(false); } catch (_) {}
+      }
+
+      const variant = opts.variant || 'info'; // 'info' | 'warning' | 'error' | 'danger' | 'confirm' | 'success'
+      const isConfirm = !!opts.isConfirm;
+      const windowTitle = opts.windowTitle || (
+        variant === 'error' ? '90FTP — Operation Error' :
+        variant === 'danger' ? '90FTP — Confirm Action' :
+        variant === 'warning' ? '90FTP — Warning' :
+        variant === 'success' ? '90FTP — Completed' :
+        isConfirm ? '90FTP — Confirmation' : '90FTP — Notice'
+      );
+
+      const titleEl = document.getElementById('appDialogWindowTitle');
+      const titleIconEl = document.getElementById('appDialogTitleIcon');
+      const badgeEl = document.getElementById('appDialogBadge');
+      const headingEl = document.getElementById('appDialogHeading');
+      const msgEl = document.getElementById('appDialogMessage');
+      const detailEl = document.getElementById('appDialogDetailBox');
+      const copyBtn = document.getElementById('appDialogCopyBtn');
+      const copyLabel = document.getElementById('appDialogCopyLabel');
+      const cancelBtn = document.getElementById('appDialogCancelBtn');
+      const confirmBtn = document.getElementById('appDialogConfirmBtn');
+
+      if (titleEl) titleEl.textContent = windowTitle;
+      if (titleIconEl) {
+        titleIconEl.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>`;
+      }
+      if (badgeEl) {
+        badgeEl.className = `desktop-dialog-icon-badge ${variant}`;
+        badgeEl.innerHTML = getAppDialogSvg(variant);
+      }
+      if (headingEl) headingEl.textContent = opts.heading || 'Notice';
+      if (msgEl) msgEl.textContent = opts.message || '';
+
+      if (detailEl) {
+        if (opts.details && String(opts.details).trim()) {
+          detailEl.textContent = String(opts.details).trim();
+          detailEl.style.display = 'block';
+        } else {
+          detailEl.textContent = '';
+          detailEl.style.display = 'none';
+        }
+      }
+
+      currentAppDialogRawCopyText = opts.copyText || opts.details || opts.message || '';
+      if (copyBtn) {
+        const showCopy = (variant === 'error' || !!opts.details) && !!currentAppDialogRawCopyText;
+        copyBtn.style.display = showCopy ? 'inline-flex' : 'none';
+        if (copyLabel) copyLabel.textContent = 'Copy Details';
+      }
+
+      if (cancelBtn) {
+        cancelBtn.style.display = isConfirm ? 'inline-flex' : 'none';
+        cancelBtn.textContent = opts.cancelText || 'Cancel';
+      }
+
+      if (confirmBtn) {
+        confirmBtn.textContent = opts.confirmText || (isConfirm ? 'Confirm' : 'OK');
+        confirmBtn.className = (variant === 'danger' || (variant === 'error' && isConfirm))
+          ? 'btn btn-dialog-danger'
+          : 'btn btn-primary';
+      }
+
+      overlay.classList.add('active');
+      setTimeout(() => {
+        try {
+          if (confirmBtn) confirmBtn.focus();
+        } catch (_) {}
+      }, 20);
+
+      return new Promise((resolve) => {
+        activeAppDialogResolver = resolve;
+      });
+    }
+
+    function resolveAppDesktopDialog(result) {
+      const overlay = document.getElementById('appDesktopDialogOverlay');
+      if (overlay) overlay.classList.remove('active');
+      if (activeAppDialogResolver) {
+        const fn = activeAppDialogResolver;
+        activeAppDialogResolver = null;
+        fn(!!result);
+      }
+    }
+
+    function copyAppDialogDetails() {
+      if (!currentAppDialogRawCopyText) return;
+      copyTextToClipboard(currentAppDialogRawCopyText, 'Dialog details copied to clipboard');
+      const copyLabel = document.getElementById('appDialogCopyLabel');
+      if (copyLabel) {
+        copyLabel.textContent = 'Copied ✓';
+        setTimeout(() => {
+          copyLabel.textContent = 'Copy Details';
+        }, 1600);
+      }
+    }
+
+    function parseDialogTextStructure(rawText, defaultHeading = 'Notice') {
+      const clean = String(rawText ?? '').replace(/\/n/g, '\n').trim();
+      if (!clean) return { heading: defaultHeading, message: '', details: '' };
+      const lines = clean.split(/\r?\n/);
+      if (lines.length === 1) {
+        const colonIdx = clean.indexOf(': ');
+        if (colonIdx > 0 && colonIdx < 38 && /error|failed|denied|invalid|cannot|could not/i.test(clean.substring(0, colonIdx))) {
+          return {
+            heading: clean.substring(0, colonIdx).trim(),
+            message: clean.substring(colonIdx + 2).trim(),
+            details: ''
+          };
+        }
+        return { heading: defaultHeading, message: clean, details: '' };
+      }
+      const firstLine = lines[0].replace(/:$/, '').trim();
+      const rest = lines.slice(1).join('\n').trim();
+      if (firstLine.length <= 68 && rest.length > 0) {
+        // Check if rest looks like a technical stack/list/paths
+        const restLines = rest.split('\n').filter(Boolean);
+        if (restLines.length >= 2 && (rest.includes('•') || rest.includes('/') || rest.includes('\\') || rest.includes('Strategy:'))) {
+          return {
+            heading: firstLine,
+            message: restLines[0],
+            details: restLines.slice(1).join('\n')
+          };
+        }
+        return {
+          heading: firstLine,
+          message: rest,
+          details: /error|failed|exception|denied|code/i.test(firstLine) ? rest : ''
+        };
+      }
+      return { heading: defaultHeading, message: clean, details: '' };
+    }
+
+    function showAppAlert(rawMessage, customTitle = null, forcedVariant = null) {
+      const text = String(rawMessage ?? '').replace(/\/n/g, '\n').trim();
+      let variant = forcedVariant;
+      if (!variant) {
+        if (/error|failed|cannot|could not|denied|invalid|rejected|timed out/i.test(text)) {
+          variant = 'error';
+        } else if (/successfully|completed|appended|cleared/i.test(text)) {
+          variant = 'success';
+        } else if (/please |empty|already|select |required|nothing to|not found|not connected/i.test(text)) {
+          variant = 'warning';
+        } else {
+          variant = 'info';
+        }
+      }
+      const defaultHeading = customTitle || (
+        variant === 'error' ? 'Operation Failed' :
+        variant === 'warning' ? 'Action Required' :
+        variant === 'success' ? 'Completed Successfully' : 'Information'
+      );
+      const parsed = parseDialogTextStructure(text, defaultHeading);
+      return showAppDialog({
+        isConfirm: false,
+        variant,
+        heading: customTitle || parsed.heading,
+        message: parsed.DetailsOnly ? '' : parsed.message,
+        details: (variant === 'error' && parsed.details && parsed.details !== parsed.message) ? parsed.details : (parsed.details && parsed.details !== parsed.message ? parsed.details : ''),
+        copyText: text,
+        confirmText: 'OK'
+      });
+    }
+
+    function showAppConfirm(rawMessage, opts = {}) {
+      const text = String(rawMessage ?? '').replace(/\/n/g, '\n').trim();
+      const isDanger = opts.variant === 'danger' || /delete|kill|cancel|reset|clear|remove|reboot|shred/i.test(text);
+      const variant = opts.variant || (isDanger ? 'danger' : 'confirm');
+      const defaultHeading = opts.title || (
+        /delete/i.test(text) ? 'Confirm Permanent Deletion' :
+        /disconnect/i.test(text) ? 'Disconnect from Server' :
+        /cancel/i.test(text) ? 'Cancel Active Operation' :
+        /reset/i.test(text) ? 'Reset Preferences' :
+        /upload/i.test(text) ? 'Confirm Upload' :
+        /download/i.test(text) ? 'Confirm Download' :
+        /transfer/i.test(text) ? 'Start Remote Transfer' :
+        'Confirm Action'
+      );
+      const parsed = parseDialogTextStructure(text, defaultHeading);
+      const confirmLabel = opts.confirmText || (
+        /delete/i.test(text) ? 'Delete' :
+        /disconnect/i.test(text) ? 'Disconnect' :
+        /reset/i.test(text) ? 'Reset Defaults' :
+        /upload/i.test(text) ? 'Upload' :
+        /download/i.test(text) ? 'Download' :
+        /install/i.test(text) ? 'Install' :
+        /start remote transfer/i.test(text) ? 'Start Transfer' :
+        'Confirm'
+      );
+      return showAppDialog({
+        isConfirm: true,
+        variant,
+        windowTitle: opts.windowTitle || (variant === 'danger' ? '90FTP — Security & Action Confirmation' : '90FTP — Confirmation'),
+        heading: opts.title || parsed.heading,
+        message: parsed.heading !== defaultHeading ? parsed.message : (parsed.details ? parsed.message : text),
+        details: parsed.details || opts.details || '',
+        confirmText: confirmLabel,
+        cancelText: opts.cancelText || 'Cancel',
+        copyText: text
+      });
+    }
+
+    // Override native browser alert so WebView2 never opens an external "This page says" box
+    window.alert = function(msg, title, variant) {
+      return showAppAlert(msg, title, variant);
+    };
+
+    window.addEventListener('keydown', (e) => {
+      const dlg = document.getElementById('appDesktopDialogOverlay');
+      if (dlg && dlg.classList.contains('active')) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          resolveAppDesktopDialog(false);
+        } else if (e.key === 'Enter' && document.activeElement !== document.getElementById('appDialogCancelBtn')) {
+          e.preventDefault();
+          e.stopPropagation();
+          resolveAppDesktopDialog(true);
+        }
+      }
+    });
 
     function copyAllLogs() {
       const body = document.getElementById('logBody');
@@ -4104,7 +4357,7 @@ window.onerror = function(msg, url, line, col, error) {
 
     async function handleDisconnect(isManual = true) {
       if (isManual && isConnected && appOptions && appOptions.confirmDisconnect) {
-        if (!confirm('Are you sure you want to disconnect from the active server?')) {
+        if (!(await showAppConfirm('Are you sure you want to disconnect from the active server?', { title: 'Disconnect from Server', confirmText: 'Disconnect', variant: 'warning' }))) {
           return;
         }
       }
@@ -4600,6 +4853,9 @@ window.onerror = function(msg, url, line, col, error) {
         }
 
         addLog(`Starting recursive upload of folder '${folderName}' (${items.length} items)...`, 'info');
+        if (appOptions && appOptions.autoSwitchTransfers !== false) {
+          try { switchBottomTab('transfers'); } catch (_) {}
+        }
         let uploadedFiles = 0;
         let createdDirs = 0;
         resetCollisionScope();
@@ -4658,16 +4914,19 @@ window.onerror = function(msg, url, line, col, error) {
             // Queued rather than awaited: the queue runs them with the
             // configured parallelism, so a folder of 200 files no longer uploads
             // strictly one at a time while the UI sits idle.
-            const queued = await enqueueTransfer('upload', item.abs_path, itemDest);
+            const queued = await enqueueTransfer('upload', item.abs_path, itemDest, true);
             if (queued) uploadedFiles++;
           }
         }
 
         refreshRemote();
         addLog(`Folder upload queued: '${folderName}' (${uploadedFiles} files, ${createdDirs} folders) — progress is in the File Transfers tab`, 'success');
+        if (typeof showInteractiveActionToast === 'function') {
+          showInteractiveActionToast(`Folder Upload Queued: ${folderName}`, `${uploadedFiles} file(s), ${createdDirs} subfolder(s) added to transfer queue`, baseRemote, true, false);
+        }
       } catch (err) {
         addLog(`Folder upload error: ${err.message || err}`, 'error');
-        alert(`Folder Upload Failed:\n${err.message || err}`);
+        showAppAlert(`Folder Upload Failed:\n${err.message || err}`, 'Folder Upload Error', 'error');
       }
     }
 
@@ -4700,6 +4959,9 @@ window.onerror = function(msg, url, line, col, error) {
         }
 
         addLog(`Starting recursive download of folder '${folderName}' (${items.length} items)...`, 'info');
+        if (appOptions && appOptions.autoSwitchTransfers !== false) {
+          try { switchBottomTab('transfers'); } catch (_) {}
+        }
         let downloadedFiles = 0;
         let createdDirs = 0;
         resetCollisionScope();
@@ -4763,16 +5025,19 @@ window.onerror = function(msg, url, line, col, error) {
               }
             }
 
-            const queued = await enqueueTransfer('download', itemDest, item.remote_path);
+            const queued = await enqueueTransfer('download', itemDest, item.remote_path, true);
             if (queued) downloadedFiles++;
           }
         }
 
         refreshLocal();
         addLog(`Folder download queued: '${folderName}' (${downloadedFiles} files, ${createdDirs} folders) — progress is in the File Transfers tab`, 'success');
+        if (typeof showInteractiveActionToast === 'function') {
+          showInteractiveActionToast(`Folder Download Queued: ${folderName}`, `${downloadedFiles} file(s), ${createdDirs} subfolder(s) added to transfer queue`, baseLocal, false, false);
+        }
       } catch (err) {
         addLog(`Folder download error: ${err.message || err}`, 'error');
-        alert(`Folder Download Failed:\n${err.message || err}`);
+        showAppAlert(`Folder Download Failed:\n${err.message || err}`, 'Folder Download Error', 'error');
       }
     }
 
@@ -4783,7 +5048,7 @@ window.onerror = function(msg, url, line, col, error) {
       }
 
       if (typeof isItemExcluded === 'function' && isItemExcluded(fileName, fileName)) {
-        if (!confirm(`File '${fileName}' matches your active Transfer Exclusion Mask rules (.env, node_modules, etc.).\n\nDo you really want to upload it?`)) {
+        if (!(await showAppConfirm(`File '${fileName}' matches your active Transfer Exclusion Mask rules (.env, node_modules, etc.).\n\nDo you really want to upload it?`, { title: 'Exclusion Mask Match', confirmText: 'Upload Anyway', variant: 'warning' }))) {
           addLog(`[Exclusion Mask] Upload skipped for: ${fileName}`, 'info');
           return;
         }
@@ -6231,7 +6496,7 @@ window.onerror = function(msg, url, line, col, error) {
         confirmMsg = `Are you sure you want to permanently delete these ${itemsToDelete.length} selected ${isRemote ? 'remote' : 'local'} items?\n\n${previewList}${extra}`;
       }
 
-      if (!confirm(confirmMsg)) return;
+      if (!(await showAppConfirm(confirmMsg, { title: 'Confirm Permanent Deletion', confirmText: 'Delete Permanently', variant: 'danger' }))) return;
 
       if (isRemote) {
         if (!isConnected) {
@@ -7586,7 +7851,7 @@ window.onerror = function(msg, url, line, col, error) {
         return;
       }
 
-      if (!confirm(`Upload ${toUpload.length} missing/modified file(s) to remote server?`)) return;
+      if (!(await showAppConfirm(`Upload ${toUpload.length} missing/modified file(s) to remote server?`, { title: 'Sync Upload to Server', confirmText: 'Upload Files', variant: 'confirm' }))) return;
 
       addLog(`Starting sync upload of ${toUpload.length} items to remote...`, 'info');
       for (const item of toUpload) {
@@ -7614,7 +7879,7 @@ window.onerror = function(msg, url, line, col, error) {
         return;
       }
 
-      if (!confirm(`Download ${toDownload.length} missing/modified file(s) to local directory?`)) return;
+      if (!(await showAppConfirm(`Download ${toDownload.length} missing/modified file(s) to local directory?`, { title: 'Sync Download to Local', confirmText: 'Download Files', variant: 'confirm' }))) return;
 
       addLog(`Starting sync download of ${toDownload.length} items to local...`, 'info');
       for (const item of toDownload) {
@@ -8152,7 +8417,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function deleteSite(id) {
-      if (!confirm('Are you sure you want to delete this saved site?')) return;
+      if (!(await showAppConfirm('Are you sure you want to delete this saved site profile?', { title: 'Delete Saved Site', confirmText: 'Delete Site', variant: 'danger' }))) return;
       try {
         const res = await sendRust('delete_site', { id });
         savedSites = res.sites || [];
@@ -8202,8 +8467,74 @@ window.onerror = function(msg, url, line, col, error) {
 
     let lastLogHeight = 160;
 
-    // Dual-Tab Bottom Panel Management (Transfers & Activity Log)
+    // Dual-Tab Bottom Panel Management (Transfers, Activity Log & Terminal)
     let activeBottomTab = 'transfers';
+
+    function switchBottomTab(tab, event) {
+      if (event) {
+        event.stopPropagation();
+      }
+      activeBottomTab = tab;
+      const isTransfers = tab === 'transfers';
+      const isLog = tab === 'log';
+      const isTerminal = tab === 'terminal';
+
+      const tabTx = document.getElementById('tabTransfers');
+      const tabLog = document.getElementById('tabActivityLog');
+      const tabTerm = document.getElementById('tabTerminal');
+      const bodyTx = document.getElementById('transfersBodyContainer');
+      const bodyLog = document.getElementById('logBodyContainer');
+      const bodyTerm = document.getElementById('terminalBodyContainer');
+      const actTx = document.getElementById('transfersActions');
+      const actLog = document.getElementById('logActions');
+      const actTerm = document.getElementById('terminalActions');
+
+      if (tabTx) tabTx.classList.toggle('active', isTransfers);
+      if (tabLog) tabLog.classList.toggle('active', isLog);
+      if (tabTerm) tabTerm.classList.toggle('active', isTerminal);
+
+      if (bodyTx) {
+        bodyTx.classList.toggle('active', isTransfers);
+        bodyTx.style.display = isTransfers ? 'flex' : 'none';
+      }
+      if (bodyLog) {
+        bodyLog.classList.toggle('active', isLog);
+        bodyLog.style.display = isLog ? 'flex' : 'none';
+      }
+      if (bodyTerm) {
+        bodyTerm.classList.toggle('active', isTerminal);
+        bodyTerm.style.display = isTerminal ? 'flex' : 'none';
+      }
+
+      if (actTx) actTx.style.display = isTransfers ? 'flex' : 'none';
+      if (actLog) actLog.style.display = isLog ? 'flex' : 'none';
+      if (actTerm) actTerm.style.display = isTerminal ? 'flex' : 'none';
+
+      const panel = document.getElementById('logPanel');
+      if (panel && panel.classList.contains('collapsed')) {
+        toggleLogPanel();
+      }
+      if (isTerminal) {
+        if (typeof terminalSessions !== 'undefined' && terminalSessions.length === 0 && typeof initTerminalSession === 'function') {
+          initTerminalSession();
+        }
+        if (panel) {
+          const curHeight = parseInt(panel.style.height) || 0;
+          if (curHeight < 260) {
+            panel.style.height = '300px';
+            lastLogHeight = 300;
+          }
+        }
+        if (typeof focusTerminalInput === 'function') {
+          setTimeout(focusTerminalInput, 50);
+        }
+      }
+    }
+
+    function handleLogHeaderClick(e) {
+      if (e && (e.target.closest('button') || e.target.closest('input') || e.target.closest('select'))) return;
+      toggleLogPanel();
+    }
     // ── Transfer queue (backend-driven) ─────────────────────────────────────
     //
     // The queue itself lives in Rust: it owns parallelism, retries and the speed
@@ -8310,9 +8641,9 @@ window.onerror = function(msg, url, line, col, error) {
       return !transferTasks.some(t => t.state === 'running' || t.state === 'pending' || t.state === 'paused');
     }
 
-    async function enqueueTransfer(kind, localPath, remotePath) {
+    async function enqueueTransfer(kind, localPath, remotePath, silentUi = false) {
       if (!isConnected) {
-        alert('Please connect to a server first');
+        if (!silentUi) showAppAlert('Please connect to a server first', 'Connection Required', 'warning');
         return null;
       }
       try {
@@ -8323,13 +8654,17 @@ window.onerror = function(msg, url, line, col, error) {
         });
         if (res && res.queue) applyTransferSnapshot(res.queue);
 
-        if (appOptions && appOptions.autoSwitchTransfers !== false) {
-          switchBottomTab('transfers');
+        if (!silentUi && appOptions && appOptions.autoSwitchTransfers !== false) {
+          try {
+            switchBottomTab('transfers');
+          } catch (_) {}
         }
         return res ? res.task_id : null;
       } catch (err) {
         addLog('Could not queue ' + kind + ' of ' + localPath + ': ' + (err.message || err), 'error');
-        alert('Could not queue transfer:/n' + (err.message || err));
+        if (!silentUi) {
+          showAppAlert('Could not queue transfer:\n' + (err.message || err), 'Transfer Queue Error', 'error');
+        }
         return null;
       }
     }
@@ -8363,7 +8698,7 @@ window.onerror = function(msg, url, line, col, error) {
       if (!transferTasks.some(t => t.state === 'running' || t.state === 'pending' || t.state === 'paused')) {
         return;
       }
-      if (!confirm('Cancel every queued and running transfer?')) return;
+      if (!(await showAppConfirm('Cancel every queued and running transfer?', { title: 'Stop All Transfers', confirmText: 'Stop All', variant: 'danger' }))) return;
       try {
         const res = await sendRust('transfer_cancel_all', {});
         if (res && res.queue) applyTransferSnapshot(res.queue);
@@ -9113,8 +9448,8 @@ window.onerror = function(msg, url, line, col, error) {
       closeOptionsModal();
     }
 
-    function resetSettingsToDefault() {
-      if (confirm('Are you sure you want to reset all preferences to factory defaults?')) {
+    async function resetSettingsToDefault() {
+      if (await showAppConfirm('Are you sure you want to reset all preferences to factory defaults?', { title: 'Reset Preferences', confirmText: 'Reset Defaults', variant: 'danger' })) {
         appOptions = Object.assign({}, defaultOptions);
         try {
           appStorage.removeItem('90ftp_options');
@@ -10368,7 +10703,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function clearKnownHostsCache() {
-      if (!confirm('Clear all saved server host key fingerprints? Future connections will prompt to verify fingerprints.')) {
+      if (!(await showAppConfirm('Clear all saved server host key fingerprints? Future connections will prompt to verify fingerprints.', { title: 'Clear Host Keys Cache', confirmText: 'Clear Keys', variant: 'danger' }))) {
         return;
       }
       try {
@@ -10381,7 +10716,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function clearRemoteHistoryCache() {
-      if (!confirm('Clear all stored remote navigation path history?')) {
+      if (!(await showAppConfirm('Clear all stored remote navigation path history?', { title: 'Clear Remote History', confirmText: 'Clear History', variant: 'danger' }))) {
         return;
       }
       try {
@@ -11344,9 +11679,9 @@ window.onerror = function(msg, url, line, col, error) {
       if (modal) modal.classList.add('active');
     }
 
-    function closeRemoteTransferModal() {
+    async function closeRemoteTransferModal() {
       if (isRtTransferActive) {
-        if (!confirm('A remote transfer is currently running. Do you want to cancel the transfer?')) {
+        if (!(await showAppConfirm('A remote transfer is currently running. Do you want to cancel the transfer?', { title: 'Cancel Running Transfer', confirmText: 'Cancel Transfer', variant: 'danger' }))) {
           return;
         }
         cancelRemoteTransfer();
@@ -11523,7 +11858,7 @@ window.onerror = function(msg, url, line, col, error) {
       const btnInstall = document.getElementById('btnInstallSshpass');
       const btnCheck = document.getElementById('btnCheckSshpass');
 
-      if (!confirm('Install sshpass on the remote source server?\n\n90FTP will automatically detect the Linux distribution (Ubuntu, Debian, CentOS, AlmaLinux, Rocky, Alpine, Arch, openSUSE) and install sshpass via the system package manager.')) {
+      if (!(await showAppConfirm('Install sshpass on the remote source server?\n\n90FTP will automatically detect the Linux distribution (Ubuntu, Debian, CentOS, AlmaLinux, Rocky, Alpine, Arch, openSUSE) and install sshpass via the system package manager.', { title: 'Install Remote sshpass Utility', confirmText: 'Install sshpass', variant: 'confirm' }))) {
         return;
       }
 
@@ -11596,7 +11931,7 @@ window.onerror = function(msg, url, line, col, error) {
       }
 
       const confirmMsg = `Start remote transfer of ${currentRtSources.length} item(s) to:\n${task.target_user}@${task.target_host}:${task.target_path}\n\nTransfer Strategy: ${task.transfer_mode.toUpperCase()}`;
-      if (!confirm(confirmMsg)) return;
+      if (!(await showAppConfirm(confirmMsg, { title: 'Start Server-to-Server Transfer', confirmText: 'Start Transfer', variant: 'confirm' }))) return;
 
       isRtTransferActive = true;
       document.getElementById('rtProgressSection').style.display = 'block';
@@ -12365,7 +12700,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function killRemoteProcessByPid(pid, signal) {
-      if (!confirm(`Send signal -${signal} to remote process PID ${pid}?`)) return;
+      if (!(await showAppConfirm(`Send signal -${signal} to remote process PID ${pid}?`, { title: 'Terminate Remote Process', confirmText: `Send -${signal}`, variant: 'danger' }))) return;
       try {
         await sendRust('remote_kill_process', { pid, signal });
         addLog(`Sent signal -${signal} to remote PID ${pid}`, 'success');
@@ -12376,7 +12711,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function controlRemoteSystemdService(unit, op) {
-      if (!confirm(`Execute 'systemctl ${op} ${unit}' on remote server?`)) return;
+      if (!(await showAppConfirm(`Execute 'systemctl ${op} ${unit}' on remote server?`, { title: 'Systemd Service Control', confirmText: `Run ${op.toUpperCase()}`, variant: op === 'stop' || op === 'restart' ? 'warning' : 'confirm' }))) return;
       try {
         await sendRust('remote_service_action', { unit, op });
         addLog(`Executed systemctl ${op} ${unit}`, 'success');
@@ -13030,9 +13365,9 @@ window.onerror = function(msg, url, line, col, error) {
       if (modal) modal.classList.add('active');
     }
 
-    function closeSyncModal() {
+    async function closeSyncModal() {
       if (isSyncBusy) {
-        if (!confirm('A sync is still running. Close the window anyway?')) return;
+        if (!(await showAppConfirm('A directory synchronization is still running. Close the window anyway?', { title: 'Synchronization in Progress', confirmText: 'Close Anyway', variant: 'warning' }))) return;
       }
       const modal = document.getElementById('syncPlanModal');
       if (modal) modal.classList.remove('active');
@@ -13218,8 +13553,8 @@ window.onerror = function(msg, url, line, col, error) {
 
       const warning = deletions > 0
         ? 'This will run ' + effective.length + ' action(s), including ' + deletions + ' deletion(s). Deleted files cannot be recovered. Continue?'
-        : 'Run ' + effective.length + ' action(s) now?';
-      if (!confirm(warning)) return;
+        : 'Run ' + effective.length + ' synchronization action(s) now?';
+      if (!(await showAppConfirm(warning, { title: deletions > 0 ? 'Confirm Sync with Deletions' : 'Apply Folder Synchronization', confirmText: 'Run Sync', variant: deletions > 0 ? 'danger' : 'confirm' }))) return;
 
       const applyBtn = document.getElementById('btnSyncApply');
       const previewBtn = document.getElementById('btnSyncPreview');
