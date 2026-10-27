@@ -48,7 +48,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.69';
+    let APP_CURRENT_VERSION = '0.0.70';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -88,13 +88,15 @@ window.onerror = function(msg, url, line, col, error) {
       await ensureIpcReady();
       return new Promise((resolve, reject) => {
         const id = 'req_' + (++reqCounter);
-        const timeoutMs = ['upload', 'download', 'remote_compress', 'remote_extract', 'sync_plan', 'sync_apply'].includes(action)
-          ? 600000 
-          : (['remote_install_sshpass'].includes(action)
-              ? 180000
-              : (['connect', 'reconnect', 'ping_keepalive', 'remote_read', 'remote_write', 'remote_list', 'remote_cd', 'terminal_exec', 'local_compress', 'local_extract', 'remote_check_sshpass'].includes(action) 
-                  ? 60000 
-                  : 15000));
+        const timeoutMs = ['remote_transfer_start', 'start_update_download'].includes(action)
+          ? 3600000
+          : (['upload', 'download', 'remote_compress', 'remote_extract', 'local_compress', 'local_extract', 'sync_plan', 'sync_apply', 'remote_scan_dir_recursive', 'local_scan_dir_recursive', 'calculate_checksum', 'pick_ssh_key'].includes(action)
+              ? 600000
+              : (['remote_install_sshpass', 'remote_delete', 'remote_delete_batch', 'local_delete', 'local_delete_batch', 'remote_move_batch', 'local_move_batch', 'remote_chmod'].includes(action)
+                  ? 180000
+                  : (['connect', 'reconnect', 'ping_keepalive', 'remote_read', 'remote_read_file', 'local_read', 'local_read_file', 'remote_write', 'local_write', 'remote_list', 'remote_cd', 'remote_stat', 'terminal_exec', 'remote_check_sshpass', 'remote_transfer_test_target', 'remote_transfer_list_target_dir', 'ssh_deploy_key', 'remote_server_health', 'remote_process_manager', 'remote_service_action', 'network_probe'].includes(action)
+                      ? 60000
+                      : 20000)));
 
         const timer = setTimeout(() => {
           if (pendingCallbacks.has(id)) {
@@ -201,9 +203,10 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     // =========================================================================
-    // Unified Professional Desktop Dialog Engine (Replaces native alert/confirm)
+    // Unified Professional Desktop Dialog Engine (Replaces native alert/confirm/prompt)
     // =========================================================================
     let activeAppDialogResolver = null;
+    let activeAppDialogIsPrompt = false;
     let currentAppDialogRawCopyText = '';
 
     function getAppDialogSvg(variant) {
@@ -219,27 +222,35 @@ window.onerror = function(msg, url, line, col, error) {
       if (variant === 'success') {
         return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
       }
+      if (variant === 'prompt') {
+        return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`;
+      }
       return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
     }
 
     function showAppDialog(opts = {}) {
       const overlay = document.getElementById('appDesktopDialogOverlay');
-      if (!overlay) return Promise.resolve(false);
+      if (!overlay) return Promise.resolve(opts.isPrompt ? null : false);
 
       // If another dialog was open, settle it cleanly first
       if (activeAppDialogResolver) {
         const prev = activeAppDialogResolver;
+        const wasPrompt = activeAppDialogIsPrompt;
         activeAppDialogResolver = null;
-        try { prev(false); } catch (_) {}
+        activeAppDialogIsPrompt = false;
+        try { prev(wasPrompt ? null : false); } catch (_) {}
       }
 
-      const variant = opts.variant || 'info'; // 'info' | 'warning' | 'error' | 'danger' | 'confirm' | 'success'
-      const isConfirm = !!opts.isConfirm;
+      const isPrompt = !!opts.isPrompt;
+      const isConfirm = !!opts.isConfirm || isPrompt;
+      activeAppDialogIsPrompt = isPrompt;
+      const variant = opts.variant || (isPrompt ? 'prompt' : 'info'); // 'info' | 'warning' | 'error' | 'danger' | 'confirm' | 'success' | 'prompt'
       const windowTitle = opts.windowTitle || (
         variant === 'error' ? '90FTP — Operation Error' :
         variant === 'danger' ? '90FTP — Confirm Action' :
         variant === 'warning' ? '90FTP — Warning' :
         variant === 'success' ? '90FTP — Completed' :
+        isPrompt ? '90FTP — Input Prompt' :
         isConfirm ? '90FTP — Confirmation' : '90FTP — Notice'
       );
 
@@ -249,6 +260,8 @@ window.onerror = function(msg, url, line, col, error) {
       const headingEl = document.getElementById('appDialogHeading');
       const msgEl = document.getElementById('appDialogMessage');
       const detailEl = document.getElementById('appDialogDetailBox');
+      const inputWrapEl = document.getElementById('appDialogInputWrap');
+      const inputEl = document.getElementById('appDialogInput');
       const copyBtn = document.getElementById('appDialogCopyBtn');
       const copyLabel = document.getElementById('appDialogCopyLabel');
       const cancelBtn = document.getElementById('appDialogCancelBtn');
@@ -259,10 +272,10 @@ window.onerror = function(msg, url, line, col, error) {
         titleIconEl.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>`;
       }
       if (badgeEl) {
-        badgeEl.className = `desktop-dialog-icon-badge ${variant}`;
+        badgeEl.className = `desktop-dialog-icon-badge ${variant === 'prompt' ? 'confirm' : variant}`;
         badgeEl.innerHTML = getAppDialogSvg(variant);
       }
-      if (headingEl) headingEl.textContent = opts.heading || 'Notice';
+      if (headingEl) headingEl.textContent = opts.heading || (isPrompt ? 'Enter Value' : 'Notice');
       if (msgEl) msgEl.textContent = opts.message || '';
 
       if (detailEl) {
@@ -275,9 +288,20 @@ window.onerror = function(msg, url, line, col, error) {
         }
       }
 
+      if (inputWrapEl && inputEl) {
+        if (isPrompt) {
+          inputWrapEl.style.display = 'block';
+          inputEl.value = opts.defaultValue != null ? String(opts.defaultValue) : '';
+          inputEl.placeholder = opts.placeholder || '';
+        } else {
+          inputWrapEl.style.display = 'none';
+          inputEl.value = '';
+        }
+      }
+
       currentAppDialogRawCopyText = opts.copyText || opts.details || opts.message || '';
       if (copyBtn) {
-        const showCopy = (variant === 'error' || !!opts.details) && !!currentAppDialogRawCopyText;
+        const showCopy = !isPrompt && (variant === 'error' || !!opts.details) && !!currentAppDialogRawCopyText;
         copyBtn.style.display = showCopy ? 'inline-flex' : 'none';
         if (copyLabel) copyLabel.textContent = 'Copy Details';
       }
@@ -288,7 +312,7 @@ window.onerror = function(msg, url, line, col, error) {
       }
 
       if (confirmBtn) {
-        confirmBtn.textContent = opts.confirmText || (isConfirm ? 'Confirm' : 'OK');
+        confirmBtn.textContent = opts.confirmText || (isPrompt ? 'OK' : (isConfirm ? 'Confirm' : 'OK'));
         confirmBtn.className = (variant === 'danger' || (variant === 'error' && isConfirm))
           ? 'btn btn-dialog-danger'
           : 'btn btn-primary';
@@ -297,9 +321,25 @@ window.onerror = function(msg, url, line, col, error) {
       overlay.classList.add('active');
       setTimeout(() => {
         try {
-          if (confirmBtn) confirmBtn.focus();
+          if (isPrompt && inputEl) {
+            inputEl.focus();
+            const val = inputEl.value || '';
+            if (opts.selectStem && val.length > 0) {
+              const compoundMatch = val.match(/\.(tar\.gz|tar\.bz2|tar\.xz)$/i);
+              const dotIdx = compoundMatch ? compoundMatch.index : val.lastIndexOf('.');
+              if (dotIdx > 0) {
+                inputEl.setSelectionRange(0, dotIdx);
+              } else {
+                inputEl.select();
+              }
+            } else {
+              inputEl.select();
+            }
+          } else if (confirmBtn) {
+            confirmBtn.focus();
+          }
         } catch (_) {}
-      }, 20);
+      }, 25);
 
       return new Promise((resolve) => {
         activeAppDialogResolver = resolve;
@@ -311,9 +351,32 @@ window.onerror = function(msg, url, line, col, error) {
       if (overlay) overlay.classList.remove('active');
       if (activeAppDialogResolver) {
         const fn = activeAppDialogResolver;
+        const wasPrompt = activeAppDialogIsPrompt;
         activeAppDialogResolver = null;
-        fn(!!result);
+        activeAppDialogIsPrompt = false;
+        if (wasPrompt) {
+          const inputEl = document.getElementById('appDialogInput');
+          fn(result ? (inputEl ? inputEl.value : '') : null);
+        } else {
+          fn(!!result);
+        }
       }
+    }
+
+    function showAppPrompt(message, defaultValue = '', opts = {}) {
+      return showAppDialog({
+        isConfirm: true,
+        isPrompt: true,
+        variant: opts.variant || 'prompt',
+        windowTitle: opts.windowTitle || '90FTP — Input Prompt',
+        heading: opts.title || 'Enter Value',
+        message: message || '',
+        defaultValue: defaultValue != null ? String(defaultValue) : '',
+        placeholder: opts.placeholder || '',
+        selectStem: !!opts.selectStem,
+        confirmText: opts.confirmText || 'OK',
+        cancelText: opts.cancelText || 'Cancel'
+      });
     }
 
     function copyAppDialogDetails() {
@@ -1252,35 +1315,35 @@ window.onerror = function(msg, url, line, col, error) {
       return map[ext] || (ext ? `${ext.toUpperCase()} File` : 'File');
     }
 
+    const naturalNameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
     function applyPaneSort(list, isRemote) {
       if (!Array.isArray(list) || list.length <= 1) return list;
       const st = isRemote ? remoteSortState : localSortState;
       const dirMult = st.asc ? 1 : -1;
+      const col = st.col;
       list.sort((a, b) => {
         if (!!a.is_dir !== !!b.is_dir) {
           return a.is_dir ? -1 : 1;
         }
-        if (st.col === 'size') {
+        if (col === 'size') {
           const sa = a.is_dir ? (calculatedFolderSizes.get(a.path) ?? 0) : (Number(a.size) || 0);
           const sb = b.is_dir ? (calculatedFolderSizes.get(b.path) ?? 0) : (Number(b.size) || 0);
           if (sa !== sb) return (sa - sb) * dirMult;
-        } else if (st.col === 'modified') {
+        } else if (col === 'modified') {
           const ma = (a.modified || '').toString();
           const mb = (b.modified || '').toString();
-          const cmp = ma.localeCompare(mb);
-          if (cmp !== 0) return cmp * dirMult;
-        } else if (st.col === 'type') {
+          if (ma !== mb) return (ma < mb ? -1 : 1) * dirMult;
+        } else if (col === 'type') {
           const ta = getHumanFileType(a.name, a.is_dir);
           const tb = getHumanFileType(b.name, b.is_dir);
-          const cmp = ta.localeCompare(tb);
-          if (cmp !== 0) return cmp * dirMult;
-        } else if (st.col === 'permissions') {
+          if (ta !== tb) return naturalNameCollator.compare(ta, tb) * dirMult;
+        } else if (col === 'permissions') {
           const pa = (a.permissions || '').toString();
           const pb = (b.permissions || '').toString();
-          const cmp = pa.localeCompare(pb);
-          if (cmp !== 0) return cmp * dirMult;
+          if (pa !== pb) return (pa < pb ? -1 : 1) * dirMult;
         }
-        return (a.name || '').toString().localeCompare((b.name || '').toString(), undefined, { numeric: true, sensitivity: 'base' }) * dirMult;
+        return naturalNameCollator.compare((a.name || '').toString(), (b.name || '').toString()) * dirMult;
       });
       return list;
     }
@@ -1538,8 +1601,34 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     // Local Directory Listing
+    const localDirCache = new Map();
+    const LOCAL_DIR_CACHE_TTL_MS = 60000;
+
+    function getLocalDirCacheKey(path) {
+      return (path || '').replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase() || 'root';
+    }
+
+    function invalidateLocalDirCache(path = null) {
+      if (!path) {
+        localDirCache.clear();
+        return;
+      }
+      localDirCache.delete(getLocalDirCacheKey(path));
+    }
+
     function renderLocalFiles(files) {
       localFiles = applyPaneSort([...(files || [])], false);
+      if (currentLocalPath && Array.isArray(files)) {
+        localDirCache.set(getLocalDirCacheKey(currentLocalPath), {
+          path: currentLocalPath,
+          files: localFiles,
+          ts: Date.now()
+        });
+        if (localDirCache.size > 60) {
+          const oldestKey = localDirCache.keys().next().value;
+          if (oldestKey) localDirCache.delete(oldestKey);
+        }
+      }
       selectedLocalFile = null;
       lastLocalClickedIdx = -1;
       const activeTab = getActiveLocalTab();
@@ -1910,7 +1999,8 @@ window.onerror = function(msg, url, line, col, error) {
 
       if (inp) {
         inp.dataset.fullPath = path || '';
-        if (document.activeElement === inp) {
+        const showFull = !!(appOptions && appOptions.showFullPath);
+        if (document.activeElement === inp || showFull) {
           inp.value = path || '';
         } else {
           inp.value = isDesk ? 'Desktop' : (path || '');
@@ -1931,8 +2021,9 @@ window.onerror = function(msg, url, line, col, error) {
     function onLocalPathInputBlur(inp) {
       if (!inp) return;
       const val = (inp.value || '').trim();
+      const showFull = !!(appOptions && appOptions.showFullPath);
       if (!val || val.toLowerCase() === 'desktop' || val === inp.dataset.fullPath) {
-        inp.value = isDesktopPath(currentLocalPath) ? 'Desktop' : (currentLocalPath || '');
+        inp.value = (!showFull && isDesktopPath(currentLocalPath)) ? 'Desktop' : (currentLocalPath || '');
       }
     }
 
@@ -2713,18 +2804,28 @@ window.onerror = function(msg, url, line, col, error) {
       popup.innerHTML = html;
     }
 
-    async function navigateLocal(path, skipHistory = false) {
+    async function navigateLocal(path, skipHistory = false, forceFresh = false) {
       if (!path || path.trim().toLowerCase() === 'desktop') {
         path = globalDesktopDir || currentLocalPath || 'C:\\Users\\aljailane\\Desktop';
       }
       const prevLocal = (currentLocalPath || '').replace(/[\\/]+$/, '');
+
+      // Optimistic Stale-While-Revalidate instant rendering from localDirCache when available
+      const cacheKey = getLocalDirCacheKey(path);
+      const cachedEntry = !forceFresh ? localDirCache.get(cacheKey) : null;
+      if (cachedEntry && (Date.now() - cachedEntry.ts < LOCAL_DIR_CACHE_TTL_MS) && Array.isArray(cachedEntry.files)) {
+        currentLocalPath = cachedEntry.path || path;
+        updateLocalAddressBarUI(currentLocalPath);
+        renderLocalFiles(cachedEntry.files);
+      }
+
       try {
         const data = await sendRust('local_list', { path });
         const newResolved = (data.path || '').replace(/[\\/]+$/, '');
         if (!skipHistory && !isHistoryNavigating && prevLocal && newResolved && prevLocal.toLowerCase() !== newResolved.toLowerCase()) {
           const tab = getActiveLocalTab();
           if (tab) {
-            tab.historyBack.push(currentLocalPath);
+            tab.historyBack.push(prevLocal);
             tab.historyForward = [];
           }
         }
@@ -2783,12 +2884,13 @@ window.onerror = function(msg, url, line, col, error) {
         navigateLocal('C:\\');
         return;
       }
-      const parent = currentLocalPath.replace(/\\[^\\]+$/, '') || 'C:\\';
+      const parent = getLocalParentDir(currentLocalPath) || 'C:\\';
       navigateLocal(parent);
     }
 
     function refreshLocal() {
-      navigateLocal(currentLocalPath || 'C:\\', true);
+      invalidateLocalDirCache(currentLocalPath || 'C:\\');
+      navigateLocal(currentLocalPath || 'C:\\', true, true);
     }
 
     function onDriveChange() {
@@ -2957,6 +3059,17 @@ window.onerror = function(msg, url, line, col, error) {
     // Remote Directory Listing
     function renderRemoteFiles(files, listError = null) {
       remoteFiles = applyPaneSort([...(files || [])], true);
+      if (!listError && currentRemotePath && Array.isArray(files) && typeof remoteDirCache !== 'undefined') {
+        remoteDirCache.set(getRemoteDirCacheKey(currentRemotePath), {
+          pwd: currentRemotePath,
+          files: remoteFiles,
+          ts: Date.now()
+        });
+        if (remoteDirCache.size > 60) {
+          const oldestKey = remoteDirCache.keys().next().value;
+          if (oldestKey) remoteDirCache.delete(oldestKey);
+        }
+      }
       selectedRemoteFile = null;
       lastRemoteClickedIdx = -1;
       const activeTab = getActiveRemoteTab();
@@ -3225,10 +3338,11 @@ window.onerror = function(msg, url, line, col, error) {
       const tEl = document.getElementById('iatTitle');
       const sEl = document.getElementById('iatSubtitle');
       const undoBtn = document.getElementById('iatUndoBtn');
-      const gotoBtn = document.getElementById('iatGotoBtn');
+      const gotoBtn = document.getElementById('iatOpenBtn') || document.getElementById('iatGotoBtn');
 
-      if (tEl) tEl.textContent = title;
-      if (sEl) sEl.textContent = subtitle;
+      const cleanTitle = String(title || '').replace(/<svg[\s\S]*?<\/svg>\s*/gi, '').trim();
+      if (tEl) tEl.textContent = cleanTitle;
+      if (sEl) sEl.textContent = subtitle || '';
       if (undoBtn) undoBtn.style.display = allowUndo ? 'inline-flex' : 'none';
       if (gotoBtn) gotoBtn.style.display = targetDir ? 'inline-flex' : 'none';
 
@@ -3248,6 +3362,10 @@ window.onerror = function(msg, url, line, col, error) {
         clearTimeout(interactiveToastTimer);
         interactiveToastTimer = null;
       }
+    }
+
+    function hideInteractiveActionToast() {
+      closeInteractiveActionToast();
     }
 
     async function openLastInteractiveTarget() {
@@ -3567,9 +3685,9 @@ window.onerror = function(msg, url, line, col, error) {
       };
 
       const scopeBadge = document.getElementById('imScopeBadge');
-      const summaryEl = document.getElementById('imSelectedSummary');
+      const summaryEl = document.getElementById('imSelectedSummary') || document.getElementById('imSourceSummary');
       const srcPathEl = document.getElementById('imSourcePathDisplay');
-      const destInput = document.getElementById('imDestPathInput');
+      const destInput = document.getElementById('imDestPathInput') || document.getElementById('imTargetDirInput');
       const chipsBox = document.getElementById('imQuickChipsContainer');
 
       if (scopeBadge) {
@@ -3581,7 +3699,7 @@ window.onerror = function(msg, url, line, col, error) {
 
       if (summaryEl) {
         summaryEl.textContent = items.length === 1
-          ? `${items[0].is_dir ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ' : '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg> '}${items[0].name}`
+          ? `${items[0].name} (${items[0].is_dir ? 'Folder' : 'File'})`
           : `${items.length} items selected (${items.slice(0, 3).map(i => i.name).join(', ')}${items.length > 3 ? '...' : ''})`;
       }
       if (srcPathEl) srcPathEl.textContent = `From: ${sourceDir}`;
@@ -3654,7 +3772,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     function selectInteractiveDestChip(path) {
-      const destInput = document.getElementById('imDestPathInput');
+      const destInput = document.getElementById('imDestPathInput') || document.getElementById('imTargetDirInput');
       if (destInput) {
         destInput.value = path;
         updateInteractiveMovePreview();
@@ -3669,8 +3787,8 @@ window.onerror = function(msg, url, line, col, error) {
       if (interactiveMoveContext) {
         interactiveMoveContext.mode = mode === 'copy' ? 'copy' : 'move';
       }
-      const movePill = document.getElementById('imModeMovePill');
-      const copyPill = document.getElementById('imModeCopyPill');
+      const movePill = document.getElementById('imModeMovePill') || document.getElementById('imModeMoveBtn');
+      const copyPill = document.getElementById('imModeCopyPill') || document.getElementById('imModeCopyBtn');
       const submitBtn = document.getElementById('imSubmitBtn');
       const radios = document.getElementsByName('imActionMode');
       for (const r of radios) {
@@ -3678,20 +3796,22 @@ window.onerror = function(msg, url, line, col, error) {
       }
       if (movePill) {
         movePill.style.borderColor = mode === 'move' ? 'var(--accent)' : 'var(--border-color)';
-        movePill.style.background = mode === 'move' ? 'rgba(56, 189, 248, 0.12)' : 'rgba(15, 23, 42, 0.6)';
+        movePill.style.background = mode === 'move' ? 'rgba(56, 189, 248, 0.2)' : 'transparent';
+        movePill.style.color = mode === 'move' ? '#38bdf8' : 'var(--text-muted)';
       }
       if (copyPill) {
         copyPill.style.borderColor = mode === 'copy' ? 'var(--accent)' : 'var(--border-color)';
-        copyPill.style.background = mode === 'copy' ? 'rgba(56, 189, 248, 0.12)' : 'rgba(15, 23, 42, 0.6)';
+        copyPill.style.background = mode === 'copy' ? 'rgba(56, 189, 248, 0.2)' : 'transparent';
+        copyPill.style.color = mode === 'copy' ? '#38bdf8' : 'var(--text-muted)';
       }
       if (submitBtn) {
-        submitBtn.innerHTML = mode === 'copy' ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Copy Now' : '<svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Move Now';
+        submitBtn.innerHTML = mode === 'copy' ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> <span>Copy Here</span>' : '<svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg> <span>Move Here</span>';
       }
       updateInteractiveMovePreview();
     }
 
     function updateInteractiveMovePreview() {
-      const destInput = document.getElementById('imDestPathInput');
+      const destInput = document.getElementById('imDestPathInput') || document.getElementById('imTargetDirInput');
       const previewEl = document.getElementById('imPreviewTargetText');
       if (!destInput || !previewEl || !interactiveMoveContext) return;
       const rawDest = (destInput.value || '').trim() || '/';
@@ -3708,8 +3828,9 @@ window.onerror = function(msg, url, line, col, error) {
 
     async function submitInteractiveMoveModal() {
       if (!interactiveMoveContext) return;
-      const destInput = document.getElementById('imDestPathInput');
-      const openAfter = document.getElementById('imOpenDestAfterCheck')?.checked || false;
+      const destInput = document.getElementById('imDestPathInput') || document.getElementById('imTargetDirInput');
+      const openCheck = document.getElementById('imOpenDestAfterCheck') || document.getElementById('imOpenAfterMove');
+      const openAfter = openCheck?.checked || false;
       const targetDir = (destInput?.value || '').trim();
       if (!targetDir) {
         alert('Please enter or select a destination folder.');
@@ -6379,7 +6500,16 @@ window.onerror = function(msg, url, line, col, error) {
 
     async function promptNewFile(isRemote) {
       closeContextMenu();
-      const fileName = prompt('Enter new file name (e.g. index.php, config.json):');
+      const fileName = await showAppPrompt(
+        `Enter a name for the new ${isRemote ? 'remote' : 'local'} file (e.g. index.php, config.json):`,
+        '',
+        {
+          title: isRemote ? 'Create New Remote File' : 'Create New Local File',
+          windowTitle: '90FTP — Create New File',
+          placeholder: 'e.g. index.php, config.json, .htaccess',
+          confirmText: 'Create File'
+        }
+      );
       if (!fileName || !fileName.trim()) return;
       const cleanName = fileName.trim();
 
@@ -6407,7 +6537,16 @@ window.onerror = function(msg, url, line, col, error) {
 
     async function promptNewFolder(isRemote) {
       closeContextMenu();
-      const folderName = prompt('Enter new folder name:');
+      const folderName = await showAppPrompt(
+        `Enter a name for the new ${isRemote ? 'remote' : 'local'} folder:`,
+        '',
+        {
+          title: isRemote ? 'Create New Remote Folder' : 'Create New Local Folder',
+          windowTitle: '90FTP — Create New Folder',
+          placeholder: 'e.g. assets, backups, public_html',
+          confirmText: 'Create Folder'
+        }
+      );
       if (!folderName || !folderName.trim()) return;
       const cleanName = folderName.trim();
 
@@ -6435,7 +6574,17 @@ window.onerror = function(msg, url, line, col, error) {
 
     async function promptRename(oldPath, oldName, isRemote) {
       closeContextMenu();
-      const newName = prompt(`Rename '${oldName}' to:`, oldName);
+      const newName = await showAppPrompt(
+        `Enter a new name for '${oldName}':`,
+        oldName,
+        {
+          title: isRemote ? 'Rename Remote Item' : 'Rename Local Item',
+          windowTitle: '90FTP — Rename Item',
+          placeholder: oldName,
+          selectStem: true,
+          confirmText: 'Rename'
+        }
+      );
       if (!newName || !newName.trim() || newName.trim() === oldName) return;
       const cleanName = newName.trim();
 
@@ -6912,7 +7061,16 @@ window.onerror = function(msg, url, line, col, error) {
       closeContextMenu();
       if (!archivePath) return;
       const defaultDest = currentLocalPath;
-      const targetDir = prompt('Extract archive to destination folder path:', defaultDest);
+      const targetDir = await showAppPrompt(
+        'Enter destination folder path to extract the local archive:',
+        defaultDest,
+        {
+          title: 'Extract Local Archive to Folder',
+          windowTitle: '90FTP — Extract Archive',
+          placeholder: defaultDest,
+          confirmText: 'Extract Now'
+        }
+      );
       if (!targetDir || !targetDir.trim()) return;
 
       try {
@@ -7205,7 +7363,16 @@ window.onerror = function(msg, url, line, col, error) {
       if (!archivePath) return;
       const fileName = archivePath.split('/').pop() || 'archive.zip';
       const defaultDest = currentRemotePath;
-      const targetDir = prompt('Extract remote archive to destination path on server:', defaultDest);
+      const targetDir = await showAppPrompt(
+        `Enter remote server destination path to extract '${fileName}':`,
+        defaultDest,
+        {
+          title: 'Extract Remote Archive to Custom Path',
+          windowTitle: '90FTP — Remote Archive Extraction',
+          placeholder: defaultDest,
+          confirmText: 'Extract Archive'
+        }
+      );
       if (!targetDir || !targetDir.trim()) return;
 
       const cleanDest = targetDir.trim();
@@ -8083,8 +8250,18 @@ window.onerror = function(msg, url, line, col, error) {
 
     async function promptNewRemoteFolder() {
       if (!isConnected) return;
-      const name = prompt('Enter new remote folder name:');
-      if (!name) return;
+      const rawName = await showAppPrompt(
+        'Enter a name for the new remote folder:',
+        '',
+        {
+          title: 'Create New Remote Folder',
+          windowTitle: '90FTP — Create Remote Folder',
+          placeholder: 'e.g. public_html, backups, uploads',
+          confirmText: 'Create Folder'
+        }
+      );
+      if (!rawName || !rawName.trim()) return;
+      const name = rawName.trim();
       const newPath = currentRemotePath.endsWith('/') ? currentRemotePath + name : currentRemotePath + '/' + name;
       try {
         const res = await sendRust('remote_create_dir', { path: newPath });
@@ -8096,8 +8273,18 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function promptNewLocalFolder() {
-      const name = prompt('Enter new local folder name:');
-      if (!name) return;
+      const rawName = await showAppPrompt(
+        'Enter a name for the new local folder:',
+        '',
+        {
+          title: 'Create New Local Folder',
+          windowTitle: '90FTP — Create Local Folder',
+          placeholder: 'e.g. New Folder, dist, backups',
+          confirmText: 'Create Folder'
+        }
+      );
+      if (!rawName || !rawName.trim()) return;
+      const name = rawName.trim();
       const newPath = currentLocalPath.endsWith('\\') ? currentLocalPath + name : currentLocalPath + '\\' + name;
       try {
         await sendRust('local_create_dir', { path: newPath });
@@ -8108,8 +8295,18 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function promptNewLocalFile() {
-      const name = prompt('Enter new local file name (e.g. index.html):');
-      if (!name) return;
+      const rawName = await showAppPrompt(
+        'Enter a name for the new local file (e.g. index.html, config.json):',
+        '',
+        {
+          title: 'Create New Local File',
+          windowTitle: '90FTP — Create Local File',
+          placeholder: 'e.g. index.html, notes.txt, .env',
+          confirmText: 'Create File'
+        }
+      );
+      if (!rawName || !rawName.trim()) return;
+      const name = rawName.trim();
       const newPath = currentLocalPath.endsWith('\\') ? currentLocalPath + name : currentLocalPath + '\\' + name;
       try {
         await sendRust('local_create_file', { path: newPath });
@@ -11227,7 +11424,7 @@ window.onerror = function(msg, url, line, col, error) {
       if (sel && sel.value !== 'manual') {
         sel.focus();
       } else {
-        const inp = document.getElementById('qcHost');
+        const inp = document.getElementById('connHost') || document.getElementById('qcHost');
         if (inp) inp.focus();
       }
     }
@@ -11334,10 +11531,11 @@ window.onerror = function(msg, url, line, col, error) {
       closeAllMenus();
       const hostInp = document.getElementById('probeHostInput');
       const portInp = document.getElementById('probePortInput');
-      const qcHost = document.getElementById('qcHost')?.value?.trim();
-      const qcPort = document.getElementById('qcPort')?.value?.trim();
-      if (hostInp && !hostInp.value) hostInp.value = qcHost || 'github.com';
-      if (portInp && (!portInp.value || portInp.value === '22')) portInp.value = qcPort || '22';
+      const activeProf = currentConnectedProfile || lastConnectedProfile || selectedQuickSite;
+      const connHost = (document.getElementById('connHost')?.value || document.getElementById('qcHost')?.value || activeProf?.host || '').trim();
+      const connPort = (document.getElementById('connPort')?.value || document.getElementById('qcPort')?.value || (activeProf?.port ? String(activeProf.port) : '')).trim();
+      if (hostInp && !hostInp.value) hostInp.value = connHost || 'github.com';
+      if (portInp && (!portInp.value || portInp.value === '22')) portInp.value = connPort || '22';
       document.getElementById('networkProbeModal')?.classList.add('active');
     }
 
@@ -13007,7 +13205,7 @@ window.onerror = function(msg, url, line, col, error) {
 
     function copyAllLogs() {
       closeAllMenus();
-      const logBox = document.getElementById('logContainer');
+      const logBox = document.getElementById('logBody') || document.getElementById('logContainer');
       if (!logBox) return;
       const text = logBox.innerText || '';
       navigator.clipboard.writeText(text).then(() => {

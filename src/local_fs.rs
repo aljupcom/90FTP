@@ -184,12 +184,16 @@ pub fn list_dir(dir_path: &str) -> Result<Vec<FileItem>, String> {
         });
     }
 
-    // Sort: directories first, then alphabetical case-insensitive
-    items.sort_by(|a, b| {
+    // Sort: directories first, then alphabetical case-insensitive without per-comparison heap allocations
+    items.sort_unstable_by(|a, b| {
         if a.is_dir != b.is_dir {
             b.is_dir.cmp(&a.is_dir)
         } else {
-            a.name.to_lowercase().cmp(&b.name.to_lowercase())
+            a.name
+                .bytes()
+                .map(|c| c.to_ascii_lowercase())
+                .cmp(b.name.bytes().map(|c| c.to_ascii_lowercase()))
+                .then_with(|| a.name.cmp(&b.name))
         }
     });
 

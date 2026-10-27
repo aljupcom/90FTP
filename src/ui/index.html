@@ -605,6 +605,19 @@
       min-width: 200px;
       min-height: 0;
       height: 100%;
+      transition: border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+    .file-pane-wrapper.pane-focused,
+    #leftPane.pane-focused .file-pane-wrapper,
+    #rightPane.pane-focused .file-pane-wrapper {
+      border-color: rgba(56, 189, 248, 0.42);
+      box-shadow: var(--glass-shadow), 0 0 0 1px rgba(56, 189, 248, 0.16);
+    }
+    [data-theme="light"] .file-pane-wrapper.pane-focused,
+    [data-theme="light"] #leftPane.pane-focused .file-pane-wrapper,
+    [data-theme="light"] #rightPane.pane-focused .file-pane-wrapper {
+      border-color: rgba(220, 38, 38, 0.45);
+      box-shadow: var(--glass-shadow), 0 0 0 1px rgba(220, 38, 38, 0.14);
     }
     .file-pane-wrapper::before {
       content: "";
@@ -1501,8 +1514,9 @@
     .modal-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(3px);
+      background: rgba(6, 10, 20, 0.72);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
       display: none;
       align-items: center;
       justify-content: center;
@@ -1518,30 +1532,33 @@
 
     .modal-content {
       background: var(--bg-panel);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 10px;
       width: 820px;
       max-width: 92vw;
       max-height: 88vh;
+      margin: auto;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.82), 0 0 0 1px rgba(255, 255, 255, 0.05);
       overflow: hidden;
+      animation: desktopDialogPop 0.14s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .modal-header {
-      padding: 8px 14px;
+      padding: 9px 14px;
       border-bottom: 1px solid var(--border-color);
       display: flex;
       align-items: center;
       justify-content: space-between;
       font-weight: 700;
-      font-size: 13px;
+      font-size: 12.5px;
       background: var(--bg-header);
+      user-select: none;
     }
 
     .modal-body {
-      padding: 14px;
+      padding: 16px;
       overflow-y: auto;
       flex: 1;
       display: flex;
@@ -1550,10 +1567,11 @@
     }
 
     .modal-footer {
-      padding: 8px 14px;
+      padding: 10px 16px;
       border-top: 1px solid var(--border-color);
       display: flex;
       justify-content: flex-end;
+      align-items: center;
       gap: 8px;
       background: var(--bg-header);
     }
@@ -1998,6 +2016,38 @@
       white-space: pre-wrap;
       word-break: break-all;
       line-height: 1.45;
+    }
+    .desktop-dialog-input-wrap {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .desktop-dialog-input {
+      width: 100%;
+      height: 32px !important;
+      padding: 5px 10px !important;
+      font-size: 12.5px !important;
+      font-family: var(--font-mono);
+      background: rgba(2, 6, 23, 0.65) !important;
+      border: 1px solid rgba(56, 189, 248, 0.38) !important;
+      border-radius: 6px !important;
+      color: var(--text-main) !important;
+      outline: none;
+      transition: border-color 0.14s ease, box-shadow 0.14s ease;
+    }
+    .desktop-dialog-input:focus {
+      border-color: #38bdf8 !important;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.22) !important;
+    }
+    [data-theme="light"] .desktop-dialog-input {
+      background: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+    [data-theme="light"] .desktop-dialog-input:focus {
+      border-color: #dc2626 !important;
+      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.16) !important;
     }
     .desktop-dialog-footer {
       padding: 10px 16px;
@@ -4221,7 +4271,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.69</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.70</span>
         </div>
       </div>
 
@@ -5239,6 +5289,7 @@
           <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           <span>CHMOD Permissions</span>
         </div>
+        <button type="button" class="native-win-close" onclick="closeChmodModal()" title="Close (Esc)">✕</button>
       </div>
       <div class="modal-body">
         <p id="chmodFilename" style="color: var(--accent); font-weight: 600; font-family: var(--font-mono);"></p>
@@ -5453,6 +5504,7 @@
           <svg class="icon" viewBox="0 0 24 24" style="stroke: #f59e0b; width: 22px; height: 22px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <span style="font-size: 15px;">Warning: Unknown Server Host Key</span>
         </div>
+        <button type="button" class="native-win-close" onclick="rejectHostKey()" title="Abort Connection (Esc)">✕</button>
       </div>
       <div class="modal-body" style="padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; font-size: 13px; line-height: 1.55;">
         <div style="font-weight: 600; color: var(--text-main); font-size: 13.5px;">
@@ -5464,13 +5516,13 @@
           If you do not trust this host, select <strong>No</strong> to abort the connection.
         </div>
 
-        <div style="background: #080c14; border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; font-family: var(--font-mono); font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; font-family: var(--font-mono); font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
           <div><strong style="color: var(--text-dim);">Server Host:</strong> <span id="hostKeyServer" style="color: #38bdf8;"></span></div>
-          <div><strong style="color: var(--text-dim);">Key Algorithm:</strong> <span id="hostKeyAlgorithm" style="color: #f1f5f9;"></span></div>
+          <div><strong style="color: var(--text-dim);">Key Algorithm:</strong> <span id="hostKeyAlgorithm" style="color: var(--text-main);"></span></div>
           <div style="word-break: break-all;"><strong style="color: var(--text-dim);">SHA-256 Fingerprint:</strong><br><span id="hostKeyFingerprint" style="color: #22c55e; font-weight: 600;"></span></div>
         </div>
       </div>
-      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; background: rgba(0,0,0,0.2);">
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
         <button class="btn btn-secondary" onclick="rejectHostKey()" style="padding: 7px 18px; min-width: 80px;">No (Cancel)</button>
         <button class="btn btn-primary" onclick="acceptHostKey()" style="padding: 7px 22px; min-width: 110px; background: #0284c7;">
           <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
@@ -5488,6 +5540,7 @@
           <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
           <span id="propTitle">Properties</span>
         </div>
+        <button type="button" class="native-win-close" onclick="closePropertiesModal()" title="Close (Esc)">✕</button>
       </div>
       <div class="modal-body" style="padding: 20px; gap: 14px; font-size: 13px;">
         <div style="display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border-color);">
@@ -5497,7 +5550,7 @@
             <div id="propType" style="color: var(--text-dim); font-size: 12px; margin-top: 2px;"></div>
           </div>
         </div>
-        <div style="display: grid; grid-template-columns: 100px 1fr; gap: 10px 12px; font-family: var(--font-mono); font-size: 12px; background: #080c14; padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+        <div style="display: grid; grid-template-columns: 100px 1fr; gap: 10px 12px; font-family: var(--font-mono); font-size: 12px; background: var(--bg-card); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
           <span style="color: var(--text-dim);">Location:</span>
           <span id="propPath" style="word-break: break-all; color: #38bdf8;"></span>
           <span style="color: var(--text-dim);">Size:</span>
@@ -5522,6 +5575,7 @@
           <svg class="icon" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           <span>Two-Way Folder Sync</span>
         </div>
+        <button type="button" class="native-win-close" onclick="closeSyncModal()" title="Close (Esc)">✕</button>
       </div>
       <div class="modal-body" style="padding: 16px; gap: 12px; font-size: 12px;">
         <div style="display: grid; grid-template-columns: 96px 1fr auto; gap: 8px 10px; align-items: center;">
@@ -6898,6 +6952,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5;">
             The installer package is verified and ready on disk. Click <strong>Install & Upgrade Now</strong> to apply the update immediately.
           </div>
+          <div id="updateActionMsg" style="font-size: 11px; color: #4ade80; font-weight: 600;"></div>
         </div>
       </div>
 
@@ -7065,24 +7120,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
   <!-- Modal: Interactive Move / Copy / Duplicate To Destination (F6) -->
   <div class="modal-overlay" id="interactiveMoveModal" style="z-index: 1086;">
-    <div class="modal-content" style="width: 550px; max-width: 95vw;">
-      <div class="modal-header" style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.14) 0%, rgba(0, 0, 0, 0.2) 100%); border-bottom: 1px solid rgba(56, 189, 248, 0.3);">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 20px;"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
-          <div>
-            <div style="font-weight: 700; font-size: 13.5px; color: var(--text-main);" id="imModalTitle">Interactive Move / Copy Items</div>
-            <div style="font-size: 11px; color: var(--text-dim);" id="imModalSubtitle">Select a quick destination folder or enter a custom target path</div>
-          </div>
+    <div class="native-window-dialog" style="width: 560px; max-width: 95vw;">
+      <div class="native-titlebar">
+        <div class="native-title-left">
+          <span style="display: inline-flex; align-items: center; color: #38bdf8;"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></span>
+          <span style="font-weight: 600;" id="imModalTitle">Interactive Move / Copy Items</span>
+          <span id="imScopeBadge" style="font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 4px; background: rgba(56, 189, 248, 0.16); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); margin-left: 6px;">LOCAL PC</span>
         </div>
-        <button type="button" class="btn btn-secondary" onclick="closeInteractiveMoveModal()" style="padding: 1px 7px; font-size: 11px;">✕</button>
+        <button type="button" class="native-win-close" onclick="closeInteractiveMoveModal()" title="Close (Esc)">✕</button>
       </div>
 
-      <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+      <div class="native-dialog-body" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 13px;">
         <!-- Selected Items Summary & Operation Mode -->
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-            <span style="font-size: 16px;"><svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
-            <div style="font-size: 12px; color: var(--text-main); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="imSourceSummary">1 item selected</div>
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+            <span style="color: #38bdf8; display: inline-flex;"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+            <div style="min-width: 0;">
+              <div style="font-size: 12px; color: var(--text-main); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="imSelectedSummary">1 item selected</div>
+              <div style="font-size: 10.5px; color: var(--text-dim); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="imSourcePathDisplay">/</div>
+            </div>
           </div>
           <div style="display: flex; gap: 6px; flex-shrink: 0;">
             <button type="button" class="btn btn-sm" id="imModeMoveBtn" onclick="setInteractiveMoveMode('move')" style="padding: 3px 10px; font-size: 11px; background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; font-weight: 700;">
@@ -7097,14 +7153,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         <!-- Quick One-Click Destination Chips (Parent .., Subfolders, Recent) -->
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <label style="font-size: 11.5px; font-weight: 600; color: var(--text-dim);">Quick One-Click Destinations:</label>
-          <div id="imQuickChipsContainer" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 135px; overflow-y: auto; padding: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px;">
+          <div id="imQuickChipsContainer" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 135px; overflow-y: auto; padding: 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;">
           </div>
         </div>
 
         <!-- Target Directory Input -->
         <div style="display: flex; flex-direction: column; gap: 5px;">
           <label style="font-size: 11.5px; font-weight: 600; color: var(--text-dim);">Destination Folder Path:</label>
-          <input type="text" id="imTargetDirInput" class="input-text" style="font-family: var(--font-mono, monospace); font-size: 12.5px; padding: 7px 10px;" placeholder="/destination/path">
+          <input type="text" id="imDestPathInput" class="path-input" style="font-family: var(--font-mono, monospace); font-size: 12.5px; height: 30px; padding: 5px 10px;" placeholder="/destination/path" oninput="updateInteractiveMovePreview()" onkeydown="if(event.key==='Enter'){ event.preventDefault(); submitInteractiveMoveModal(); }">
+          <div id="imPreviewTargetText" style="font-size: 11px; color: #38bdf8; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;"></div>
         </div>
 
         <!-- Optional Open Folder After Move -->
@@ -7114,10 +7171,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         </label>
       </div>
 
-      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border-color);">
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border-color);">
         <button type="button" class="btn btn-secondary" onclick="closeInteractiveMoveModal()">Cancel</button>
         <button type="button" class="btn btn-primary" id="imSubmitBtn" onclick="submitInteractiveMoveModal()" style="display: flex; align-items: center; gap: 6px;">
-          <span><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></span>
+          <span><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></span>
           <span id="imSubmitBtnText">Move Here</span>
         </button>
       </div>
@@ -7498,6 +7555,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         <div class="desktop-dialog-content">
           <div class="desktop-dialog-heading" id="appDialogHeading">Notification</div>
           <div class="desktop-dialog-message" id="appDialogMessage"></div>
+          <div class="desktop-dialog-input-wrap" id="appDialogInputWrap" style="display: none;">
+            <input type="text" class="desktop-dialog-input" id="appDialogInput" spellcheck="false" autocomplete="off">
+          </div>
           <div class="desktop-dialog-detail-box" id="appDialogDetailBox" style="display: none;"></div>
         </div>
       </div>
