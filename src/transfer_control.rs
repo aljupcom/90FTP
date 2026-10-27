@@ -13,8 +13,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-/// Chunk size used by every transfer loop.
-pub const CHUNK_SIZE: usize = 128 * 1024;
+/// Chunk size used by every transfer loop (256 KiB high-throughput buffer).
+pub const CHUNK_SIZE: usize = 256 * 1024;
 
 /// Returned when a transfer stopped because the user asked it to. Callers match
 /// on this to tell a cancellation apart from a genuine I/O failure, which must

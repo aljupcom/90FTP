@@ -88,7 +88,7 @@ impl SftpClient {
             cfg.inactivity_timeout = Some(std::time::Duration::from_secs(3600 * 24));
             cfg.keepalive_interval = Some(std::time::Duration::from_secs(15));
             cfg.keepalive_max = 10;
-            cfg.window_size = 4 * 1024 * 1024;
+            cfg.window_size = 16 * 1024 * 1024;
             cfg.maximum_packet_size = 65536;
             let config = Arc::new(cfg);
             let handler = ClientHandler {
@@ -157,8 +157,8 @@ impl SftpClient {
 
             let mut sftp_cfg = SftpConfig::default();
             sftp_cfg.request_timeout_secs = 300; // 5-minute timeout per request for large files and batch transfers
-            sftp_cfg.max_concurrent_writes = 32;
-            sftp_cfg.max_concurrent_reads = 32;
+            sftp_cfg.max_concurrent_writes = 64;
+            sftp_cfg.max_concurrent_reads = 64;
 
             let sftp = SftpSession::new_with_config(channel.into_stream(), sftp_cfg).await
                 .map_err(|e| format!("Failed to initialize SFTP protocol: {}", e))?;
@@ -372,8 +372,9 @@ impl SftpClient {
             let mut remote_f = self.sftp.open(&file_s).await
                 .map_err(|e| format!("Failed to open remote file {}: {}", file_s, e))?;
 
-            let mut local_f = tokio::fs::File::create(&local_s).await
+            let raw_local_f = tokio::fs::File::create(&local_s).await
                 .map_err(|e| format!("Failed to create local destination file {}: {}", local_s, e))?;
+            let mut local_f = tokio::io::BufWriter::with_capacity(512 * 1024, raw_local_f);
 
             let mut chunk = vec![0u8; CHUNK_SIZE];
             let mut total_bytes = 0u64;
@@ -418,8 +419,9 @@ impl SftpClient {
             use tokio::io::AsyncReadExt;
             use tokio::io::AsyncWriteExt;
 
-            let mut local_f = tokio::fs::File::open(&local_s).await
+            let raw_local_f = tokio::fs::File::open(&local_s).await
                 .map_err(|e| format!("Failed to open local file {}: {}", local_s, e))?;
+            let mut local_f = tokio::io::BufReader::with_capacity(512 * 1024, raw_local_f);
 
             let mut remote_f = self.sftp.create(&remote_s).await
                 .map_err(|e| format!("Failed to create remote file {}: {}", remote_s, e))?;

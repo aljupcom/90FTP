@@ -415,6 +415,101 @@ pub fn parse_scp_progress_line(chunk: &str) -> Option<(f64, Option<String>, Opti
     pct_opt.map(|p| (p, speed_opt, file_opt, bytes_opt))
 }
 
+pub fn build_direct_transfer_command(task: &RemoteTransferTask) -> (String, String) {
+    let sources_joined = task
+        .sources
+        .iter()
+        .map(|s| format!("'{}'", s.replace('\'', "'\\''")))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let clean_target_dir = {
+        let trimmed = task.target_path.trim();
+        if trimmed.is_empty() || trimmed == "." {
+            "./".to_string()
+        } else if trimmed.ends_with('/') {
+            trimmed.to_string()
+        } else {
+            format!("{}/", trimmed)
+        }
+    };
+    let target_dest = format!(
+        "{}@{}:'{}'",
+        task.target_user,
+        task.target_host,
+        clean_target_dir.replace('\'', "'\\''")
+    );
+
+    // `accept-new` still trusts the key on first contact (there is no
+    // way to pre-seed a remote-to-remote host key) but it refuses a
+    // changed key, which is what stops a silent MITM on re-connect.
+    // `no` was disabling that check entirely.
+    //
+    // IMPORTANT: When authenticating with a password via `sshpass`, we MUST NOT
+    // pass `-o BatchMode=yes` because OpenSSH disables password prompts completely
+    // in BatchMode, causing `scp`/`ssh` to fail immediately with
+    // `Permission denied (publickey,password)`. Instead, disable pubkey probing
+    // so `sshpass` receives the password prompt immediately.
+    let has_password = !task.target_pass.is_empty() && task.target_auth_type != "key";
+    let ssh_opts = if has_password {
+        "-o StrictHostKeyChecking=accept-new -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive -o ConnectTimeout=20"
+    } else {
+        "-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20"
+    };
+
+    // The password never goes on the sshpass command line (`-p`
+    // exposes it to `ps` for every local user) and never reaches the
+    // UI log. It is written to a 0600 file, consumed with `-f`, and
+    // removed immediately afterwards.
+    if task.transfer_mode == "direct_rsync" {
+        if has_password {
+            let esc_pass = task.target_pass.replace('\'', "'\\''");
+            let cmd = format!(
+                "umask 077; __p=$(mktemp /tmp/.90ftp.XXXXXX); printf '%s' '{p}' > \"$__p\"; \
+sshpass -f \"$__p\" rsync -avz --info=progress2 -e 'ssh -p {port} {opts}' {src} {dst}; __rc=$?; rm -f \"$__p\"; exit $__rc",
+                p = esc_pass,
+                port = task.target_port,
+                opts = ssh_opts,
+                src = sources_joined,
+                dst = target_dest
+            );
+            let shown = format!(
+                "sshpass -f <secure-temp-file> rsync -avz --info=progress2 -e 'ssh -p {} {}' {} {}",
+                task.target_port, ssh_opts, sources_joined, target_dest
+            );
+            (cmd, shown)
+        } else {
+            let cmd = format!(
+                "rsync -avz --info=progress2 -e 'ssh -p {} {}' {} {}",
+                task.target_port, ssh_opts, sources_joined, target_dest
+            );
+            (cmd.clone(), cmd)
+        }
+    } else if has_password {
+        let esc_pass = task.target_pass.replace('\'', "'\\''");
+        let cmd = format!(
+            "umask 077; __p=$(mktemp /tmp/.90ftp.XXXXXX); printf '%s' '{p}' > \"$__p\"; \
+sshpass -f \"$__p\" scp -P {port} -r {opts} {src} {dst}; __rc=$?; rm -f \"$__p\"; exit $__rc",
+            p = esc_pass,
+            port = task.target_port,
+            opts = ssh_opts,
+            src = sources_joined,
+            dst = target_dest
+        );
+        let shown = format!(
+            "sshpass -f <secure-temp-file> scp -P {} -r {} {} {}",
+            task.target_port, ssh_opts, sources_joined, target_dest
+        );
+        (cmd, shown)
+    } else {
+        let cmd = format!(
+            "scp -P {} -r {} {} {}",
+            task.target_port, ssh_opts, sources_joined, target_dest
+        );
+        (cmd.clone(), cmd)
+    }
+}
+
 pub fn execute_transfer_thread(
     mut source_client: Option<RemoteClient>,
     task: RemoteTransferTask,
@@ -490,25 +585,70 @@ pub fn execute_transfer_thread(
 
     emit_log(&format!("Starting remote transfer to {}@{}:{} ({})", task.target_user, task.target_host, task.target_port, task.target_protocol.to_uppercase()), "info");
 
+    // Pre-connect to destination server so we can:
+    // 1. Validate target credentials upfront and ensure `target_path` directory exists before SCP/rsync runs
+    // 2. Reuse the connection immediately for Stream Relay Bridge if direct transfer is unavailable
+    let dest_clean = task.target_path.trim().replace('\\', "/");
+    let dest_base = if dest_clean.is_empty() { ".".to_string() } else { dest_clean };
+    let mut pre_target_client: Option<RemoteClient> = match RemoteClient::connect(
+        &task.target_protocol,
+        &task.target_host,
+        task.target_port,
+        &task.target_user,
+        &task.target_pass,
+        &task.target_auth_type,
+        task.target_key_path.as_deref(),
+        task.target_passphrase.as_deref(),
+        true,
+    ) {
+        Ok(mut c) => {
+            if dest_base != "." && dest_base != "/" && dest_base != "~" {
+                let _ = c.make_dir_all(&dest_base);
+            }
+            Some(c)
+        }
+        Err(e) => {
+            emit_log(&format!("Notice: Target pre-check could not connect directly ({})", e), "warning");
+            None
+        }
+    };
+
     // 1. Direct Server-to-Server Attempt (if source is remote SSH, target is SSH, and mode is direct or auto)
     if task.source_is_remote && (task.target_protocol == "scp" || task.target_protocol == "sftp" || task.target_protocol == "ssh") {
         if let Some(ref src) = source_client {
             if task.transfer_mode == "direct_scp" || task.transfer_mode == "direct_rsync" || task.transfer_mode == "auto" {
                 emit_log("Attempting direct Server-to-Server transfer via native remote command...", "info");
 
-                // If password authentication is required for direct SCP, check for sshpass first
+                // If password authentication is required for direct SCP/rsync, check for sshpass first
                 let mut can_try_direct = true;
-                if task.transfer_mode != "direct_rsync" && !task.target_pass.is_empty() {
-                    let has_sshpass = match src.exec_command_clean("command -v sshpass || which sshpass") {
+                let has_password = !task.target_pass.is_empty() && task.target_auth_type != "key";
+                if has_password {
+                    let mut has_sshpass = match src.exec_command_clean("command -v sshpass || which sshpass") {
                         Ok((0, out)) => !out.trim().is_empty() && !out.contains("not found"),
                         _ => false,
                     };
 
                     if !has_sshpass {
+                        emit_log("Notice: 'sshpass' is not installed on source server. Attempting automatic installation...", "info");
+                        let auto_install_cmd = "if command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq sshpass; \
+elif command -v dnf >/dev/null 2>&1; then (dnf install -y -q epel-release || true) && dnf install -y -q sshpass; \
+elif command -v yum >/dev/null 2>&1; then (yum install -y -q epel-release || true) && yum install -y -q sshpass; \
+elif command -v apk >/dev/null 2>&1; then apk add --no-cache sshpass; \
+elif command -v pacman >/dev/null 2>&1; then pacman -Sy --noconfirm sshpass; \
+elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install sshpass; fi; command -v sshpass || which sshpass";
+                        if let Ok((0, out)) = src.exec_command_clean(auto_install_cmd) {
+                            if out.lines().any(|l| l.contains("sshpass") && !l.contains("not found")) {
+                                has_sshpass = true;
+                                emit_log("✓ Automatically installed 'sshpass' on source server!", "success");
+                            }
+                        }
+                    }
+
+                    if !has_sshpass {
                         can_try_direct = false;
-                        emit_log("Notice: 'sshpass' utility is not installed on the source server.", "warning");
+                        emit_log("Notice: 'sshpass' utility is not available on the source server.", "warning");
                         if task.transfer_mode == "auto" {
-                            emit_log("Direct password SCP requires sshpass. Falling back smoothly to Universal Stream Relay Bridge...", "info");
+                            emit_log("Direct password transfer requires sshpass. Falling back smoothly to Universal Stream Relay Bridge...", "info");
                         } else {
                             let err_msg = "Direct Server-to-Server transfer with password requires 'sshpass' on the source server. Please click 'Install sshpass' in the Remote Transfer dialog or switch strategy to 'Stream Relay Bridge'.";
                             emit_log(err_msg, "error");
@@ -520,47 +660,7 @@ pub fn execute_transfer_thread(
 
                 if can_try_direct {
                     let sources_joined = task.sources.iter().map(|s| format!("'{}'", s.replace('\'', "'\\''"))).collect::<Vec<_>>().join(" ");
-                    let target_dest = format!("{}@{}:'{}'", task.target_user, task.target_host, task.target_path.replace('\'', "'\\''"));
-
-                    // `accept-new` still trusts the key on first contact (there is no
-                    // way to pre-seed a remote-to-remote host key) but it refuses a
-                    // changed key, which is what stops a silent MITM on re-connect.
-                    // `no` was disabling that check entirely.
-                    let ssh_opts = "-o BatchMode=yes -o StrictHostKeyChecking=accept-new";
-
-                    // The password never goes on the sshpass command line (`-p`
-                    // exposes it to `ps` for every local user) and never reaches the
-                    // UI log. It is written to a 0600 file, consumed with `-f`, and
-                    // removed immediately afterwards.
-                    let (direct_cmd, display_cmd) = if task.transfer_mode == "direct_rsync" {
-                        let cmd = format!(
-                            "rsync -avz --info=progress2 -e 'ssh -p {} {}' {} {}",
-                            task.target_port, ssh_opts, sources_joined, target_dest
-                        );
-                        (cmd.clone(), cmd)
-                    } else if !task.target_pass.is_empty() {
-                        let esc_pass = task.target_pass.replace('\'', "'\\''");
-                        let cmd = format!(
-                            "umask 077; __p=$(mktemp /tmp/.90ftp.XXXXXX); printf '%s' '{p}' > \"$__p\"; \
-sshpass -f \"$__p\" scp -P {port} -r {opts} {src} {dst}; __rc=$?; rm -f \"$__p\"; exit $__rc",
-                            p = esc_pass,
-                            port = task.target_port,
-                            opts = ssh_opts,
-                            src = sources_joined,
-                            dst = target_dest
-                        );
-                        let shown = format!(
-                            "sshpass -f <secure-temp-file> scp -P {} -r {} {} {}",
-                            task.target_port, ssh_opts, sources_joined, target_dest
-                        );
-                        (cmd, shown)
-                    } else {
-                        let cmd = format!(
-                            "scp -P {} -r {} {} {}",
-                            task.target_port, ssh_opts, sources_joined, target_dest
-                        );
-                        (cmd.clone(), cmd)
-                    };
+                    let (direct_cmd, display_cmd) = build_direct_transfer_command(&task);
 
                     let total_files = task.sources.len();
                     let first_file = task.sources.first()
@@ -629,12 +729,14 @@ sshpass -f \"$__p\" scp -P {port} -r {opts} {src} {dst}; __rc=$?; rm -f \"$__p\"
                                 return;
                             }
 
+                            let out_lower = out.to_lowercase();
                             let is_clean_success = code == 0
-                                && !out.to_lowercase().contains("command not found")
-                                && !out.to_lowercase().contains("not found")
-                                && !out.to_lowercase().contains("permission denied")
-                                && !out.to_lowercase().contains("connection refused")
-                                && !out.to_lowercase().contains("no such file");
+                                && !out_lower.contains("command not found")
+                                && !out_lower.contains("not found")
+                                && !out_lower.contains("permission denied")
+                                && !out_lower.contains("connection refused")
+                                && !out_lower.contains("no such file")
+                                && !out_lower.contains("host key verification failed");
 
                             if is_clean_success {
                                 emit_progress(
@@ -694,31 +796,37 @@ sshpass -f \"$__p\" scp -P {port} -r {opts} {src} {dst}; __rc=$?; rm -f \"$__p\"
     // 2. Universal Stream Relay Bridge
     emit_log("Connecting to target server for Stream Relay transfer...", "info");
 
-    let mut target_client = match RemoteClient::connect(
-        &task.target_protocol,
-        &task.target_host,
-        task.target_port,
-        &task.target_user,
-        &task.target_pass,
-        &task.target_auth_type,
-        task.target_key_path.as_deref(),
-        task.target_passphrase.as_deref(),
-        true,
-    ) {
-        Ok(c) => c,
-        Err(e) => {
-            emit_error(&format!("Failed to connect to destination server: {}", e));
-            return;
-        }
+    let mut target_client = match pre_target_client.take() {
+        Some(c) => c,
+        None => match RemoteClient::connect(
+            &task.target_protocol,
+            &task.target_host,
+            task.target_port,
+            &task.target_user,
+            &task.target_pass,
+            &task.target_auth_type,
+            task.target_key_path.as_deref(),
+            task.target_passphrase.as_deref(),
+            true,
+        ) {
+            Ok(mut c) => {
+                if dest_base != "." && dest_base != "/" && dest_base != "~" {
+                    if let Err(e) = c.make_dir_all(&dest_base) {
+                        emit_log(&format!("Notice: make_dir_all on {}: {}", dest_base, e), "info");
+                    }
+                }
+                c
+            }
+            Err(e) => {
+                emit_error(&format!("Failed to connect to destination server: {}", e));
+                return;
+            }
+        },
     };
 
     emit_log("Connected to destination server! Ensuring target directory exists...", "info");
-    let dest_clean = task.target_path.trim().replace('\\', "/");
-    let dest_base = if dest_clean.is_empty() { ".".to_string() } else { dest_clean };
     if dest_base != "." && dest_base != "/" && dest_base != "~" {
-        if let Err(e) = target_client.make_dir_all(&dest_base) {
-            emit_log(&format!("Notice: make_dir_all on {}: {}", dest_base, e), "info");
-        }
+        let _ = target_client.make_dir_all(&dest_base);
     }
 
     emit_log("Scanning and enumerating source files and folders...", "info");
@@ -800,42 +908,234 @@ sshpass -f \"$__p\" scp -P {port} -r {opts} {src} {dst}; __rc=$?; rm -f \"$__p\"
                 }
             }
 
-            let elapsed = start_time.elapsed().as_secs_f64();
-            let speed_mb = if elapsed > 0.05 {
-                (done_bytes as f64 / (1024.0 * 1024.0)) / elapsed
-            } else {
-                0.0
-            };
-            let speed_str = format!("{:.2} MB/s", speed_mb);
-            emit_progress(&item.relative_path, done_files, total_files, done_bytes, total_bytes, &speed_str, None);
+            let base_done_bytes = done_bytes;
+            let file_size = item.size;
+            emit_progress(&item.relative_path, done_files, total_files, base_done_bytes, total_bytes, "Starting...", None);
 
-            let transfer_res = if task.source_is_remote {
-                if let Some(ref mut src) = source_client {
-                    let temp_file_path = std::env::temp_dir().join(format!("90ftp_relay_{}_{}.tmp", std::process::id(), done_files));
-                    let temp_str = temp_file_path.to_string_lossy().to_string();
+            let mut transfer_res: Result<(), String> = Err("Not started".to_string());
+            for attempt in 1..=3 {
+                if cancelled.load(Ordering::Relaxed) {
+                    transfer_res = Err("Transfer cancelled by user".to_string());
+                    break;
+                }
 
-                    match src.download_to_local_file(&item.source_full_path, &temp_str) {
-                        Ok(_) => {
-                            let res = target_client.upload_from_local_file(&temp_str, &target_item_path).map(|_| ());
-                            let _ = std::fs::remove_file(&temp_file_path);
-                            res
+                if attempt > 1 {
+                    emit_log(&format!("↻ Retrying transfer (attempt {}/3): {}", attempt, item.relative_path), "warning");
+                    if let Ok(reconn) = RemoteClient::connect(
+                        &task.target_protocol,
+                        &task.target_host,
+                        task.target_port,
+                        &task.target_user,
+                        &task.target_pass,
+                        &task.target_auth_type,
+                        task.target_key_path.as_deref(),
+                        task.target_passphrase.as_deref(),
+                        true,
+                    ) {
+                        target_client = reconn;
+                    }
+                }
+
+                transfer_res = if task.source_is_remote {
+                    if let Some(ref mut src) = source_client {
+                        let temp_file_path = std::env::temp_dir().join(format!("90ftp_relay_{}_{}.tmp", std::process::id(), done_files));
+                        let temp_str = temp_file_path.to_string_lossy().to_string();
+
+                        // Stage 1/2: Download from source server with live progress & cancellation
+                        let dl_start = Instant::now();
+                        let dl_last_tick = std::sync::Mutex::new(Instant::now());
+                        let dl_cancel_slot: Arc<std::sync::Mutex<Option<crate::transfer_control::ControlHandle>>> =
+                            Arc::new(std::sync::Mutex::new(None));
+                        let dl_cancel_slot_cb = dl_cancel_slot.clone();
+                        let cancelled_dl = cancelled.clone();
+                        let exec_dl = exec_script.clone();
+                        let rel_dl = item.relative_path.clone();
+
+                        let dl_ctl = crate::transfer_control::TransferControl::with_progress(
+                            file_size,
+                            Arc::new(move |done, _tot| {
+                                if cancelled_dl.load(Ordering::Relaxed) {
+                                    if let Ok(guard) = dl_cancel_slot_cb.lock() {
+                                        if let Some(ref h) = *guard {
+                                            h.cancel();
+                                        }
+                                    }
+                                    return;
+                                }
+                                if let Ok(mut tick) = dl_last_tick.try_lock() {
+                                    if tick.elapsed().as_millis() >= 200 || (file_size > 0 && done >= file_size) {
+                                        *tick = Instant::now();
+                                        if let Some(ref cb) = exec_dl {
+                                            let el = dl_start.elapsed().as_secs_f64();
+                                            let spd = if el > 0.05 { (done as f64 / (1024.0 * 1024.0)) / el } else { 0.0 };
+                                            let stage_bytes = base_done_bytes + (done / 2);
+                                            let pct = if total_bytes > 0 {
+                                                (stage_bytes as f64 / total_bytes as f64 * 100.0).min(99.5)
+                                            } else {
+                                                50.0
+                                            };
+                                            let payload = json!({
+                                                "percent": pct,
+                                                "current_file": format!("[Relay 1/2: Downloading] {}", rel_dl),
+                                                "done_files": done_files,
+                                                "total_files": total_files,
+                                                "done_bytes": stage_bytes,
+                                                "total_bytes": total_bytes,
+                                                "speed": format!("{:.2} MB/s", spd)
+                                            });
+                                            if let Ok(s) = serde_json::to_string(&payload) {
+                                                cb(format!("if(window.onRemoteTransferProgress) window.onRemoteTransferProgress({});", s));
+                                            }
+                                        }
+                                    }
+                                }
+                            }),
+                        );
+                        *dl_cancel_slot.lock().unwrap() = Some(dl_ctl.handle());
+
+                        match src.download_to_local_file_ctl(&item.source_full_path, &temp_str, &dl_ctl) {
+                            Ok(actual_dl_bytes) => {
+                                // Stage 2/2: Upload to target server with live progress & cancellation
+                                let eff_size = if file_size > 0 { file_size } else { actual_dl_bytes };
+                                let ul_start = Instant::now();
+                                let ul_last_tick = std::sync::Mutex::new(Instant::now());
+                                let ul_cancel_slot: Arc<std::sync::Mutex<Option<crate::transfer_control::ControlHandle>>> =
+                                    Arc::new(std::sync::Mutex::new(None));
+                                let ul_cancel_slot_cb = ul_cancel_slot.clone();
+                                let cancelled_ul = cancelled.clone();
+                                let exec_ul = exec_script.clone();
+                                let rel_ul = item.relative_path.clone();
+
+                                let ul_ctl = crate::transfer_control::TransferControl::with_progress(
+                                    eff_size,
+                                    Arc::new(move |done, _tot| {
+                                        if cancelled_ul.load(Ordering::Relaxed) {
+                                            if let Ok(guard) = ul_cancel_slot_cb.lock() {
+                                                if let Some(ref h) = *guard {
+                                                    h.cancel();
+                                                }
+                                            }
+                                            return;
+                                        }
+                                        if let Ok(mut tick) = ul_last_tick.try_lock() {
+                                            if tick.elapsed().as_millis() >= 200 || (eff_size > 0 && done >= eff_size) {
+                                                *tick = Instant::now();
+                                                if let Some(ref cb) = exec_ul {
+                                                    let el = ul_start.elapsed().as_secs_f64();
+                                                    let spd = if el > 0.05 { (done as f64 / (1024.0 * 1024.0)) / el } else { 0.0 };
+                                                    let stage_bytes = base_done_bytes + (eff_size / 2) + (done / 2);
+                                                    let pct = if total_bytes > 0 {
+                                                        (stage_bytes as f64 / total_bytes as f64 * 100.0).min(99.9)
+                                                    } else {
+                                                        90.0
+                                                    };
+                                                    let payload = json!({
+                                                        "percent": pct,
+                                                        "current_file": format!("[Relay 2/2: Uploading] {}", rel_ul),
+                                                        "done_files": done_files,
+                                                        "total_files": total_files,
+                                                        "done_bytes": stage_bytes,
+                                                        "total_bytes": total_bytes,
+                                                        "speed": format!("{:.2} MB/s", spd)
+                                                    });
+                                                    if let Ok(s) = serde_json::to_string(&payload) {
+                                                        cb(format!("if(window.onRemoteTransferProgress) window.onRemoteTransferProgress({});", s));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }),
+                                );
+                                *ul_cancel_slot.lock().unwrap() = Some(ul_ctl.handle());
+
+                                let res = target_client.upload_from_local_file_ctl(&temp_str, &target_item_path, &ul_ctl).map(|_| ());
+                                let _ = std::fs::remove_file(&temp_file_path);
+                                res
+                            }
+                            Err(e) => {
+                                let _ = std::fs::remove_file(&temp_file_path);
+                                Err(format!("Download failed for {}: {}", item.source_full_path, e))
+                            }
                         }
-                        Err(e) => {
-                            let _ = std::fs::remove_file(&temp_file_path);
-                            Err(format!("Download failed for {}: {}", item.source_full_path, e))
-                        }
+                    } else {
+                        Err("Source client disconnected".to_string())
                     }
                 } else {
-                    Err("Source client disconnected".to_string())
+                    let ul_start = Instant::now();
+                    let ul_last_tick = std::sync::Mutex::new(Instant::now());
+                    let ul_cancel_slot: Arc<std::sync::Mutex<Option<crate::transfer_control::ControlHandle>>> =
+                        Arc::new(std::sync::Mutex::new(None));
+                    let ul_cancel_slot_cb = ul_cancel_slot.clone();
+                    let cancelled_ul = cancelled.clone();
+                    let exec_ul = exec_script.clone();
+                    let rel_ul = item.relative_path.clone();
+
+                    let ul_ctl = crate::transfer_control::TransferControl::with_progress(
+                        file_size,
+                        Arc::new(move |done, _tot| {
+                            if cancelled_ul.load(Ordering::Relaxed) {
+                                if let Ok(guard) = ul_cancel_slot_cb.lock() {
+                                    if let Some(ref h) = *guard {
+                                        h.cancel();
+                                    }
+                                }
+                                return;
+                            }
+                            if let Ok(mut tick) = ul_last_tick.try_lock() {
+                                if tick.elapsed().as_millis() >= 200 || (file_size > 0 && done >= file_size) {
+                                    *tick = Instant::now();
+                                    if let Some(ref cb) = exec_ul {
+                                        let el = ul_start.elapsed().as_secs_f64();
+                                        let spd = if el > 0.05 { (done as f64 / (1024.0 * 1024.0)) / el } else { 0.0 };
+                                        let cur_bytes = base_done_bytes + done;
+                                        let pct = if total_bytes > 0 {
+                                            (cur_bytes as f64 / total_bytes as f64 * 100.0).min(99.9)
+                                        } else {
+                                            90.0
+                                        };
+                                        let payload = json!({
+                                            "percent": pct,
+                                            "current_file": rel_ul.clone(),
+                                            "done_files": done_files,
+                                            "total_files": total_files,
+                                            "done_bytes": cur_bytes,
+                                            "total_bytes": total_bytes,
+                                            "speed": format!("{:.2} MB/s", spd)
+                                        });
+                                        if let Ok(s) = serde_json::to_string(&payload) {
+                                            cb(format!("if(window.onRemoteTransferProgress) window.onRemoteTransferProgress({});", s));
+                                        }
+                                    }
+                                }
+                            }
+                        }),
+                    );
+                    *ul_cancel_slot.lock().unwrap() = Some(ul_ctl.handle());
+                    target_client.upload_from_local_file_ctl(&item.source_full_path, &target_item_path, &ul_ctl).map(|_| ())
+                };
+
+                if transfer_res.is_ok() || cancelled.load(Ordering::Relaxed) {
+                    break;
                 }
-            } else {
-                target_client.upload_from_local_file(&item.source_full_path, &target_item_path).map(|_| ())
-            };
+            }
+
+            if cancelled.load(Ordering::Relaxed) {
+                emit_log("Transfer cancelled by user.", "warning");
+                emit_complete(false, "Transfer cancelled by user", done_files, done_bytes, start_time.elapsed().as_secs_f64());
+                return;
+            }
 
             match transfer_res {
                 Ok(_) => {
                     done_files += 1;
                     done_bytes += item.size;
+                    let elapsed = start_time.elapsed().as_secs_f64();
+                    let speed_mb = if elapsed > 0.05 {
+                        (done_bytes as f64 / (1024.0 * 1024.0)) / elapsed
+                    } else {
+                        0.0
+                    };
+                    emit_progress(&item.relative_path, done_files, total_files, done_bytes, total_bytes, &format!("{:.2} MB/s", speed_mb), None);
                     emit_log(&format!("✓ Transferred: {} ({})", item.relative_path, format_size(item.size)), "success");
                 }
                 Err(e) => {
@@ -920,6 +1220,83 @@ mod tests {
         assert_eq!(task.transfer_mode, "auto");
         assert_eq!(task.overwrite, "overwrite");
         assert!(task.recursive);
+    }
+
+    #[test]
+    fn test_direct_command_with_password_never_uses_batchmode() {
+        let task = RemoteTransferTask {
+            source_is_remote: true,
+            sources: vec!["/home/memychat.tar.gz".to_string()],
+            transfer_mode: "auto".to_string(),
+            target_protocol: "sftp".to_string(),
+            target_host: "84.46.254.56".to_string(),
+            target_port: 22,
+            target_user: "root".to_string(),
+            target_pass: "MySecretPass123!".to_string(),
+            target_auth_type: "password".to_string(),
+            target_key_path: None,
+            target_passphrase: None,
+            target_path: "/home/memychat/htdocs/memychat.com".to_string(),
+            recursive: true,
+            overwrite: "overwrite".to_string(),
+        };
+
+        let (direct_cmd, display_cmd) = build_direct_transfer_command(&task);
+        assert!(
+            !direct_cmd.contains("BatchMode=yes"),
+            "BatchMode=yes disables password prompts and breaks sshpass: {direct_cmd}"
+        );
+        assert!(
+            direct_cmd.contains("StrictHostKeyChecking=accept-new"),
+            "Must enforce StrictHostKeyChecking=accept-new: {direct_cmd}"
+        );
+        assert!(
+            direct_cmd.contains("PubkeyAuthentication=no"),
+            "Must disable pubkey probing when password is supplied: {direct_cmd}"
+        );
+        assert!(
+            direct_cmd.contains("sshpass -f \"$__p\""),
+            "Must pass password via secure 0600 file: {direct_cmd}"
+        );
+        assert!(
+            !display_cmd.contains("MySecretPass123!"),
+            "Display command must never expose the password: {display_cmd}"
+        );
+        assert!(
+            direct_cmd.contains("'/home/memychat/htdocs/memychat.com/'"),
+            "Target directory path should end with trailing slash: {direct_cmd}"
+        );
+    }
+
+    #[test]
+    fn test_direct_command_without_password_uses_batchmode() {
+        let task = RemoteTransferTask {
+            source_is_remote: true,
+            sources: vec!["/home/memychat.tar.gz".to_string()],
+            transfer_mode: "direct_scp".to_string(),
+            target_protocol: "sftp".to_string(),
+            target_host: "84.46.254.56".to_string(),
+            target_port: 22,
+            target_user: "root".to_string(),
+            target_pass: String::new(),
+            target_auth_type: "key".to_string(),
+            target_key_path: None,
+            target_passphrase: None,
+            target_path: "/home/memychat/htdocs/memychat.com".to_string(),
+            recursive: true,
+            overwrite: "overwrite".to_string(),
+        };
+
+        let (direct_cmd, _display_cmd) = build_direct_transfer_command(&task);
+        assert!(
+            direct_cmd.contains("BatchMode=yes"),
+            "Key-based direct transfer must use BatchMode=yes so it never hangs: {direct_cmd}"
+        );
+        assert!(
+            direct_cmd.contains("StrictHostKeyChecking=accept-new"),
+            "Must enforce StrictHostKeyChecking=accept-new: {direct_cmd}"
+        );
+        assert!(!direct_cmd.contains("sshpass"));
     }
 
     #[test]

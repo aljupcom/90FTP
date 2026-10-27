@@ -48,7 +48,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.67';
+    let APP_CURRENT_VERSION = '0.0.68';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -1298,6 +1298,7 @@ window.onerror = function(msg, url, line, col, error) {
       const tbody = document.getElementById('localFileList');
       if (!tbody) return;
       tbody.innerHTML = '';
+      const frag = document.createDocumentFragment();
 
       const canGoUp = !isLocalRoot(currentLocalPath);
       if (canGoUp) {
@@ -1332,7 +1333,7 @@ window.onerror = function(msg, url, line, col, error) {
           <td class="mono-cell">Parent Directory</td>
         `;
         attachInteractiveRowDropTarget(trUp, false, parentDirPath, parentBaseName, true);
-        tbody.appendChild(trUp);
+        frag.appendChild(trUp);
       }
 
       const filterLower = (localQuickFilterText || '').trim().toLowerCase();
@@ -1341,8 +1342,10 @@ window.onerror = function(msg, url, line, col, error) {
       if (localFiles.length === 0) {
         const emptyTr = document.createElement('tr');
         emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '30px'} 10px; font-style: italic;">Folder is empty</td>`;
-        tbody.appendChild(emptyTr);
+        frag.appendChild(emptyTr);
+        tbody.appendChild(frag);
         updatePaneStatsBadge(false);
+        updateFsWatcher();
         return;
       }
 
@@ -1478,7 +1481,7 @@ window.onerror = function(msg, url, line, col, error) {
             <td class="mono-cell">${f.modified || '-'}</td>
             <td class="mono-cell">${getHumanFileType(fileName, !!f.is_dir)}</td>
           `;
-          tbody.appendChild(tr);
+          frag.appendChild(tr);
         } catch (itemErr) {
           console.error('Error rendering file item:', f, itemErr);
         }
@@ -1487,9 +1490,10 @@ window.onerror = function(msg, url, line, col, error) {
       if (renderedCount === 0 && filterLower) {
         const noMatchTr = document.createElement('tr');
         noMatchTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: 20px 10px; font-style: italic;">No items match filter "${escapeHtml(localQuickFilterText)}"</td>`;
-        tbody.appendChild(noMatchTr);
+        frag.appendChild(noMatchTr);
       }
 
+      tbody.appendChild(frag);
       updatePaneStatsBadge(false);
       updateFsWatcher();
     }
@@ -2719,6 +2723,7 @@ window.onerror = function(msg, url, line, col, error) {
       const tbody = document.getElementById('remoteFileList');
       if (!tbody) return;
       tbody.innerHTML = '';
+      const frag = document.createDocumentFragment();
 
       const canGoUp = !isRemoteRoot(currentRemotePath);
       if (canGoUp) {
@@ -2753,7 +2758,7 @@ window.onerror = function(msg, url, line, col, error) {
           <td class="mono-cell">Parent Directory</td>
         `;
         attachInteractiveRowDropTarget(trUp, true, parentDirPath, parentBaseName, true);
-        tbody.appendChild(trUp);
+        frag.appendChild(trUp);
       }
 
       if (listError) {
@@ -2775,8 +2780,10 @@ window.onerror = function(msg, url, line, col, error) {
             </div>
           </td>
         `;
-        tbody.appendChild(errTr);
+        frag.appendChild(errTr);
+        tbody.appendChild(frag);
         updatePaneStatsBadge(true);
+        updateFsWatcher();
         return;
       }
 
@@ -2786,8 +2793,10 @@ window.onerror = function(msg, url, line, col, error) {
       if (remoteFiles.length === 0) {
         const emptyTr = document.createElement('tr');
         emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '25px'}; font-style: italic;">Empty Directory</td>`;
-        tbody.appendChild(emptyTr);
+        frag.appendChild(emptyTr);
+        tbody.appendChild(frag);
         updatePaneStatsBadge(true);
+        updateFsWatcher();
         return;
       }
 
@@ -2923,7 +2932,7 @@ window.onerror = function(msg, url, line, col, error) {
             <td class="mono-cell">${f.modified || '-'}</td>
             <td class="mono-cell">${f.permissions || '-'}</td>
           `;
-          tbody.appendChild(tr);
+          frag.appendChild(tr);
         } catch (itemErr) {
           console.error('Error rendering remote file item:', f, itemErr);
         }
@@ -2932,9 +2941,10 @@ window.onerror = function(msg, url, line, col, error) {
       if (renderedCount === 0 && filterLower) {
         const noMatchTr = document.createElement('tr');
         noMatchTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: 20px 10px; font-style: italic;">No items match filter "${escapeHtml(remoteQuickFilterText)}"</td>`;
-        tbody.appendChild(noMatchTr);
+        frag.appendChild(noMatchTr);
       }
 
+      tbody.appendChild(frag);
       updatePaneStatsBadge(true);
       updateFsWatcher();
     }
@@ -3638,7 +3648,26 @@ window.onerror = function(msg, url, line, col, error) {
       }
     }
 
-    async function navigateRemote(path, skipHistory = false) {
+    const remoteDirCache = new Map();
+    const REMOTE_DIR_CACHE_TTL_MS = 60000;
+
+    function getRemoteDirCacheKey(path) {
+      const prof = currentConnectedProfile || lastConnectedProfile;
+      const hostKey = prof && prof.host ? `${prof.host}:${prof.port || 22}:${prof.username || ''}` : 'active';
+      const normPath = (path || '/').replace(/\/+$/, '') || '/';
+      return `${hostKey}|${normPath}`;
+    }
+
+    function invalidateRemoteDirCache(path = null) {
+      if (!path) {
+        remoteDirCache.clear();
+        return;
+      }
+      const key = getRemoteDirCacheKey(path);
+      remoteDirCache.delete(key);
+    }
+
+    async function navigateRemote(path, skipHistory = false, forceFresh = false) {
       if (!path) path = currentRemotePath || '/';
       const prevRemote = (currentRemotePath || '').replace(/\/+$/, '') || '/';
 
@@ -3663,6 +3692,17 @@ window.onerror = function(msg, url, line, col, error) {
         }
       }
 
+      // Optimistic Stale-While-Revalidate instant rendering from cache when available
+      const cacheKey = getRemoteDirCacheKey(path);
+      const cachedEntry = !forceFresh ? remoteDirCache.get(cacheKey) : null;
+      if (cachedEntry && (Date.now() - cachedEntry.ts < REMOTE_DIR_CACHE_TTL_MS) && Array.isArray(cachedEntry.files)) {
+        const normTarget = (cachedEntry.pwd || path || '/').replace(/\/+$/, '') || '/';
+        currentRemotePath = normTarget;
+        const rInput = document.getElementById('remotePathInput');
+        if (rInput) rInput.value = currentRemotePath;
+        renderRemoteFiles(cachedEntry.files, null);
+      }
+
       try {
         addLog('CWD -> ' + path, 'cmd');
         const data = await sendRust('remote_cd', { path });
@@ -3681,6 +3721,16 @@ window.onerror = function(msg, url, line, col, error) {
         if (data.remote_history) updateRemoteHistory(data.remote_history);
         if (data.list_error) {
           addLog('Remote directory notice: ' + data.list_error, 'error');
+        } else if (Array.isArray(data.files)) {
+          remoteDirCache.set(getRemoteDirCacheKey(currentRemotePath), {
+            pwd: currentRemotePath,
+            files: data.files,
+            ts: Date.now()
+          });
+          if (remoteDirCache.size > 60) {
+            const oldestKey = remoteDirCache.keys().next().value;
+            if (oldestKey) remoteDirCache.delete(oldestKey);
+          }
         }
         renderRemoteFiles(data.files, data.list_error);
         syncCurrentRemoteTabState();
@@ -3737,7 +3787,8 @@ window.onerror = function(msg, url, line, col, error) {
 
     function refreshRemote() {
       if (!isConnected && !(appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile)) return;
-      navigateRemote(currentRemotePath || '/', true);
+      invalidateRemoteDirCache(currentRemotePath || '/');
+      navigateRemote(currentRemotePath || '/', true, true);
     }
 
     // ========================================================
@@ -3845,6 +3896,11 @@ window.onerror = function(msg, url, line, col, error) {
         if (!data || !Array.isArray(data.files)) return;
         if ((currentRemotePath || '') !== path) return;
         invalidateFolderSizeCache(path);
+        remoteDirCache.set(getRemoteDirCacheKey(path), {
+          pwd: path,
+          files: data.files,
+          ts: Date.now()
+        });
         renderRemoteFiles(data.files);
         restorePaneSelection(true, selected);
         if (scroller) scroller.scrollTop = scrollTop;
@@ -5350,24 +5406,61 @@ window.onerror = function(msg, url, line, col, error) {
 
       renderContextMenuItems(type, item);
 
+      // Measure actual rendered height & width before showing to prevent any bottom/right clipping
+      menu.style.visibility = 'hidden';
+      menu.style.left = '0px';
+      menu.style.top = '0px';
       menu.classList.add('active');
 
-      const menuWidth = 260;
-      const menuHeight = 360;
+      const rect = menu.getBoundingClientRect();
+      const menuWidth = rect.width || 255;
+      const menuHeight = rect.height || 320;
+      const pad = 8;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
       let x = e.clientX;
       let y = e.clientY;
 
-      if (x + menuWidth > window.innerWidth) {
-        x = window.innerWidth - menuWidth - 10;
-      }
-      if (y + menuHeight > window.innerHeight) {
-        y = window.innerHeight - menuHeight - 10;
+      if (x + menuWidth + pad > vw) {
+        x = Math.max(pad, e.clientX - menuWidth);
+        if (x + menuWidth + pad > vw) {
+          x = Math.max(pad, vw - menuWidth - pad);
+        }
       }
 
-      menu.style.left = `${Math.max(10, x)}px`;
-      menu.style.top = `${Math.max(10, y)}px`;
+      if (y + menuHeight + pad > vh) {
+        if (e.clientY - menuHeight >= pad) {
+          y = e.clientY - menuHeight;
+        } else {
+          y = Math.max(pad, vh - menuHeight - pad);
+        }
+      }
 
-      // Local context menu is fully rendered synchronously by renderContextMenuItems
+      menu.style.left = `${Math.max(pad, Math.round(x))}px`;
+      menu.style.top = `${Math.max(pad, Math.round(y))}px`;
+      menu.style.visibility = 'visible';
+
+      // Dynamic flyout collision detection for cascading submenus
+      const subItems = menu.querySelectorAll('.context-menu-sub');
+      subItems.forEach(sub => {
+        sub.addEventListener('mouseenter', () => {
+          sub.classList.remove('open-left', 'open-up');
+          const submenu = sub.querySelector('.context-submenu');
+          if (!submenu) return;
+          const subRect = submenu.getBoundingClientRect();
+          const parentRect = sub.getBoundingClientRect();
+          const subW = subRect.width || 245;
+          const subH = subRect.height || 180;
+
+          if (parentRect.right + subW + pad > window.innerWidth) {
+            sub.classList.add('open-left');
+          }
+          if (parentRect.top + subH + pad > window.innerHeight) {
+            sub.classList.add('open-up');
+          }
+        });
+      });
     }
 
     function renderLocalShellContextMenu(item, verbs) {
@@ -5600,6 +5693,7 @@ window.onerror = function(msg, url, line, col, error) {
 
       const isRemote = type.startsWith('remote');
       const isBlank = type.endsWith('_blank');
+      const chevronSvg = `<svg class="context-menu-sub-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
 
       let html = '';
 
@@ -5611,7 +5705,7 @@ window.onerror = function(msg, url, line, col, error) {
           html += `
             <div class="context-menu-item" onclick="clipboardPasteHere(${isRemote})" style="color: #22c55e;">
               <svg class="icon" viewBox="0 0 24 24" style="color: #22c55e;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-              <span style="font-weight: 700;">Paste ${interactiveClipboard.items.length} Item(s) Here (${interactiveClipboard.mode === 'cut' ? 'Move' : 'Copy'})</span>
+              <span style="font-weight: 700;">Paste ${interactiveClipboard.items.length} Item(s) (${interactiveClipboard.mode === 'cut' ? 'Move' : 'Copy'})</span>
               <span class="shortcut">Ctrl+V</span>
             </div>
             <div class="context-menu-separator"></div>
@@ -5631,43 +5725,62 @@ window.onerror = function(msg, url, line, col, error) {
             <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
             <span>New Folder...</span>
           </div>
-          <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'all');">
-            <svg class="icon" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            <span>Select All (Files & Folders)</span>
-            <span class="shortcut">Ctrl+A</span>
+          <div class="context-menu-separator"></div>
+          <div class="context-menu-sub">
+            <div class="context-menu-item">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <span>Selection</span>
+              ${chevronSvg}
+            </div>
+            <div class="context-submenu">
+              <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'all');">
+                <svg class="icon" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span>Select All (Files & Folders)</span>
+                <span class="shortcut">Ctrl+A</span>
+              </div>
+              <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'files');">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Select Files Only</span>
+              </div>
+              <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'folders');">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Select Folders Only</span>
+              </div>
+              <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'invert');">
+                <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <span>Invert Selection</span>
+              </div>
+            </div>
           </div>
-          <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'files');">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <span>Select Files Only</span>
-          </div>
-          <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'folders');">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            <span>Select Folders Only</span>
-          </div>
-          <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'invert');">
-            <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            <span>Invert Selection</span>
+          <div class="context-menu-sub">
+            <div class="context-menu-item">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+              <span>Directory Tools</span>
+              ${chevronSvg}
+            </div>
+            <div class="context-submenu">
+              <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(dirPath)}')">
+                <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy Directory Path</span>
+              </div>
+              ${isRemote ? `
+              <div class="context-menu-item" onclick="openRemoteTerminal('${escapeJsString(dirPath)}')">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                <span>Open Terminal Here</span>
+              </div>
+              <div class="context-menu-item" onclick="remoteCompressCurrentDirectory()">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                <span>Compress Current Remote Directory...</span>
+              </div>
+              ` : `
+              <div class="context-menu-item" onclick="compressCurrentLocalDirectory()">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                <span>Compress Current Directory...</span>
+              </div>
+              `}
+            </div>
           </div>
           <div class="context-menu-separator"></div>
-          <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(dirPath)}')">
-            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span>Copy Directory Path</span>
-          </div>
-          ${isRemote ? `
-          <div class="context-menu-item" onclick="openRemoteTerminal('${escapeJsString(dirPath)}')">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-            <span>Open Terminal Here</span>
-          </div>
-          <div class="context-menu-item" onclick="remoteCompressCurrentDirectory()">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-            <span>Compress Current Remote Directory...</span>
-          </div>
-          ` : `
-          <div class="context-menu-item" onclick="compressCurrentLocalDirectory()">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-            <span>Compress Current Directory...</span>
-          </div>
-          `}
           <div class="context-menu-item" onclick="${isRemote ? 'refreshRemote()' : 'refreshLocal()'}">
             <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             <span>Refresh</span>
@@ -5679,61 +5792,42 @@ window.onerror = function(msg, url, line, col, error) {
         const selCount = selectedItems.length > 1 ? selectedItems.length : 1;
         const canGoUp = isRemote ? !isRemoteRoot(currentRemotePath) : !isLocalRoot(currentLocalPath);
         const hasClipboard = interactiveClipboard && Array.isArray(interactiveClipboard.items) && interactiveClipboard.items.length > 0;
+        const isArchive = !item.is_dir && (isRemote ? isArchiveFilenameJs(item.name) : item.name.toLowerCase().endsWith('.zip'));
+        const otherFiles = isRemote ? localFiles : remoteFiles;
+        const counterpart = !item.is_dir ? otherFiles.find(f => !f.is_dir && f.name.toLowerCase() === item.name.toLowerCase()) : null;
 
-        html += `<div class="context-menu-header">${selCount > 1 ? `${selCount} Items Selected` : ((item.is_dir ? 'Folder: ' : 'File: ') + escapeHtml(item.name.length > 20 ? item.name.substring(0, 18) + '...' : item.name))}</div>`;
+        html += `<div class="context-menu-header">${selCount > 1 ? `${selCount} Items Selected` : ((item.is_dir ? 'Folder: ' : 'File: ') + escapeHtml(item.name.length > 24 ? item.name.substring(0, 22) + '...' : item.name))}</div>`;
 
+        // 1. Primary Open / Edit Actions
         if (item.is_dir) {
           html += `
             <div class="context-menu-item" onclick="${isRemote ? `navigateRemote('${escapeJsString(item.path)}')` : `navigateLocal('${escapeJsString(item.path)}')`}">
               <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              <span>Open Folder</span>
+              <span style="font-weight: 600;">Open Folder</span>
               <span class="shortcut">Enter</span>
             </div>
             <div class="context-menu-item" onclick="closeContextMenu(); openFolderInNewTab(${isRemote}, '${escapeJsString(item.path)}')">
               <svg class="icon" viewBox="0 0 24 24" style="color: var(--accent);"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-              <span style="font-weight: 600;">Open Folder in New Tab</span>
+              <span>Open in New Tab</span>
               <span class="shortcut">Middle-Click</span>
             </div>
-            <div class="context-menu-item" onclick="closeContextMenu(); calculateFolderSize('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
-              <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-              <span>Calculate Folder Size...</span>
-            </div>
-            <div class="context-menu-item" onclick="closeContextMenu(); openContentGrepAtPath('${escapeJsString(item.path)}', ${isRemote})">
-              <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <span>Search Text Inside Folder (Grep)...</span>
-            </div>
-            <div class="context-menu-item" onclick="closeContextMenu(); quickBookmarkFolder('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
-              <svg class="icon" viewBox="0 0 24 24" style="color: #fbbf24;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              <span>Bookmark This Folder</span>
-            </div>
           `;
-          if (isRemote) {
-            html += `
-              <div class="context-menu-item" onclick="openRemoteTerminal('${escapeJsString(item.path)}')">
-                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-                <span>Open Terminal Here</span>
-              </div>
-            `;
-          }
         } else {
           html += `
             <div class="context-menu-item" onclick="${isRemote ? `openRemoteFileInEditor('${escapeJsString(item.path)}')` : `openLocalFileInEditor('${escapeJsString(item.path)}')`}">
-              <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-              <span>Edit in Code Editor</span>
+              <svg class="icon" viewBox="0 0 24 24" style="color: var(--accent);"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              <span style="font-weight: 600;">Edit in Code Editor</span>
               <span class="shortcut">F4</span>
-            </div>
-            <div class="context-menu-item" onclick="closeContextMenu(); openFileInspectorModal('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
-              <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              <span>Live Log Tail / Hex Inspector...</span>
             </div>
           `;
         }
 
+        // 2. Primary Transfer & Server-to-Server Dispatch Actions
         if (isRemote) {
           html += `
             <div class="context-menu-item" onclick="${selCount > 1 ? `transferDownload()` : (item.is_dir ? `downloadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `downloadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`)}">
               <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>${selCount > 1 ? `Download ${selCount} Selected Items to Local` : 'Download to Local'}</span>
+              <span style="font-weight: 600;">${selCount > 1 ? `Download ${selCount} Items to Local` : 'Download to Local'}</span>
             </div>
             <div class="context-menu-item" onclick="closeContextMenu(); openRemoteTransferModal('${escapeJsString(item.path)}', true)">
               <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
@@ -5744,29 +5838,19 @@ window.onerror = function(msg, url, line, col, error) {
           html += `
             <div class="context-menu-item" onclick="${selCount > 1 ? `transferUpload()` : (item.is_dir ? `uploadFolderDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')` : `uploadFileDirect('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')`)}">
               <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span>${selCount > 1 ? `Upload ${selCount} Selected Items to Server` : 'Upload to Server'}</span>
+              <span style="font-weight: 600;">${selCount > 1 ? `Upload ${selCount} Items to Server` : 'Upload to Server'}</span>
+            </div>
+            <div class="context-menu-item" onclick="closeContextMenu(); openRemoteTransferModal('${escapeJsString(item.path)}', false)">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              <span style="font-weight: 600;">Remote Transfer / Dispatch...</span>
             </div>
           `;
         }
 
         html += `<div class="context-menu-separator"></div>`;
 
-        // Interactive Move & Clipboard Actions
-        if (canGoUp) {
-          html += `
-            <div class="context-menu-item" onclick="moveSelectedToParent(${isRemote})">
-              <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
-              <span style="font-weight: 600; color: #fbbf24;">Move to .. (Parent Directory)</span>
-              <span class="shortcut">Alt+↑</span>
-            </div>
-          `;
-        }
+        // 3. Quick Clipboard Actions + Cascading Submenu Groups (7-Zip / Desktop Explorer Style)
         html += `
-          <div class="context-menu-item" onclick="openInteractiveMoveModal(${isRemote}, 'move')">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-            <span style="font-weight: 600;">Interactive Move / Copy To...</span>
-            <span class="shortcut">F6</span>
-          </div>
           <div class="context-menu-item" onclick="clipboardCutSelected(${isRemote})">
             <svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
             <span>Cut</span>
@@ -5784,77 +5868,206 @@ window.onerror = function(msg, url, line, col, error) {
             <span class="shortcut">Ctrl+V</span>
           </div>
           ` : ''}
-          ${!item.is_dir ? `
-          <div class="context-menu-item" onclick="duplicateItemsInPlace(${isRemote}, [{ path: '${escapeJsString(item.path)}', name: '${escapeJsString(item.name)}', is_dir: false }])">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
-            <span>Duplicate File</span>
-          </div>
-          ` : ''}
           <div class="context-menu-separator"></div>
         `;
 
-        if (!isRemote) {
-          const isArchive = !item.is_dir && item.name.toLowerCase().endsWith('.zip');
-          if (isArchive) {
-            html += `
-              <div class="context-menu-item" onclick="extractLocalHere('${escapeJsString(item.path)}')">
-                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
-                <span style="font-weight: 600;">Extract Here</span>
-              </div>
-              <div class="context-menu-item" onclick="extractLocalToSubfolder('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
-                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-                <span>Extract to ${escapeHtml(item.name.replace(/\.[^/.]+$/, ''))}/</span>
-              </div>
-              <div class="context-menu-item" onclick="promptExtractLocalFolder('${escapeJsString(item.path)}')">
-                <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                <span>Extract to Custom Folder...</span>
-              </div>
-            `;
-          }
-          html += `
-            <div class="context-menu-item" onclick="promptCompressLocalSelected('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
-              <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-              <span>Compress Archive (ZIP, TAR, GZ)...</span>
+        // Group A: Move & Organize ▸
+        html += `
+          <div class="context-menu-sub">
+            <div class="context-menu-item">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #fbbf24;"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              <span>Move & Organize</span>
+              ${chevronSvg}
             </div>
-          `;
-        } else {
-          const isArchive = !item.is_dir && isArchiveFilenameJs(item.name);
-          if (isArchive) {
-            html += `
-              <div class="context-menu-item" onclick="remoteExtractHere('${escapeJsString(item.path)}')">
-                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
-                <span style="font-weight: 600;">Extract Archive Here (Remote)</span>
+            <div class="context-submenu">
+              ${canGoUp ? `
+              <div class="context-menu-item" onclick="moveSelectedToParent(${isRemote})">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
+                <span style="font-weight: 600; color: #fbbf24;">Move to .. (Parent Directory)</span>
+                <span class="shortcut">Alt+↑</span>
               </div>
-              <div class="context-menu-item" onclick="remoteExtractToSubfolder('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
-                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-                <span>Extract to /${escapeHtml(item.name.replace(/\.[^/.]+$/, ''))}/</span>
+              ` : ''}
+              <div class="context-menu-item" onclick="openInteractiveMoveModal(${isRemote}, 'move')">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                <span style="font-weight: 600;">Interactive Move / Copy To...</span>
+                <span class="shortcut">F6</span>
               </div>
-              <div class="context-menu-item" onclick="remoteExtractCustomPath('${escapeJsString(item.path)}')">
-                <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                <span>Extract to Custom Path...</span>
+              <div class="context-menu-item" onclick="closeContextMenu(); openBatchRenameModal(${isRemote})">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                <span>Batch Multi-Rename (${selCount > 1 ? selCount + ' Selected' : 'Regex'})...</span>
+                <span class="shortcut">Ctrl+M</span>
               </div>
-            `;
-          }
-          html += `
-            <div class="context-menu-item" onclick="remoteCompressSelected('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
-              <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-              <span>Compress Archive (ZIP, TAR, GZ)...</span>
+              ${!item.is_dir ? `
+              <div class="context-menu-item" onclick="duplicateItemsInPlace(${isRemote}, [{ path: '${escapeJsString(item.path)}', name: '${escapeJsString(item.name)}', is_dir: false }])">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+                <span>Duplicate File</span>
+              </div>
+              ` : `
+              <div class="context-menu-item" onclick="closeContextMenu(); quickBookmarkFolder('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #fbbf24;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span>Bookmark This Folder</span>
+              </div>
+              `}
             </div>
-          `;
-        }
+          </div>
+        `;
+
+        // Group B: Archive & Compression ▸
+        html += `
+          <div class="context-menu-sub">
+            <div class="context-menu-item">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              <span>Archive & Compression</span>
+              ${chevronSvg}
+            </div>
+            <div class="context-submenu">
+              ${!isRemote ? `
+                ${isArchive ? `
+                <div class="context-menu-item" onclick="extractLocalHere('${escapeJsString(item.path)}')">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+                  <span style="font-weight: 600;">Extract Here</span>
+                </div>
+                <div class="context-menu-item" onclick="extractLocalToSubfolder('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                  <span>Extract to ${escapeHtml(item.name.replace(/\.[^/.]+$/, ''))}/</span>
+                </div>
+                <div class="context-menu-item" onclick="promptExtractLocalFolder('${escapeJsString(item.path)}')">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>Extract to Custom Folder...</span>
+                </div>
+                <div class="context-menu-separator"></div>
+                ` : ''}
+                <div class="context-menu-item" onclick="promptCompressLocalSelected('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                  <span>Compress Archive (ZIP, TAR, GZ)...</span>
+                </div>
+              ` : `
+                ${isArchive ? `
+                <div class="context-menu-item" onclick="remoteExtractHere('${escapeJsString(item.path)}')">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+                  <span style="font-weight: 600;">Extract Archive Here (Remote)</span>
+                </div>
+                <div class="context-menu-item" onclick="remoteExtractToSubfolder('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                  <span>Extract to /${escapeHtml(item.name.replace(/\.[^/.]+$/, ''))}/</span>
+                </div>
+                <div class="context-menu-item" onclick="remoteExtractCustomPath('${escapeJsString(item.path)}')">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>Extract to Custom Path...</span>
+                </div>
+                <div class="context-menu-separator"></div>
+                ` : ''}
+                <div class="context-menu-item" onclick="remoteCompressSelected('${escapeJsString(item.path)}', '${escapeJsString(item.name)}')">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                  <span>Compress Archive (ZIP, TAR, GZ)...</span>
+                </div>
+              `}
+            </div>
+          </div>
+        `;
+
+        // Group C: Inspect & Tools ▸
+        html += `
+          <div class="context-menu-sub">
+            <div class="context-menu-item">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>Inspect & Tools</span>
+              ${chevronSvg}
+            </div>
+            <div class="context-submenu">
+              ${item.is_dir ? `
+                <div class="context-menu-item" onclick="closeContextMenu(); calculateFolderSize('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                  <span>Calculate Folder Size...</span>
+                </div>
+                <div class="context-menu-item" onclick="closeContextMenu(); openContentGrepAtPath('${escapeJsString(item.path)}', ${isRemote})">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <span>Search Text Inside Folder (Grep)...</span>
+                </div>
+                ${isRemote ? `
+                <div class="context-menu-item" onclick="openRemoteTerminal('${escapeJsString(item.path)}')">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                  <span>Open Terminal Here</span>
+                </div>
+                ` : `
+                <div class="context-menu-item" onclick="openInFileExplorer('${escapeJsString(item.path)}')">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>Open in File Explorer</span>
+                </div>
+                `}
+              ` : `
+                <div class="context-menu-item" onclick="closeContextMenu(); openFileInspectorModal('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  <span>Live Log Tail / Hex Inspector...</span>
+                </div>
+                <div class="context-menu-item" onclick="openChecksumModal('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span>Calculate Checksum (SHA-256 / MD5)...</span>
+                </div>
+                ${counterpart ? `
+                <div class="context-menu-item" onclick="closeContextMenu(); openFileDiffModal('${escapeJsString(isRemote ? counterpart.path : item.path)}', '${escapeJsString(isRemote ? item.path : counterpart.path)}', '${escapeJsString(item.name)}')">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>
+                  <span style="font-weight: 600;">Compare File Contents (Diff)</span>
+                </div>
+                <div class="context-menu-item" onclick="openChecksumCompareModal('${escapeJsString(item.path)}', '${escapeJsString(counterpart.path)}', '${escapeJsString(item.name)}', ${isRemote})">
+                  <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>Verify Checksum with ${isRemote ? 'Local' : 'Remote'}</span>
+                </div>
+                ` : ''}
+                ${!isRemote ? `
+                <div class="context-menu-item" onclick="openInFileExplorer('${escapeJsString(item.path)}')">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>Reveal in File Explorer</span>
+                </div>
+                ` : ''}
+              `}
+              <div class="context-menu-separator"></div>
+              <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(item.path)}')">
+                <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy Full Path</span>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Group D: Selection ▸
+        html += `
+          <div class="context-menu-sub">
+            <div class="context-menu-item">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <span>Selection</span>
+              ${chevronSvg}
+            </div>
+            <div class="context-submenu">
+              <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'all');">
+                <svg class="icon" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span>Select All (Files & Folders)</span>
+                <span class="shortcut">Ctrl+A</span>
+              </div>
+              <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'files');">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Select Files Only</span>
+              </div>
+              <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'folders');">
+                <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Select Folders Only</span>
+              </div>
+              <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'invert');">
+                <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <span>Invert Selection</span>
+              </div>
+            </div>
+          </div>
+        `;
 
         html += `<div class="context-menu-separator"></div>`;
 
+        // 4. Direct Item Management (Rename, Permissions, Delete, Properties)
         html += `
           <div class="context-menu-item" onclick="promptRename('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
             <svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             <span>Rename...</span>
             <span class="shortcut">F2</span>
-          </div>
-          <div class="context-menu-item" onclick="closeContextMenu(); openBatchRenameModal(${isRemote})">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            <span>Batch Multi-Rename (${selCount > 1 ? selCount + ' Selected' : 'Pattern/Regex'})...</span>
-            <span class="shortcut">Ctrl+M</span>
           </div>
         `;
 
@@ -5873,61 +6086,10 @@ window.onerror = function(msg, url, line, col, error) {
             <span>${selCount > 1 ? `Delete ${selCount} Selected Items` : 'Delete'}</span>
             <span class="shortcut">Del</span>
           </div>
-        `;
-
-        html += `<div class="context-menu-separator"></div>`;
-
-        if (!item.is_dir) {
-          html += `
-            <div class="context-menu-item" onclick="openChecksumModal('${escapeJsString(item.path)}', '${escapeJsString(item.name)}', ${isRemote})">
-              <svg class="icon" viewBox="0 0 24 24" style="color: #a855f7;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              <span>Calculate Checksum (SHA-256 / MD5)...</span>
-            </div>
-          `;
-          const otherFiles = isRemote ? localFiles : remoteFiles;
-          const counterpart = otherFiles.find(f => !f.is_dir && f.name.toLowerCase() === item.name.toLowerCase());
-          if (counterpart) {
-            const locP = isRemote ? counterpart.path : item.path;
-            const remP = isRemote ? item.path : counterpart.path;
-            html += `
-              <div class="context-menu-item" onclick="closeContextMenu(); openFileDiffModal('${escapeJsString(locP)}', '${escapeJsString(remP)}', '${escapeJsString(item.name)}')">
-                <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>
-                <span style="font-weight: 600;">Compare File Contents (Side-by-Side Diff)</span>
-              </div>
-              <div class="context-menu-item" onclick="openChecksumCompareModal('${escapeJsString(item.path)}', '${escapeJsString(counterpart.path)}', '${escapeJsString(item.name)}', ${isRemote})">
-                <svg class="icon" viewBox="0 0 24 24" style="color: #10b981;"><polyline points="20 6 9 17 4 12"/></svg>
-                <span>Verify Checksum with ${isRemote ? 'Local' : 'Remote'} Counterpart</span>
-              </div>
-            `;
-          }
-        }
-
-        html += `
-          <div class="context-menu-item" onclick="copyItemPath('${escapeJsString(item.path)}')">
-            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span>Copy Full Path</span>
-          </div>
+          <div class="context-menu-separator"></div>
           <div class="context-menu-item" onclick='showPropertiesModal(${JSON.stringify(item)}, ${isRemote})'>
             <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
             <span>Properties & Info...</span>
-          </div>
-          <div class="context-menu-separator"></div>
-          <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'all');">
-            <svg class="icon" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            <span>Select All (Files & Folders)</span>
-            <span class="shortcut">Ctrl+A</span>
-          </div>
-          <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'files');">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <span>Select Files Only</span>
-          </div>
-          <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'folders');">
-            <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            <span>Select Folders Only</span>
-          </div>
-          <div class="context-menu-item" onclick="closeContextMenu(); selectAllItemsInPane(${isRemote}, 'invert');">
-            <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            <span>Invert Selection</span>
           </div>
         `;
       }
