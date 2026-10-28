@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.71';
+    let APP_CURRENT_VERSION = '0.0.0.72';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -165,6 +165,19 @@ window.onerror = function(msg, url, line, col, error) {
     };
 
     // Logging (Supports bilingual output with Arabic/English)
+    // Autoscroll is coalesced into one animation frame. Writing scrollTop on
+    // every appended line forces a synchronous layout each time, which turned
+    // busy transfer logs into a stutter of dozens of reflows per second.
+    let logScrollPending = false;
+    function scheduleLogScroll(body) {
+      if (logScrollPending) return;
+      logScrollPending = true;
+      requestAnimationFrame(() => {
+        logScrollPending = false;
+        if (body.isConnected) body.scrollTop = body.scrollHeight;
+      });
+    }
+
     function addLog(msg, type = 'info') {
       const body = document.getElementById('logBody');
       if (!body) return;
@@ -178,7 +191,7 @@ window.onerror = function(msg, url, line, col, error) {
       while (body.children.length > maxLines) {
         body.removeChild(body.firstChild);
       }
-      body.scrollTop = body.scrollHeight;
+      scheduleLogScroll(body);
     }
 
     function copyTextToClipboard(text, notifyMsg = 'Copied to clipboard!') {
@@ -1630,6 +1643,26 @@ window.onerror = function(msg, url, line, col, error) {
       localDirCache.delete(getLocalDirCacheKey(path));
     }
 
+    // Structural equality for a directory listing. Used to detect the very
+    // common case where a cached pane was painted first for responsiveness and
+    // the fresh IPC answer turns out to describe exactly the same contents —
+    // rebuilding the table then is pure waste and makes navigation feel heavy.
+    function sameFileList(a, b) {
+      if (a === b) return true;
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        const x = a[i];
+        const y = b[i];
+        if (x === y) continue;
+        if (!x || !y) return false;
+        if (x.name !== y.name) return false;
+        if (!!x.is_dir !== !!y.is_dir) return false;
+        if (x.size !== y.size) return false;
+        if (x.modified !== y.modified) return false;
+      }
+      return true;
+    }
+
     function renderLocalFiles(files) {
       localFiles = applyPaneSort([...(files || [])], false);
       if (currentLocalPath && Array.isArray(files)) {
@@ -2827,10 +2860,12 @@ window.onerror = function(msg, url, line, col, error) {
       // Optimistic Stale-While-Revalidate instant rendering from localDirCache when available
       const cacheKey = getLocalDirCacheKey(path);
       const cachedEntry = !forceFresh ? localDirCache.get(cacheKey) : null;
+      let cachePainted = false;
       if (cachedEntry && (Date.now() - cachedEntry.ts < LOCAL_DIR_CACHE_TTL_MS) && Array.isArray(cachedEntry.files)) {
         currentLocalPath = cachedEntry.path || path;
         updateLocalAddressBarUI(currentLocalPath);
         renderLocalFiles(cachedEntry.files);
+        cachePainted = true;
       }
 
       try {
@@ -2854,7 +2889,14 @@ window.onerror = function(msg, url, line, col, error) {
             }
           }
         }
-        renderLocalFiles(data.files);
+        // A cache hit painted this folder a moment ago. If the authoritative
+        // answer describes the same contents, the table on screen is already
+        // correct and rebuilding it would only cost a frame.
+        if (!(cachePainted
+              && Array.isArray(data.files)
+              && sameFileList(localFiles, applyPaneSort([...data.files], false)))) {
+          renderLocalFiles(data.files);
+        }
         syncCurrentLocalTabState();
         const treePopup = document.getElementById('localPathTreePopup');
         if (treePopup && treePopup.classList.contains('active')) {
@@ -4083,12 +4125,14 @@ window.onerror = function(msg, url, line, col, error) {
       // Optimistic Stale-While-Revalidate instant rendering from cache when available
       const cacheKey = getRemoteDirCacheKey(path);
       const cachedEntry = !forceFresh ? remoteDirCache.get(cacheKey) : null;
+      let cachePainted = false;
       if (cachedEntry && (Date.now() - cachedEntry.ts < REMOTE_DIR_CACHE_TTL_MS) && Array.isArray(cachedEntry.files)) {
         const normTarget = (cachedEntry.pwd || path || '/').replace(/\/+$/, '') || '/';
         currentRemotePath = normTarget;
         const rInput = document.getElementById('remotePathInput');
         if (rInput) rInput.value = currentRemotePath;
         renderRemoteFiles(cachedEntry.files, null);
+        cachePainted = true;
       }
 
       try {
@@ -4120,7 +4164,14 @@ window.onerror = function(msg, url, line, col, error) {
             if (oldestKey) remoteDirCache.delete(oldestKey);
           }
         }
-        renderRemoteFiles(data.files, data.list_error);
+        // Same rule as the local pane: a cache hit already painted this
+        // folder, so an identical authoritative answer needs no rebuild.
+        if (!(cachePainted
+              && !data.list_error
+              && Array.isArray(data.files)
+              && sameFileList(remoteFiles, applyPaneSort([...data.files], true)))) {
+          renderRemoteFiles(data.files, data.list_error);
+        }
         syncCurrentRemoteTabState();
         const rTree = document.getElementById('remotePathTreePopup');
         if (rTree && rTree.classList.contains('active')) {
@@ -13900,6 +13951,16 @@ window.onerror = function(msg, url, line, col, error) {
       }
     }
 
+    // Tells the Rust host that the first frame is on screen. The native window
+    // is created hidden, so this call is what makes it appear: without it the
+    // user would see the empty black client area while WebView2 boots up.
+    let uiReadySent = false;
+    function notifyUiReady() {
+      if (uiReadySent) return;
+      uiReadySent = true;
+      try { sendRust('ui_ready', {}).catch(() => {}); } catch (_) {}
+    }
+
     // Launch
     let hasInitialized = false;
     async function launchApp() {
@@ -13910,6 +13971,9 @@ window.onerror = function(msg, url, line, col, error) {
       } catch (err) {
         console.error('Fatal initialization error:', err);
       }
+      // Give the browser one task turn to finish layout/paint before revealing
+      // the window, so the very first visible frame is the real interface.
+      setTimeout(notifyUiReady, 0);
     }
 
     // Auto-refresh directories on window focus if enabled in Connection & Sync options

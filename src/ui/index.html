@@ -63,7 +63,7 @@
       --sync-delete: #ef4444;
       --sync-conflict: #f59e0b;
       --sync-muted: #71717a;
-      --table-th-bg: rgba(26, 28, 36, 0.92);
+      --table-th-bg: rgba(26, 28, 36, 0.985);
       --table-tr-even: rgba(255, 255, 255, 0.012);
       --table-tr-hover: rgba(56, 189, 248, 0.055);
       --log-bg: rgba(14, 16, 22, 0.86);
@@ -111,7 +111,7 @@
       --sync-delete: #b91c1c;
       --sync-conflict: #b45309;
       --sync-muted: #94a3b8;
-      --table-th-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(241, 243, 245, 0.90) 100%);
+      --table-th-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(241, 243, 245, 0.985) 100%);
       --table-tr-even: rgba(0, 0, 0, 0.012);
       --table-tr-hover: linear-gradient(90deg, rgba(220, 38, 38, 0.05) 0%, rgba(0, 0, 0, 0.012) 50%, rgba(220, 38, 38, 0.02) 100%);
       --log-bg: rgba(15, 17, 23, 0.92);
@@ -165,8 +165,7 @@
       background: transparent !important;
     }
     [data-theme="light"] th {
-      background: linear-gradient(180deg, rgba(253, 253, 254, 0.88) 0%, rgba(241, 243, 245, 0.84) 100%) !important;
-      backdrop-filter: blur(8px);
+      background: linear-gradient(180deg, rgba(253, 253, 254, 0.99) 0%, rgba(241, 243, 245, 0.985) 100%) !important;
       border-bottom: 1px solid rgba(0, 0, 0, 0.09) !important;
       border-right: 1px solid rgba(0, 0, 0, 0.06) !important;
       color: #475569 !important;
@@ -814,8 +813,10 @@
 
     th {
       background: var(--table-th-bg);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      /* No backdrop-filter here: the header is `position: sticky`, so a blur
+         had to be recomputed over the rows scrolling underneath on every
+         frame. The background is 98% opaque, so dropping the blur is not
+         visible and removes the per-frame cost entirely. */
       color: var(--text-muted);
       font-weight: 600;
       font-size: 11px;
@@ -2629,6 +2630,18 @@
       from { opacity: 0; transform: scale(0.92); }
       to { opacity: 1; transform: scale(1); }
     }
+    /* Both names below were referenced by existing rules but never defined, so
+       Chromium silently dropped the animation and dialogs / drag hints snapped
+       into place with no transition at all. Defining them restores the intended
+       feel without touching any layout. */
+    @keyframes desktopDialogPop {
+      from { opacity: 0; transform: scale(0.965) translateY(-6px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
     .loading-title {
       font-size: 15.5px;
       font-weight: 600;
@@ -3457,9 +3470,14 @@
     .ambient-orb {
       position: absolute;
       border-radius: 50%;
-      filter: blur(110px);
       pointer-events: none;
-      will-change: transform, opacity;
+      /* The old rule was `filter: blur(110px)` on a 380–480px layer with an
+         infinite animation: the compositor had to re-blur a large surface on
+         every single frame, which kept the app from ever going idle and made
+         every scroll and folder change feel sticky. The radial gradients
+         already fade to fully transparent at 75%, so the blur added almost no
+         visible softness. */
+      will-change: transform;
       animation: ambientDrift 22s ease-in-out infinite alternate;
     }
     .ambient-orb.orb-1 {
@@ -3495,9 +3513,11 @@
       background: radial-gradient(circle, rgba(239, 68, 68, 0.03) 0%, rgba(245, 158, 11, 0.01) 55%, transparent 75%);
     }
     @keyframes ambientDrift {
-      0% { transform: translate3d(0, 0, 0) scale(1); }
-      50% { transform: translate3d(14px, -10px, 0) scale(1.03); }
-      100% { transform: translate3d(-10px, 10px, 0) scale(0.98); }
+      /* Transform-only: no scale, so the gradient texture is rasterized once
+         and merely moved. Scaling forced a re-rasterization per frame. */
+      0% { transform: translate3d(0, 0, 0); }
+      50% { transform: translate3d(14px, -10px, 0); }
+      100% { transform: translate3d(-10px, 10px, 0); }
     }
     .ambient-vector-svg {
       position: absolute;
@@ -4276,6 +4296,32 @@
       unicode-bidi: plaintext;
     }
 
+    /* -------------------------------------------------------------------
+       File listings are excluded from RTL on purpose.
+       Column order, the icon-before-name layout and the Size / Modified
+       alignment form a fixed grid that mirrors badly: in RTL the Name column
+       jumps to the far right, the icon flips to the other side of the label
+       and the numeric columns stop lining up. Keeping the table LTR leaves
+       the grid intact while the surrounding chrome stays mirrored. Each cell
+       is an isolated run, so an Arabic file name still shapes right-to-left
+       inside its own cell.
+       ------------------------------------------------------------------- */
+    [dir="rtl"] .file-listing-table,
+    [dir="rtl"] .file-listing-table thead,
+    [dir="rtl"] .file-listing-table tbody,
+    [dir="rtl"] .file-listing-table tr {
+      direction: ltr;
+    }
+    [dir="rtl"] .file-listing-table th,
+    [dir="rtl"] .file-listing-table td {
+      direction: ltr;
+      unicode-bidi: isolate;
+      text-align: left;
+    }
+    [dir="rtl"] .file-listing-table .file-cell {
+      flex-direction: row;
+    }
+
     /* Arabic glyphs are slightly taller; avoid clipping in fixed-height chrome. */
     html[lang="ar"] .btn,
     html[lang="ar"] .dropdown-item,
@@ -4346,7 +4392,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.71</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.72</span>
         </div>
       </div>
 
@@ -4849,7 +4895,7 @@
       </div>
 
       <div class="table-container">
-        <table>
+        <table class="file-listing-table">
           <thead>
             <tr>
               <th class="sortable-col" style="width: 50%;" onclick="sortFilePane(false, 'name')" title="Click to sort by Name">Name <span class="sort-indicator" id="localSort_name">▲</span></th>
@@ -5016,7 +5062,7 @@
       </div>
 
       <div class="table-container">
-        <table>
+        <table class="file-listing-table">
           <thead>
             <tr>
               <th class="sortable-col" style="width: 45%;" onclick="sortFilePane(true, 'name')" title="Click to sort by Name">Name <span class="sort-indicator" id="remoteSort_name">▲</span></th>

@@ -41,6 +41,9 @@ pub enum IpcTarget {
 enum AppEvent {
     ExecScript(IpcTarget, String),
     OpenNativeTerminal(serde_json::Value),
+    /// Reveal the main window. Sent by the page once its first frame is ready,
+    /// or by the safety-net timer if that signal never arrives.
+    ShowMainWindow,
 }
 
 fn main() {
@@ -133,6 +136,14 @@ fn main() {
         std::thread::spawn(move || {
             match serde_json::from_str::<IpcRequest>(&body) {
                 Ok(ipc_req) => {
+                    // The page reports its first painted frame here. That is the
+                    // signal to reveal the window, which is why the window is
+                    // built hidden: WebView2 needs a few hundred milliseconds to
+                    // come up, and showing the native frame before that paints
+                    // the empty (black) client area first.
+                    if ipc_req.action == "ui_ready" {
+                        let _ = proxy.send_event(AppEvent::ShowMainWindow);
+                    }
                     let resp = app_state.handle_request(ipc_req);
                     match serde_json::to_string(&resp) {
                         Ok(resp_json) => {
@@ -162,8 +173,14 @@ fn main() {
         .build(&window)
         .expect("Failed to initialize WebView");
 
-    // Show window smoothly now that WebView2 is initialized with dark theme background
-    window.set_visible(true);
+    // The window stays hidden until the page says it has painted. `with_background_color`
+    // already matches the dark shell, so even the shortest gap reads as the app
+    // background instead of a black rectangle.
+    let show_fallback = proxy.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+        let _ = show_fallback.send_event(AppEvent::ShowMainWindow);
+    });
 
     let mut terminal_instance: Option<(tao::window::Window, wry::WebView)> = None;
 
@@ -198,6 +215,12 @@ fn main() {
                             }
                         }
                     }
+                }
+            }
+            Event::UserEvent(AppEvent::ShowMainWindow) => {
+                if !window.is_visible() {
+                    window.set_visible(true);
+                    window.set_focus();
                 }
             }
             Event::UserEvent(AppEvent::OpenNativeTerminal(params)) => {

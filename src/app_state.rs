@@ -885,6 +885,11 @@ impl AppState {
                 )
             }
 
+            // Fire-and-forget readiness ping from the page. `main` watches for
+            // this action to reveal the window; the reply only exists so the
+            // front-end promise settles instead of dangling.
+            "ui_ready" => IpcResponse::ok(id, action, json!({ "ready": true })),
+
             "get_ui_prefs" => {
                 let prefs = ui_prefs::load();
                 IpcResponse::ok(id, action, json!({
