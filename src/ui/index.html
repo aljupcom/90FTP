@@ -494,6 +494,32 @@
       box-shadow: var(--glass-shadow);
       min-height: 40px;
       flex-shrink: 0;
+      /* The bar needs ~1450px at its natural width: the site picker, five
+         connection fields and four action buttons. Below that the flex items
+         cannot shrink past their min-content width, and because body hides
+         horizontal overflow the trailing buttons were painted outside the
+         window — visible to layout, impossible to click. Scrolling keeps every
+         control reachable down to the 800px minimum window size. */
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+    }
+    .quick-connect-bar::-webkit-scrollbar {
+      height: 6px;
+    }
+    .quick-connect-bar::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.35);
+      border-radius: 3px;
+    }
+    /* Fields must not collapse to their border box when the bar runs out of
+       width. A floor keeps the host / user / password boxes readable and lets
+       the bar overflow into the scroll container instead of squeezing them to
+       a few pixels. */
+    .quick-connect-bar input {
+      min-width: 96px;
+    }
+    .quick-connect-bar #connPort {
+      min-width: 58px;
     }
     .quick-connect-bar input, .quick-connect-bar select {
       background: var(--bg-glass-input);
@@ -2901,6 +2927,7 @@
       top: 100%;
       left: 0;
       min-width: 220px;
+      max-width: calc(100vw - 12px);
       background: var(--bg-panel);
       border: 1px solid var(--border-color);
       border-radius: 5px;
@@ -4338,6 +4365,15 @@
       transform: scaleX(-1);
     }
 
+    /* The menubar is mirrored, so the last menu item ("File") sits against the
+       right edge. Anchoring its dropdown to the item's left edge pushed the
+       whole panel off-screen. Anchor to the mirrored edge instead; toggleMenu()
+       still clamps it if the item is close to the opposite edge. */
+    [dir="rtl"] .menu-dropdown {
+      left: auto;
+      right: 0;
+    }
+
     /* Trailing keyboard hints follow the mirrored edge. */
     [dir="rtl"] .shortcut {
       margin-left: 0;
@@ -5308,8 +5344,8 @@
           </tr>
         </thead>
         <tbody id="transfersList">
-          <tr>
-            <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 22px 10px;">
+          <tr class="transfers-empty-row">
+            <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 22px 10px;" data-i18n="transfers.empty">
               No active or queued file transfers
             </td>
           </tr>

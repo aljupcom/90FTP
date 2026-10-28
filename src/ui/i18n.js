@@ -35,7 +35,9 @@
   var reverseEnabled = true;
 
   /* Subtrees that must never be translated: machine output, terminals, tool
-     descriptions, diagnostics detail and release notes. */
+     descriptions, diagnostics detail and release notes. User data (file names,
+     transfer queue rows, site names) is marked with data-i18n-skip at the point
+     where it is rendered, because the surrounding cells still need translating. */
   var SKIP_SELECTOR = [
     '[data-i18n-skip]',
     '#logBody',
@@ -45,6 +47,9 @@
     '#appDialogDetailBox',
     '#changelogContent',
     '#errorLogsBody',
+    /* Transfer queue rows carry file names; the empty-state row does not and
+       still needs translating. */
+    '#transfersBodyContainer tbody tr:not(.transfers-empty-row)',
     '.xterm'
   ].join(', ');
 
@@ -330,6 +335,90 @@
     return 1;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Live re-sweep                                                       */
+  /* ------------------------------------------------------------------ */
+  /* Most of the interface is built at runtime: renderers assign innerHTML from
+     template literals that carry English source text, and a one-shot sweep at
+     boot only ever sees the skeleton. Without this observer every label a
+     renderer rebuilds — the site picker's "Manual Input...", the file table's
+     type column, tab titles — reverts to English on the next navigation.
+
+     The sweep runs inside the mutation callback rather than on an animation
+     frame, so it finishes before the browser paints: the user never sees the
+     English literal appear and then flip to Arabic. Mutation records arrive in
+     batches, so one render costs one pass. applyElementText() is a no-op when
+     the text already matches, which is what makes the characterData
+     notification that the sweep itself generates settle immediately. */
+
+  var observer = null;
+  var sweeping = false;
+  var MAX_ROOTS = 40;
+
+  function sweepRoots(roots) {
+    if (sweeping) return; // re-entrant call from our own writes; already covered
+    sweeping = true;
+    try {
+      for (var i = 0; i < roots.length; i++) {
+        var root = roots[i];
+        if (!root || !root.isConnected) continue;
+        promoteAttributes(root);
+        promoteTextNodes(root);
+        applyExplicit(root);
+      }
+    } catch (_) {
+      /* A detached or half-built subtree must never break the renderer that
+         produced it. */
+    } finally {
+      sweeping = false;
+    }
+  }
+
+  function startObserver() {
+    if (observer || typeof MutationObserver === 'undefined') return;
+    if (!document.body) return;
+    observer = new MutationObserver(function (records) {
+      /* In English every renderer already emits the right text, so sweeping
+         would only burn CPU on large tables. Switching language re-sweeps the
+         whole document, which is where the promotion for existing markup
+         happens. */
+      if (current === 'en') return;
+      var roots = [];
+      for (var i = 0; i < records.length; i++) {
+        var rec = records[i];
+        if (rec.type === 'characterData') {
+          var parentEl = rec.target.parentElement;
+          if (parentEl && !isSkipped(parentEl)) roots.push(parentEl);
+          continue;
+        }
+        var added = rec.addedNodes;
+        for (var j = 0; j < added.length; j++) {
+          var node = added[j];
+          if (node.nodeType === 1) {
+            if (!isSkipped(node)) roots.push(node);
+          } else if (node.nodeType === 3 && node.parentElement && !isSkipped(node.parentElement)) {
+            roots.push(node.parentElement);
+          }
+        }
+      }
+      if (!roots.length) return;
+      // A bulk render: one whole-document pass beats thousands of tiny ones.
+      if (roots.length > MAX_ROOTS) roots = [document.body];
+      sweepRoots(roots);
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+  }
+
+  function stopObserver() {
+    if (!observer) return;
+    observer.disconnect();
+    observer = null;
+  }
+
   /* English source text of an element, used by search filters so keyword
      search keeps working after the visible text is translated. */
   function enSourceOf(el) {
@@ -369,6 +458,8 @@
     isRtl: isRtl,
     normalizeLang: normalizeLang,
     applyTranslations: applyTranslations,
+    startObserver: startObserver,
+    stopObserver: stopObserver,
     enSourceOf: enSourceOf,
     keyForPhrase: keyForPhrase,
     missingKeys: missingKeys,
@@ -386,5 +477,14 @@
   global.I18N = api;
   global.t = t;
   global.tn = tn;
+
+  /* Boot: start watching once the document has a body. */
+  if (typeof document !== 'undefined') {
+    if (document.body) {
+      startObserver();
+    } else if (document.addEventListener) {
+      document.addEventListener('DOMContentLoaded', startObserver, { once: true });
+    }
+  }
 
 })(typeof window !== 'undefined' ? window : this);

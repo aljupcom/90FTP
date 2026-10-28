@@ -764,10 +764,10 @@ window.onerror = function(msg, url, line, col, error) {
           currentRemotePath = '';
           if (typeof clearQuickFilter === 'function') clearQuickFilter(true);
           const rInp = document.getElementById('remotePathInput');
-          if (rInp) rInp.value = 'Not connected';
+          if (rInp) rInp.value = t('pane.not_connected');
           const rList = document.getElementById('remoteFileList');
           if (rList) {
-            rList.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 50px;">Enter server credentials above and click Connect.</td></tr>`;
+            rList.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 50px;">${escapeHtml(t('pane.enter_credentials'))}</td></tr>`;
           }
           updatePaneStatsBadge(true);
           setConnectedState(false);
@@ -811,10 +811,10 @@ window.onerror = function(msg, url, line, col, error) {
           rList.innerHTML = `
             <tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 42px 15px;">
               <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
-                <span style="color: var(--text-main); font-weight: 700; font-size: 14px;">Selected Server: ${escapeHtml(site.name)} (${escapeHtml(site.host)})</span>
-                <span style="font-size: 12.5px; color: var(--text-muted);">Ready to connect (${site.protocol.toUpperCase()}://${escapeHtml(site.username)}@${escapeHtml(site.host)}:${site.port})</span>
+                <span style="color: var(--text-main); font-weight: 700; font-size: 14px;">${escapeHtml(t('pane.selected_server', { name: site.name, host: site.host }))}</span>
+                <span style="font-size: 12.5px; color: var(--text-muted);">${escapeHtml(t('pane.ready_to_connect', { url: `${site.protocol.toUpperCase()}://${site.username}@${site.host}:${site.port}` }))}</span>
                 <button type="button" class="btn btn-primary" onclick="handleConnectClick()" style="padding: 5px 16px; font-weight: 600; margin-top: 2px;">
-                  <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Connect to ${escapeHtml(site.name)}
+                  <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${escapeHtml(t('pane.connect_to_site', { name: site.name }))}
                 </button>
               </div>
             </td></tr>
@@ -1321,11 +1321,50 @@ window.onerror = function(msg, url, line, col, error) {
     let remoteSortState = { col: 'name', asc: true };
     const calculatedFolderSizes = new Map();
 
+    /* Extension -> dictionary key. The Type column shows t(key); the English
+       source labels below are kept for sorting only, so ordering a column by
+       type behaves the same in both languages. */
+    const FILE_TYPE_KEYS = {
+      php: 'ftype.php', js: 'ftype.javascript', ts: 'ftype.typescript', json: 'ftype.json',
+      html: 'ftype.html', htm: 'ftype.html', css: 'ftype.stylesheet', scss: 'ftype.sass',
+      py: 'ftype.python', rs: 'ftype.rust', go: 'ftype.go', sh: 'ftype.shell',
+      ps1: 'ftype.powershell', sql: 'ftype.sql', env: 'ftype.env', yml: 'ftype.yaml',
+      yaml: 'ftype.yaml', toml: 'ftype.toml', xml: 'ftype.xml', md: 'ftype.markdown',
+      txt: 'ftype.text', log: 'ftype.log', ini: 'ftype.config', conf: 'ftype.config',
+      zip: 'ftype.zip', gz: 'ftype.gz', tgz: 'ftype.targz', tar: 'ftype.tar',
+      rar: 'ftype.rar', '7z': 'ftype.sevenzip', pdf: 'ftype.pdf',
+      png: 'ftype.png', jpg: 'ftype.jpeg', jpeg: 'ftype.jpeg', gif: 'ftype.gif',
+      svg: 'ftype.svg', webp: 'ftype.webp', ico: 'ftype.icon',
+      mp4: 'ftype.mp4', mp3: 'ftype.mp3', exe: 'ftype.executable', dll: 'ftype.library'
+    };
+
+    function getFileExtension(fileName) {
+      const n = (fileName || '').toLowerCase();
+      return n.includes('.') ? n.split('.').pop() : '';
+    }
+
+    /* Dictionary key describing this entry's type. */
+    function getFileTypeKey(fileName, isDir) {
+      if (isDir) return 'ftype.directory';
+      const n = (fileName || '').toLowerCase();
+      if (n.startsWith('.') && !n.slice(1).includes('.')) return 'ftype.dotfile';
+      const ext = getFileExtension(fileName);
+      if (!ext) return 'ftype.file';
+      return FILE_TYPE_KEYS[ext] || 'ftype.ext';
+    }
+
+    /* Localized label for the Type column. */
+    function getFileTypeLabel(fileName, isDir) {
+      const key = getFileTypeKey(fileName, isDir);
+      if (key === 'ftype.ext') return t('ftype.ext', { ext: getFileExtension(fileName).toUpperCase() });
+      return t(key);
+    }
+
     function getHumanFileType(fileName, isDir) {
       if (isDir) return 'Directory';
       const n = (fileName || '').toLowerCase();
       if (n.startsWith('.') && !n.slice(1).includes('.')) return 'Dotfile Config';
-      const ext = n.includes('.') ? n.split('.').pop() : '';
+      const ext = getFileExtension(fileName);
       const map = {
         php: 'PHP Script', js: 'JavaScript', ts: 'TypeScript', json: 'JSON Data',
         html: 'HTML Doc', htm: 'HTML Doc', css: 'Stylesheet', scss: 'SASS Style',
@@ -1465,20 +1504,25 @@ window.onerror = function(msg, url, line, col, error) {
         });
 
         if (selDirs > 0 && selFiles > 0) {
-          badge.innerHTML = `<span style="color:#fbbf24; font-weight:700;">📁 ${selDirs} dir${selDirs===1?'':'s'}</span> + <span style="color:#38bdf8; font-weight:700;">📄 ${selFiles} file${selFiles===1?'':'s'}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
+          badge.innerHTML = `<span style="color:#fbbf24; font-weight:700;">📁 ${escapeHtml(tn('count.folders', selDirs))}</span> + <span style="color:#38bdf8; font-weight:700;">📄 ${escapeHtml(tn('count.files', selFiles))}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
         } else if (selDirs > 0) {
-          badge.innerHTML = `<span style="color:#fbbf24; font-weight:700;">📁 ${selDirs} folder${selDirs===1?'':'s'}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
+          badge.innerHTML = `<span style="color:#fbbf24; font-weight:700;">📁 ${escapeHtml(tn('count.folders', selDirs))}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
         } else {
-          badge.innerHTML = `<span style="color:#38bdf8; font-weight:700;">📄 ${selFiles} file${selFiles===1?'':'s'}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
+          badge.innerHTML = `<span style="color:#38bdf8; font-weight:700;">📄 ${escapeHtml(tn('count.files', selFiles))}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
         }
-        badge.title = `${selCount} selected (${selFiles} files, ${selDirs} folders — ${formatBytes(selBytes)}). Click to cycle selection (All / Files / Folders / Clear)`;
+        badge.title = t('status.selection_summary', {
+          count: selCount,
+          files: tn('count.files', selFiles),
+          folders: tn('count.folders', selDirs),
+          size: formatBytes(selBytes)
+        });
         badge.classList.add('has-selection');
       } else if (filterVal) {
-        badge.textContent = `${visibleCount} / ${allList.length} items`;
+        badge.textContent = t('status.filtered_count', { visible: visibleCount, total: allList.length });
         badge.title = '';
         badge.classList.remove('has-selection');
       } else {
-        badge.textContent = `${allList.length} item${allList.length === 1 ? '' : 's'}`;
+        badge.textContent = tn('count.items', allList.length);
         badge.title = '';
         badge.classList.remove('has-selection');
       }
@@ -1719,7 +1763,7 @@ window.onerror = function(msg, url, line, col, error) {
           </td>
           <td class="mono-cell">-</td>
           <td class="mono-cell">-</td>
-          <td class="mono-cell">Parent Directory</td>
+          <td class="mono-cell">${escapeHtml(t('pane.parent_dir_row'))}</td>
         `;
         attachInteractiveRowDropTarget(trUp, false, parentDirPath, parentBaseName, true);
         frag.appendChild(trUp);
@@ -1730,7 +1774,7 @@ window.onerror = function(msg, url, line, col, error) {
 
       if (localFiles.length === 0) {
         const emptyTr = document.createElement('tr');
-        emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '30px'} 10px; font-style: italic;">Folder is empty</td>`;
+        emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '30px'} 10px; font-style: italic;">${escapeHtml(t('pane.folder_empty'))}</td>`;
         frag.appendChild(emptyTr);
         tbody.appendChild(frag);
         updatePaneStatsBadge(false);
@@ -1862,13 +1906,13 @@ window.onerror = function(msg, url, line, col, error) {
             <td>
               <div class="file-cell">
                 <span class="file-icon ${iconClass}">${svg}</span>
-                <span>${escapeHtml(fileName)}</span>
+                <span data-i18n-skip>${escapeHtml(fileName)}</span>
                 ${compareBadgeHtml}
               </div>
             </td>
             <td class="mono-cell">${sizeCellText}</td>
             <td class="mono-cell">${f.modified || '-'}</td>
-            <td class="mono-cell">${getHumanFileType(fileName, !!f.is_dir)}</td>
+            <td class="mono-cell">${escapeHtml(getFileTypeLabel(fileName, !!f.is_dir))}</td>
           `;
           frag.appendChild(tr);
         } catch (itemErr) {
@@ -1878,7 +1922,7 @@ window.onerror = function(msg, url, line, col, error) {
 
       if (renderedCount === 0 && filterLower) {
         const noMatchTr = document.createElement('tr');
-        noMatchTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: 20px 10px; font-style: italic;">No items match filter "${escapeHtml(localQuickFilterText)}"</td>`;
+        noMatchTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: 20px 10px; font-style: italic;">${escapeHtml(t('pane.no_filter_match', { filter: localQuickFilterText }))}</td>`;
         frag.appendChild(noMatchTr);
       }
 
@@ -2177,7 +2221,7 @@ window.onerror = function(msg, url, line, col, error) {
       } else {
         const tbody = document.getElementById('localFileList');
         if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 30px 10px; font-style: italic;">Loading directory...</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 30px 10px; font-style: italic;">${escapeHtml(t('pane.loading_dir'))}</td></tr>`;
         }
         await navigateLocal(currentLocalPath, true);
       }
@@ -2207,7 +2251,7 @@ window.onerror = function(msg, url, line, col, error) {
 
       const tbody = document.getElementById('localFileList');
       if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 30px 10px; font-style: italic;">Loading directory...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-dim); padding: 30px 10px; font-style: italic;">${escapeHtml(t('pane.loading_dir'))}</td></tr>`;
       }
 
       const fInp = document.getElementById('localQuickFilter');
@@ -2400,7 +2444,7 @@ window.onerror = function(msg, url, line, col, error) {
         } else {
           const tbody = document.getElementById('remoteFileList');
           if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 45px;">Loading remote directory...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 45px;">${escapeHtml(t('pane.loading_remote_dir'))}</td></tr>`;
           }
           await navigateRemote(currentRemotePath || '/', true);
         }
@@ -2466,7 +2510,7 @@ window.onerror = function(msg, url, line, col, error) {
       if (options.connectProfile) {
         const tbody = document.getElementById('remoteFileList');
         if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 45px;">Connecting to ${escapeHtml(options.connectProfile.host)}...</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 45px;">${escapeHtml(t('pane.connecting_to', { host: options.connectProfile.host }))}</td></tr>`;
         }
         await executeConnect({
           ...options.connectProfile,
@@ -3177,7 +3221,7 @@ window.onerror = function(msg, url, line, col, error) {
           </td>
           <td class="mono-cell">-</td>
           <td class="mono-cell">-</td>
-          <td class="mono-cell">Parent Directory</td>
+          <td class="mono-cell">${escapeHtml(t('pane.parent_dir_row'))}</td>
         `;
         attachInteractiveRowDropTarget(trUp, true, parentDirPath, parentBaseName, true);
         frag.appendChild(trUp);
@@ -3346,7 +3390,7 @@ window.onerror = function(msg, url, line, col, error) {
             <td>
               <div class="file-cell">
                 <span class="file-icon ${iconClass}">${svg}</span>
-                <span>${escapeHtml(fileName)}</span>
+                <span data-i18n-skip>${escapeHtml(fileName)}</span>
                 ${compareBadgeHtml}
               </div>
             </td>
@@ -3362,7 +3406,7 @@ window.onerror = function(msg, url, line, col, error) {
 
       if (renderedCount === 0 && filterLower) {
         const noMatchTr = document.createElement('tr');
-        noMatchTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: 20px 10px; font-style: italic;">No items match filter "${escapeHtml(remoteQuickFilterText)}"</td>`;
+        noMatchTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: 20px 10px; font-style: italic;">${escapeHtml(t('pane.no_filter_match', { filter: remoteQuickFilterText }))}</td>`;
         frag.appendChild(noMatchTr);
       }
 
@@ -8483,7 +8527,7 @@ window.onerror = function(msg, url, line, col, error) {
         item.title = `${s.name} (${s.protocol}://${s.host}:${s.port})\nDouble click to connect`;
         item.innerHTML = `
           <svg class="icon icon-sm site-tree-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-          <span style="overflow:hidden; text-overflow:ellipsis; flex:1;">${escapeHtml(s.name)}</span>
+          <span data-i18n-skip style="overflow:hidden; text-overflow:ellipsis; flex:1;">${escapeHtml(s.name)}</span>
           <span class="site-proto-badge">${escapeHtml((s.protocol || 'sftp').toUpperCase())}</span>
         `;
         item.onclick = () => {
@@ -9079,7 +9123,7 @@ window.onerror = function(msg, url, line, col, error) {
       const tbody = document.getElementById('transfersList');
       if (!tbody) return;
       if (transferTasks.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 22px 10px;">No active or queued file transfers</td></tr>';
+        tbody.innerHTML = `<tr class="transfers-empty-row"><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 22px 10px;">${escapeHtml(t('transfers.empty'))}</td></tr>`;
         return;
       }
 
@@ -9244,6 +9288,13 @@ window.onerror = function(msg, url, line, col, error) {
       try { cached = appStorage.getItem('90ftp_lang'); } catch (_) {}
       I18N.setLanguage(boot || cached || 'en');
       I18N.applyTranslations(document);
+
+      // The status label is written by setConnectedState(), so it is excluded
+      // from the promotion sweep and would otherwise stay English until the
+      // first connection event. Seed it here so the first frame is already
+      // localized.
+      const statusEl = document.getElementById('statusText');
+      if (statusEl) statusEl.innerText = t('top.disconnected');
     }
 
     // Single choke point for a language change: switch the dictionary, re-apply
@@ -11563,6 +11614,26 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     // Native Desktop Menubar
+    /* Keep a menubar dropdown inside the window. The CSS anchors it to the
+       item's leading edge, which is the left edge in English and the right edge
+       in Arabic; for the item nearest the opposite edge that anchor alone puts
+       the panel outside the window, where body's overflow-x: hidden makes it
+       invisible and its items unclickable. Measuring after the panel is shown
+       and shifting it back by the overflow amount is direction-agnostic. */
+    function fitMenuDropdown(parentItem) {
+      const dd = parentItem && parentItem.querySelector('.menu-dropdown');
+      if (!dd) return;
+      const pad = 6;
+      const vw = window.innerWidth;
+      dd.style.left = '0px';
+      dd.style.right = 'auto';
+      const rect = dd.getBoundingClientRect();
+      let shift = 0;
+      if (rect.right > vw - pad) shift = (vw - pad) - rect.right;
+      if (rect.left + shift < pad) shift = pad - rect.left;
+      dd.style.left = `${Math.round(shift)}px`;
+    }
+
     function toggleMenu(e, menuId) {
       if (e) {
         e.stopPropagation();
@@ -11575,6 +11646,7 @@ window.onerror = function(msg, url, line, col, error) {
       closeAllMenus();
       if (!wasActive && parentItem) {
         parentItem.classList.add('active');
+        fitMenuDropdown(parentItem);
       }
     }
 
