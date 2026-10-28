@@ -86,7 +86,13 @@ Set-Content $issPath $iss -NoNewline
 $htmlPath = Join-Path $Root "src\ui\index.html"
 $html = Get-Content $htmlPath -Raw
 $html = $html -replace '(?:const|let)\s+APP_CURRENT_VERSION\s*=\s*''[^'']+''', ('let APP_CURRENT_VERSION = ''' + $Version + '''')
-$html = $html -replace 'Version\s+[0-9\.]+\s+(Pro|Dev)\s+\(Windows\s+x64\)', ('Version ' + $Version + ' Dev (Windows x64)')
+# About chip. The suffix is optional: the file ships the bare form
+# "Version 0.0.0.X (Windows x64)", and requiring "Dev"/"Pro" here meant the
+# pattern never matched, so the chip sat at 0.0.0.55 for many releases.
+$html = $html -replace 'Version\s+[0-9\.]+\s*(?:Pro|Dev)?\s*\(Windows\s+x64\)', ('Version ' + $Version + ' Dev (Windows x64)')
+# Diagnostics block inside the About dialog. Anchored to the start of the line
+# so it cannot collide with the About chip above.
+$html = $html -replace '(?m)^(\s*Version:\s*)[0-9\.]+(\s*\(Release\))', ('${1}' + $Version + '${2}')
 $html = $html -replace 'Current:\s+v[0-9\.]+', ('Current: v' + $Version)
 $html = $html -replace 'Modern Site Manager v[0-9\.]+', ('Modern Site Manager v' + $Version)
 Set-Content $htmlPath $html -NoNewline
