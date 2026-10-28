@@ -36,6 +36,9 @@
     :root, [data-theme="dark"] {
       --bg-app: #14161c;
       --bg-panel: rgba(28, 30, 38, 0.86);
+      /* Menus float over live content, so they get an opaque fill: a
+         translucent panel let the file list show through the labels. */
+      --bg-menu: #1b1d24;
       --bg-card: rgba(36, 38, 48, 0.88);
       --bg-card-hover: rgba(48, 51, 64, 0.92);
       --bg-header: rgba(24, 26, 33, 0.88);
@@ -96,6 +99,7 @@
     [data-theme="light"] {
       --bg-app: linear-gradient(135deg, #ffffff 0%, #f9fafb 40%, #fdf8f8 72%, #f4f6f8 100%);
       --bg-panel: rgba(255, 255, 255, 0.88);
+      --bg-menu: #ffffff;
       --bg-card: rgba(255, 255, 255, 0.92);
       --bg-card-hover: rgba(254, 242, 242, 0.88);
       --bg-header: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(251, 251, 252, 0.88) 60%, rgba(254, 242, 242, 0.85) 100%);
@@ -2927,14 +2931,28 @@
       top: 100%;
       left: 0;
       min-width: 220px;
+      /* Size to the longest label: a fixed 220px panel wrapped long Arabic
+         entries onto two lines. */
+      width: max-content;
       max-width: calc(100vw - 12px);
-      background: var(--bg-panel);
+      /* Never taller than the window: a long panel scrolls instead of being
+         silently clipped by the bottom edge. */
+      max-height: calc(100vh - 44px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      background: var(--bg-menu);
       border: 1px solid var(--border-color);
       border-radius: 5px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
       padding: 4px 0;
       display: none;
       z-index: 100;
+    }
+    /* A panel that hosts flyout submenus must not clip them. */
+    .menu-dropdown.has-flyout {
+      overflow: visible;
+      max-height: none;
     }
     .menu-item.active .menu-dropdown {
       display: block;
@@ -2948,6 +2966,7 @@
       font-size: 13px;
       color: var(--text-main);
       cursor: pointer;
+      white-space: nowrap;
       transition: background 0.08s;
     }
     .dropdown-item:hover {
@@ -2974,6 +2993,99 @@
       color: rgba(255, 255, 255, 0.85);
     }
 
+    /* Accent / success text inside a menu row. These used to be inline
+       styles, which outrank the :hover rule and left the label painted in its
+       own colour on top of the accent fill -- i.e. invisible. */
+    .dropdown-item .dd-accent {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .dropdown-item .dd-success {
+      color: #4ade80;
+      font-weight: 600;
+    }
+    .dropdown-item .menu-icon.menu-icon-success {
+      color: #22c55e;
+    }
+    .dropdown-item:hover .dd-accent,
+    .dropdown-item:hover .dd-success,
+    .dropdown-item:hover .menu-icon {
+      color: #ffffff;
+    }
+    .dropdown-item:hover .menu-icon svg {
+      stroke: #ffffff;
+    }
+
+    /* --- Grouped (flyout) submenus ---------------------------------------
+       The Tools panel carries ~18 commands, which is taller than the window
+       on a small display and got clipped at the bottom edge. Related commands
+       now live in side panels so the top-level list stays short. */
+    .dropdown-item.has-submenu {
+      position: relative;
+      padding-right: 8px;
+    }
+    [dir="rtl"] .dropdown-item.has-submenu {
+      padding-right: 12px;
+      padding-left: 8px;
+    }
+
+    .dropdown-item .submenu-arrow {
+      margin-left: auto;
+      font-size: 13px;
+      line-height: 1;
+      color: var(--text-dim);
+      transition: color 0.08s;
+    }
+    [dir="rtl"] .dropdown-item .submenu-arrow {
+      margin-left: 0;
+      margin-right: auto;
+      transform: scaleX(-1);
+    }
+    .dropdown-item.has-submenu:hover > .submenu-arrow {
+      color: #ffffff;
+    }
+
+    .menu-item .menu-dropdown .menu-dropdown.submenu {
+      top: -5px;
+      left: 100%;
+      margin-left: 2px;
+      display: none;
+      /* Size to the widest label instead of inheriting the parent panel's
+         width, which squeezed long Arabic labels onto two lines. */
+      width: max-content;
+      min-width: 214px;
+      max-width: min(380px, calc(100vw - 12px));
+      max-height: calc(100vh - 20px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .menu-item .menu-dropdown .menu-dropdown.submenu .dropdown-item {
+      white-space: nowrap;
+    }
+    .dropdown-item.has-submenu:hover > .menu-dropdown.submenu,
+    .dropdown-item.has-submenu.submenu-open > .menu-dropdown.submenu {
+      display: block;
+    }
+    [dir="rtl"] .menu-item .menu-dropdown .menu-dropdown.submenu {
+      left: auto;
+      right: 100%;
+      margin-left: 0;
+      margin-right: 2px;
+    }
+    /* Flip to the opposite side when the natural side would leave the window. */
+    .menu-item .menu-dropdown .menu-dropdown.submenu.submenu-flip {
+      left: auto;
+      right: 100%;
+      margin-left: 0;
+      margin-right: 2px;
+    }
+    [dir="rtl"] .menu-item .menu-dropdown .menu-dropdown.submenu.submenu-flip {
+      left: 100%;
+      right: auto;
+      margin-left: 2px;
+      margin-right: 0;
+    }
+
     .dropdown-separator {
       height: 1px;
       background: var(--border-color);
@@ -2983,6 +3095,7 @@
     /* Options Tabs & Dialog Styling matching native desktop */
     .options-tab-bar {
       display: flex;
+      flex-wrap: wrap;
       gap: 2px;
       border-bottom: 1px solid var(--border-color);
       padding: 0 4px;
@@ -2993,6 +3106,7 @@
       font-size: 12.5px;
       font-weight: 600;
       color: var(--text-muted);
+      white-space: nowrap;
       border: 1px solid transparent;
       border-bottom: none;
       border-radius: 4px 4px 0 0;
@@ -3286,6 +3400,17 @@
     }
   
     /* Floating Glassmorphic Notification Toast */
+    /* A floating toast sits on top of the window (z-index 99999) and, in
+       right-to-left layouts, lands exactly where the menubar panels open --
+       it covered the first rows of every menu. Stand it down while a menu is
+       open; it fades back in as soon as the menu closes. */
+    body.menu-open .floating-update-toast,
+    body.menu-open .interactive-action-toast {
+      opacity: 0 !important;
+      pointer-events: none !important;
+      transition: opacity 0.12s ease;
+    }
+
     .floating-update-toast {
       position: fixed;
       top: 74px;
@@ -4500,7 +4625,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.76</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.77</span>
         </div>
       </div>
 
@@ -4544,8 +4669,8 @@
           </div>
           <div class="dropdown-separator"></div>
           <div class="dropdown-item" id="menuItemReconnect" onclick="handleReconnect(true)" style="display: none;">
-            <span class="menu-icon" style="color: #22c55e;"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
-            <span style="color: #4ade80; font-weight: 600;">Reconnect Session</span>
+            <span class="menu-icon menu-icon-success"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+            <span class="dd-success">Reconnect Session</span>
             <span class="shortcut">Ctrl+R</span>
           </div>
           <div class="dropdown-item" id="menuItemDisconnect" onclick="disconnect()">
@@ -4634,99 +4759,155 @@
 
       <div class="menu-item" onclick="toggleMenu(event, 'toolsMenu')">
         <span>Tools</span>
-        <div class="menu-dropdown" id="toolsMenu">
+                <div class="menu-dropdown has-flyout" id="toolsMenu">
           <div class="dropdown-item" onclick="openCommandPalette()">
             <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
-            <span style="font-weight: 600; color: var(--accent);">Command Palette (Omni-Launcher)...</span>
+            <span class="dd-accent">Command Palette (Omni-Launcher)...</span>
             <span class="shortcut">Ctrl+K</span>
           </div>
           <div class="dropdown-separator"></div>
-          <div class="dropdown-item" onclick="openFindFilesModal()">
+
+          <!-- Group: Search & Navigate -->
+          <div class="dropdown-item has-submenu" onmouseenter="positionSubmenu(this)" onclick="toggleSubmenu(event, this)">
             <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-            <span>Find Files (Remote & Local)...</span>
-            <span class="shortcut">Ctrl+F</span>
+            <span>Search &amp; Navigate</span>
+            <span class="submenu-arrow">&#8250;</span>
+            <div class="menu-dropdown submenu">
+              <div class="dropdown-item" onclick="openFindFilesModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+                <span>Find Files (Remote &amp; Local)...</span>
+                <span class="shortcut">Ctrl+F</span>
+              </div>
+              <div class="dropdown-item" onclick="openContentGrepModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+                <span>Search Text Inside Files (Grep)...</span>
+                <span class="shortcut">Ctrl+Shift+F</span>
+              </div>
+              <div class="dropdown-item" onclick="openBookmarksModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+                <span>Path Bookmarks &amp; Quick-Jump...</span>
+                <span class="shortcut">Ctrl+B</span>
+              </div>
+            </div>
           </div>
-          <div class="dropdown-item" onclick="openContentGrepModal()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
-            <span>Search Text Inside Files (Grep)...</span>
-            <span class="shortcut">Ctrl+Shift+F</span>
-          </div>
-          <div class="dropdown-item" onclick="openBatchRenameModal()">
+
+          <!-- Group: File Operations -->
+          <div class="dropdown-item has-submenu" onmouseenter="positionSubmenu(this)" onclick="toggleSubmenu(event, this)">
             <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>
-            <span>Batch Multi-Rename Tool (Regex/Seq)...</span>
-            <span class="shortcut">Ctrl+M</span>
+            <span>File Operations</span>
+            <span class="submenu-arrow">&#8250;</span>
+            <div class="menu-dropdown submenu">
+              <div class="dropdown-item" onclick="openBatchRenameModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>
+                <span>Batch Multi-Rename Tool (Regex/Seq)...</span>
+                <span class="shortcut">Ctrl+M</span>
+              </div>
+              <div class="dropdown-item" onclick="openChmodModal()">
+                <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+                <span>Set Permissions (CHMOD)...</span>
+              </div>
+              <div class="dropdown-item" onclick="openExclusionMaskModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+                <span>Transfer Exclusion Mask...</span>
+              </div>
+            </div>
           </div>
-          <div class="dropdown-item" onclick="toggleSynchronizedBrowsing()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
-            <span>Synchronized Browsing (Lock-Step)</span>
-            <span class="shortcut">Ctrl+Y</span>
-          </div>
-          <div class="dropdown-item" onclick="openBookmarksModal()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
-            <span>Path Bookmarks & Quick-Jump...</span>
-            <span class="shortcut">Ctrl+B</span>
-          </div>
-          <div class="dropdown-item" onclick="toggleCompareDirectories()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18"/></svg></span>
-            <span>Compare Directories</span>
-            <span class="shortcut">Shift+F1</span>
-          </div>
-          <div class="dropdown-item" onclick="openSyncModal()">
+
+          <!-- Group: Sync & Compare -->
+          <div class="dropdown-item has-submenu" onmouseenter="positionSubmenu(this)" onclick="toggleSubmenu(event, this)">
             <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
-            <span>Two-Way Folder Sync...</span>
-            <span class="shortcut">Ctrl+Shift+Y</span>
+            <span>Sync &amp; Compare</span>
+            <span class="submenu-arrow">&#8250;</span>
+            <div class="menu-dropdown submenu">
+              <div class="dropdown-item" onclick="toggleCompareDirectories()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18"/></svg></span>
+                <span>Compare Directories</span>
+                <span class="shortcut">Shift+F1</span>
+              </div>
+              <div class="dropdown-item" onclick="openSyncModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
+                <span>Two-Way Folder Sync...</span>
+                <span class="shortcut">Ctrl+Shift+Y</span>
+              </div>
+              <div class="dropdown-item" onclick="toggleSynchronizedBrowsing()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+                <span>Synchronized Browsing (Lock-Step)</span>
+                <span class="shortcut">Ctrl+Y</span>
+              </div>
+            </div>
           </div>
-          <div class="dropdown-item" onclick="openExclusionMaskModal()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-            <span>Transfer Exclusion Mask...</span>
+
+          <!-- Group: Server & Network -->
+          <div class="dropdown-item has-submenu" onmouseenter="positionSubmenu(this)" onclick="toggleSubmenu(event, this)">
+            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></span>
+            <span>Server &amp; Network</span>
+            <span class="submenu-arrow">&#8250;</span>
+            <div class="menu-dropdown submenu">
+              <div class="dropdown-item" onclick="openRemoteTerminal()">
+                <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+                <span>Open Remote Terminal (SSH)...</span>
+              </div>
+              <div class="dropdown-item" onclick="openRemoteTransferModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
+                <span>Remote Transfer &amp; Server Dispatcher...</span>
+              </div>
+              <div class="dropdown-item" onclick="openProcessManagerModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+                <span>Remote Process, Port &amp; Service Manager...</span>
+              </div>
+              <div class="dropdown-item" onclick="openNetworkProbeModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+                <span>Network Ping &amp; Port Probe...</span>
+              </div>
+              <div class="dropdown-item" onclick="openSshKeygenModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
+                <span>SSH Keypair Generator &amp; Vault...</span>
+              </div>
+              <div class="dropdown-item" onclick="openServerHealthModal()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+                <span>Remote Server Health &amp; Disk Usage...</span>
+              </div>
+            </div>
           </div>
-          <div class="dropdown-separator"></div>
-          <div class="dropdown-item" onclick="openRemoteTerminal()">
-            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
-            <span>Open Remote Terminal (SSH)...</span>
-          </div>
-          <div class="dropdown-item" onclick="openRemoteTransferModal()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
-            <span>Remote Transfer & Server Dispatcher...</span>
-          </div>
+
           <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="openToolsModal()">
             <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
-            <span>Power Tools & Diagnostics Suite...</span>
+            <span>Power Tools &amp; Diagnostics Suite...</span>
           </div>
-          <div class="dropdown-item" onclick="openProcessManagerModal()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-            <span>Remote Process, Port & Service Manager...</span>
-          </div>
-          <div class="dropdown-item" onclick="openNetworkProbeModal()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
-            <span>Network Ping & Port Probe...</span>
-          </div>
-          <div class="dropdown-item" onclick="openSshKeygenModal()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
-            <span>SSH Keypair Generator & Vault...</span>
-          </div>
-          <div class="dropdown-item" onclick="openServerHealthModal()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
-            <span>Remote Server Health & Disk Usage...</span>
-          </div>
-          <div class="dropdown-separator"></div>
-          <div class="dropdown-item" onclick="openOptionsModal('security')">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
-            <span>Clear Cache & History...</span>
-          </div>
-          <div class="dropdown-item" onclick="openStorageFolder()">
+
+          <!-- Group: Maintenance -->
+          <div class="dropdown-item has-submenu" onmouseenter="positionSubmenu(this)" onclick="toggleSubmenu(event, this)">
             <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
-            <span>Open Storage Folder</span>
+            <span>Maintenance</span>
+            <span class="submenu-arrow">&#8250;</span>
+            <div class="menu-dropdown submenu">
+              <div class="dropdown-item" onclick="openOptionsModal('security')">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+                <span>Clear Cache &amp; History...</span>
+              </div>
+              <div class="dropdown-item" onclick="openStorageFolder()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+                <span>Open Storage Folder</span>
+              </div>
+            </div>
           </div>
-          <div class="dropdown-separator"></div>
-          <div class="dropdown-item" onclick="copyAllLogs()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></span>
-            <span>Copy All Logs</span>
-          </div>
-          <div class="dropdown-item" onclick="clearLogs()">
-            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
-            <span>Clear Log Console</span>
+
+          <!-- Group: Log Console -->
+          <div class="dropdown-item has-submenu" onmouseenter="positionSubmenu(this)" onclick="toggleSubmenu(event, this)">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+            <span>Log Console</span>
+            <span class="submenu-arrow">&#8250;</span>
+            <div class="menu-dropdown submenu">
+              <div class="dropdown-item" onclick="copyAllLogs()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></span>
+                <span>Copy All Logs</span>
+              </div>
+              <div class="dropdown-item" onclick="clearLogs()">
+                <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+                <span>Clear Log Console</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -6149,7 +6330,7 @@
           </div>
           <div class="about-brand-sub">Modern Site Manager & Asynchronous File Transfer Engine</div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.76 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.77 Dev (Windows x64)</span>
             <span style="font-size: 12px; color: var(--text-dim);">Release Channel: Official</span>
           </div>
         </div>
@@ -6264,7 +6445,7 @@
         </div>
         <div class="about-code-box" id="aboutDiagnosticsText">
 Application: 90FTP Desktop Client
-Version: 0.0.0.76 (Release)
+Version: 0.0.0.77 (Release)
 OS: Windows NT 10.0 x64
 WebView2: Evergreen Host
 Renderer: DirectComposition Hardware Accelerated

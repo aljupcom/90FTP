@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.76';
+    let APP_CURRENT_VERSION = '0.0.0.77';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -11621,17 +11621,85 @@ window.onerror = function(msg, url, line, col, error) {
        invisible and its items unclickable. Measuring after the panel is shown
        and shifting it back by the overflow amount is direction-agnostic. */
     function fitMenuDropdown(parentItem) {
-      const dd = parentItem && parentItem.querySelector('.menu-dropdown');
+      const dd = parentItem && parentItem.querySelector(':scope > .menu-dropdown');
       if (!dd) return;
       const pad = 6;
       const vw = window.innerWidth;
+      const vh = window.innerHeight;
       dd.style.left = '0px';
       dd.style.right = 'auto';
+      dd.style.top = '';
       const rect = dd.getBoundingClientRect();
       let shift = 0;
       if (rect.right > vw - pad) shift = (vw - pad) - rect.right;
       if (rect.left + shift < pad) shift = pad - rect.left;
       dd.style.left = `${Math.round(shift)}px`;
+      /* Same idea vertically: a panel taller than the window is clipped at the
+         bottom edge, so pull it up by the overflow amount. */
+      const overflowY = rect.bottom - (vh - pad);
+      if (overflowY > 0) dd.style.top = `calc(100% - ${Math.round(overflowY)}px)`;
+    }
+
+    /* --- Grouped flyout submenus ------------------------------------------
+       Hover already opens the panel through CSS. This only decides which side
+       the panel opens on: the natural side is outward from the menubar, but on
+       a narrow window that can leave the viewport, so measure and flip. */
+    function measureSubmenu(sub) {
+      if (sub.offsetWidth) return { w: sub.offsetWidth, h: sub.offsetHeight };
+      /* Not painted yet: lay it out off-screen-ish, read, then restore. The
+         browser never gets to paint the intermediate state. */
+      const prevDisplay = sub.style.display;
+      const prevVisibility = sub.style.visibility;
+      sub.style.display = 'block';
+      sub.style.visibility = 'hidden';
+      const w = sub.offsetWidth;
+      const h = sub.offsetHeight;
+      sub.style.display = prevDisplay;
+      sub.style.visibility = prevVisibility;
+      return { w, h };
+    }
+
+    function positionSubmenu(parentItem) {
+      const sub = parentItem && parentItem.querySelector(':scope > .menu-dropdown.submenu');
+      if (!sub) return;
+      /* Opening one group closes any other that was pinned open by a click. */
+      const host = parentItem.parentElement;
+      if (host) {
+        host.querySelectorAll(':scope > .dropdown-item.submenu-open').forEach(el => {
+          if (el !== parentItem) el.classList.remove('submenu-open');
+        });
+      }
+      const rtl = document.documentElement.getAttribute('dir') === 'rtl';
+      const pad = 6;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const size = measureSubmenu(sub);
+      /* Measure at the natural side first. */
+      sub.classList.remove('submenu-flip');
+      const base = parentItem.getBoundingClientRect();
+      const naturalLeft = rtl ? base.left - size.w : base.right;
+      const fits = naturalLeft >= pad && naturalLeft + size.w <= vw - pad;
+      sub.classList.toggle('submenu-flip', !fits);
+      /* Keep the panel inside the window vertically as well. */
+      const roomBelow = vh - base.top - pad;
+      const shift = size.h > roomBelow ? roomBelow - size.h : 0;
+      sub.style.top = shift < 0 ? `${Math.round(shift - 5)}px` : '';
+    }
+
+    function toggleSubmenu(e, parentItem) {
+      if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+      const wasOpen = parentItem.classList.contains('submenu-open');
+      const host = parentItem.parentElement;
+      if (host) {
+        host.querySelectorAll(':scope > .dropdown-item.submenu-open').forEach(el => el.classList.remove('submenu-open'));
+      }
+      if (!wasOpen) {
+        parentItem.classList.add('submenu-open');
+        positionSubmenu(parentItem);
+      }
     }
 
     function toggleMenu(e, menuId) {
@@ -11646,6 +11714,7 @@ window.onerror = function(msg, url, line, col, error) {
       closeAllMenus();
       if (!wasActive && parentItem) {
         parentItem.classList.add('active');
+        document.body.classList.add('menu-open');
         fitMenuDropdown(parentItem);
       }
     }
@@ -11654,6 +11723,11 @@ window.onerror = function(msg, url, line, col, error) {
       document.querySelectorAll('.desktop-menubar .menu-item.active').forEach(item => {
         item.classList.remove('active');
       });
+      /* Reset any group panel pinned open by a click. */
+      document.querySelectorAll('.desktop-menubar .dropdown-item.submenu-open').forEach(item => {
+        item.classList.remove('submenu-open');
+      });
+      document.body.classList.remove('menu-open');
     }
 
     function focusQuickConnect() {
