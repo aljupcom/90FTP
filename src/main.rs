@@ -13,6 +13,7 @@ mod sftp_client;
 mod sync;
 mod transfer_control;
 mod transfer_queue;
+mod ui_prefs;
 mod watcher;
 
 use std::sync::Arc;
@@ -91,11 +92,24 @@ fn main() {
     // The application script lives in `ui/app.js` and is injected here so the
     // page stays a single self-contained document: WebView2 loads it through
     // NavigateToString, where a relative <script src> would not resolve.
+    // The interface language is injected before any page script runs, so the
+    // correct direction and language are in place on the very first paint.
+    // The value is whitelisted by `ui_prefs::normalize_language` and serialized
+    // through serde_json, so a corrupted file cannot break out of the literal.
+    let ui_prefs_boot = ui_prefs::load();
+    let ui_prefs_script = format!(
+        "window.__UI_PREFS__ = {};",
+        serde_json::json!({ "language": ui_prefs_boot.language })
+    );
+
     let html_content = include_str!("ui/index.html")
         .replace("// __APP_JS__", include_str!("ui/app.js"))
         .replace("/* __XTERM_CSS__ */", include_str!("ui/xterm.css"))
         .replace("// __XTERM_JS__", include_str!("ui/xterm.js"))
-        .replace("// __XTERM_FIT_JS__", include_str!("ui/xterm-addon-fit.js"));
+        .replace("// __XTERM_FIT_JS__", include_str!("ui/xterm-addon-fit.js"))
+        .replace("// __I18N_EN__", include_str!("ui/i18n.en.js"))
+        .replace("// __I18N_AR__", include_str!("ui/i18n.ar.js"))
+        .replace("// __I18N_JS__", include_str!("ui/i18n.js"));
 
     let mut webview_dir = sessions::get_storage_dir();
     webview_dir.push("webview_data");
@@ -142,6 +156,7 @@ fn main() {
         // release binary hands any script-injection bug a full execution console.
         .with_devtools(cfg!(debug_assertions))
         .with_background_color((17, 17, 19, 255))
+        .with_initialization_script(&ui_prefs_script)
         .with_html(html_content)
         .with_ipc_handler(ipc_handler)
         .build(&window)

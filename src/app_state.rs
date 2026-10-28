@@ -5,6 +5,7 @@ use crate::local_fs;
 use crate::models::{IpcRequest, IpcResponse, SiteProfile};
 use crate::remote::RemoteClient;
 use crate::sessions;
+use crate::ui_prefs;
 use crate::watcher;
 
 pub type ScriptCallback = Arc<dyn Fn(String) + Send + Sync>;
@@ -879,8 +880,36 @@ impl AppState {
                         "local_files": local_files,
                         "remote_history": remote_history,
                         "app_version": format!("0.0.0.{}", env!("CARGO_PKG_VERSION").split('.').last().unwrap_or("2")),
+                        "ui_prefs": ui_prefs::load(),
                     }),
                 )
+            }
+
+            "get_ui_prefs" => {
+                let prefs = ui_prefs::load();
+                IpcResponse::ok(id, action, json!({
+                    "version": prefs.version,
+                    "language": prefs.language,
+                }))
+            }
+
+            "save_ui_prefs" => {
+                // Read-modify-write so a partial payload never wipes other keys.
+                let mut prefs = ui_prefs::load();
+                if let Some(language) = payload["language"].as_str() {
+                    prefs.language = ui_prefs::normalize_language(language);
+                }
+                match ui_prefs::save(&prefs) {
+                    Ok(saved) => IpcResponse::ok(id, action, json!({
+                        "version": saved.version,
+                        "language": saved.language,
+                    })),
+                    Err(err) => IpcResponse::err(
+                        id,
+                        action,
+                        &format!("Failed to save UI preferences: {}", err),
+                    ),
+                }
             }
 
             "get_local_drives" => {

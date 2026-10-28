@@ -43,12 +43,16 @@ window.onerror = function(msg, url, line, col, error) {
     let selectedQuickSite = null;
     let currentConnectedProfile = null;
     let lastConnectedProfile = null;
+    // Remembered so the status badge can be re-rendered in the new language
+    // after a language switch, without losing the connected host label.
+    let lastConnectedLabel = '';
+    let lastConnectedFlag = false;
     let keepAliveTimer = null;
     let silentReconnectPromise = null;
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.70';
+    let APP_CURRENT_VERSION = '0.0.0.71';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -246,12 +250,12 @@ window.onerror = function(msg, url, line, col, error) {
       activeAppDialogIsPrompt = isPrompt;
       const variant = opts.variant || (isPrompt ? 'prompt' : 'info'); // 'info' | 'warning' | 'error' | 'danger' | 'confirm' | 'success' | 'prompt'
       const windowTitle = opts.windowTitle || (
-        variant === 'error' ? '90FTP — Operation Error' :
-        variant === 'danger' ? '90FTP — Confirm Action' :
-        variant === 'warning' ? '90FTP — Warning' :
-        variant === 'success' ? '90FTP — Completed' :
-        isPrompt ? '90FTP — Input Prompt' :
-        isConfirm ? '90FTP — Confirmation' : '90FTP — Notice'
+        variant === 'error' ? t('dlg.operation_error') :
+        variant === 'danger' ? t('dlg.confirm_action') :
+        variant === 'warning' ? t('dlg.warning') :
+        variant === 'success' ? t('dlg.completed') :
+        isPrompt ? t('dlg.input_prompt') :
+        isConfirm ? t('dlg.confirmation') : t('dlg.notice')
       );
 
       const titleEl = document.getElementById('appDialogWindowTitle');
@@ -275,7 +279,7 @@ window.onerror = function(msg, url, line, col, error) {
         badgeEl.className = `desktop-dialog-icon-badge ${variant === 'prompt' ? 'confirm' : variant}`;
         badgeEl.innerHTML = getAppDialogSvg(variant);
       }
-      if (headingEl) headingEl.textContent = opts.heading || (isPrompt ? 'Enter Value' : 'Notice');
+      if (headingEl) headingEl.textContent = opts.heading || (isPrompt ? t('dlg.enter_value') : t('dlg.notice'));
       if (msgEl) msgEl.textContent = opts.message || '';
 
       if (detailEl) {
@@ -303,16 +307,16 @@ window.onerror = function(msg, url, line, col, error) {
       if (copyBtn) {
         const showCopy = !isPrompt && (variant === 'error' || !!opts.details) && !!currentAppDialogRawCopyText;
         copyBtn.style.display = showCopy ? 'inline-flex' : 'none';
-        if (copyLabel) copyLabel.textContent = 'Copy Details';
+        if (copyLabel) copyLabel.textContent = t('dlg.copy_details');
       }
 
       if (cancelBtn) {
         cancelBtn.style.display = isConfirm ? 'inline-flex' : 'none';
-        cancelBtn.textContent = opts.cancelText || 'Cancel';
+        cancelBtn.textContent = opts.cancelText || t('common.cancel');
       }
 
       if (confirmBtn) {
-        confirmBtn.textContent = opts.confirmText || (isPrompt ? 'OK' : (isConfirm ? 'Confirm' : 'OK'));
+        confirmBtn.textContent = opts.confirmText || (isPrompt ? t('common.ok') : (isConfirm ? t('dlg.confirm') : t('common.ok')));
         confirmBtn.className = (variant === 'danger' || (variant === 'error' && isConfirm))
           ? 'btn btn-dialog-danger'
           : 'btn btn-primary';
@@ -386,18 +390,21 @@ window.onerror = function(msg, url, line, col, error) {
       if (copyLabel) {
         copyLabel.textContent = 'Copied ✓';
         setTimeout(() => {
-          copyLabel.textContent = 'Copy Details';
+          copyLabel.textContent = t('dlg.copy_details');
         }, 1600);
       }
     }
 
-    function parseDialogTextStructure(rawText, defaultHeading = 'Notice') {
+    // Severity heuristics run on the already-translated message. The keyword
+    // patterns themselves live in the dictionaries (re.* keys), so the Arabic
+    // alternations never appear in this file.
+    function parseDialogTextStructure(rawText, defaultHeading = t('dlg.notice')) {
       const clean = String(rawText ?? '').replace(/\/n/g, '\n').trim();
       if (!clean) return { heading: defaultHeading, message: '', details: '' };
       const lines = clean.split(/\r?\n/);
       if (lines.length === 1) {
         const colonIdx = clean.indexOf(': ');
-        if (colonIdx > 0 && colonIdx < 38 && /error|failed|denied|invalid|cannot|could not/i.test(clean.substring(0, colonIdx))) {
+        if (colonIdx > 0 && colonIdx < 38 && I18N.matches('error', clean.substring(0, colonIdx))) {
           return {
             heading: clean.substring(0, colonIdx).trim(),
             message: clean.substring(colonIdx + 2).trim(),
@@ -421,7 +428,7 @@ window.onerror = function(msg, url, line, col, error) {
         return {
           heading: firstLine,
           message: rest,
-          details: /error|failed|exception|denied|code/i.test(firstLine) ? rest : ''
+          details: I18N.matches('error', firstLine) ? rest : ''
         };
       }
       return { heading: defaultHeading, message: clean, details: '' };
@@ -431,20 +438,20 @@ window.onerror = function(msg, url, line, col, error) {
       const text = String(rawMessage ?? '').replace(/\/n/g, '\n').trim();
       let variant = forcedVariant;
       if (!variant) {
-        if (/error|failed|cannot|could not|denied|invalid|rejected|timed out/i.test(text)) {
+        if (I18N.matches('error', text)) {
           variant = 'error';
-        } else if (/successfully|completed|appended|cleared/i.test(text)) {
+        } else if (I18N.matches('success', text)) {
           variant = 'success';
-        } else if (/please |empty|already|select |required|nothing to|not found|not connected/i.test(text)) {
+        } else if (I18N.matches('warning', text)) {
           variant = 'warning';
         } else {
           variant = 'info';
         }
       }
       const defaultHeading = customTitle || (
-        variant === 'error' ? 'Operation Failed' :
-        variant === 'warning' ? 'Action Required' :
-        variant === 'success' ? 'Completed Successfully' : 'Information'
+        variant === 'error' ? t('dlg.operation_failed') :
+        variant === 'warning' ? t('dlg.action_required') :
+        variant === 'success' ? t('dlg.completed_successfully') : t('dlg.information')
       );
       const parsed = parseDialogTextStructure(text, defaultHeading);
       return showAppDialog({
@@ -454,44 +461,44 @@ window.onerror = function(msg, url, line, col, error) {
         message: parsed.DetailsOnly ? '' : parsed.message,
         details: (variant === 'error' && parsed.details && parsed.details !== parsed.message) ? parsed.details : (parsed.details && parsed.details !== parsed.message ? parsed.details : ''),
         copyText: text,
-        confirmText: 'OK'
+        confirmText: t('common.ok')
       });
     }
 
     function showAppConfirm(rawMessage, opts = {}) {
       const text = String(rawMessage ?? '').replace(/\/n/g, '\n').trim();
-      const isDanger = opts.variant === 'danger' || /delete|kill|cancel|reset|clear|remove|reboot|shred/i.test(text);
+      const isDanger = opts.variant === 'danger' || I18N.matches('danger', text);
       const variant = opts.variant || (isDanger ? 'danger' : 'confirm');
       const defaultHeading = opts.title || (
-        /delete/i.test(text) ? 'Confirm Permanent Deletion' :
-        /disconnect/i.test(text) ? 'Disconnect from Server' :
-        /cancel/i.test(text) ? 'Cancel Active Operation' :
-        /reset/i.test(text) ? 'Reset Preferences' :
-        /upload/i.test(text) ? 'Confirm Upload' :
-        /download/i.test(text) ? 'Confirm Download' :
-        /transfer/i.test(text) ? 'Start Remote Transfer' :
-        'Confirm Action'
+        I18N.matches('delete', text) ? t('dlg.confirm_deletion') :
+        I18N.matches('disconnect', text) ? t('dlg.disconnect_server') :
+        I18N.matches('cancel', text) ? t('dlg.cancel_operation') :
+        I18N.matches('reset', text) ? t('opt.reset_title') :
+        I18N.matches('upload', text) ? t('dlg.confirm_upload') :
+        I18N.matches('download', text) ? t('dlg.confirm_download') :
+        I18N.matches('transfer', text) ? t('txt.start_remote_transfer') :
+        t('dlg.confirm_action_short')
       );
       const parsed = parseDialogTextStructure(text, defaultHeading);
       const confirmLabel = opts.confirmText || (
-        /delete/i.test(text) ? 'Delete' :
-        /disconnect/i.test(text) ? 'Disconnect' :
-        /reset/i.test(text) ? 'Reset Defaults' :
-        /upload/i.test(text) ? 'Upload' :
-        /download/i.test(text) ? 'Download' :
-        /install/i.test(text) ? 'Install' :
-        /start remote transfer/i.test(text) ? 'Start Transfer' :
-        'Confirm'
+        I18N.matches('delete', text) ? t('common.delete') :
+        I18N.matches('disconnect', text) ? t('menu.disconnect') :
+        I18N.matches('reset', text) ? t('common.reset_defaults') :
+        I18N.matches('upload', text) ? t('tr.upload') :
+        I18N.matches('download', text) ? t('tr.download') :
+        I18N.matches('install', text) ? t('dlg.install') :
+        I18N.matches('start_transfer', text) ? t('dlg.start_transfer') :
+        t('dlg.confirm')
       );
       return showAppDialog({
         isConfirm: true,
         variant,
-        windowTitle: opts.windowTitle || (variant === 'danger' ? '90FTP — Security & Action Confirmation' : '90FTP — Confirmation'),
+        windowTitle: opts.windowTitle || (variant === 'danger' ? t('dlg.security_confirm') : t('dlg.confirmation')),
         heading: opts.title || parsed.heading,
         message: parsed.heading !== defaultHeading ? parsed.message : (parsed.details ? parsed.message : text),
         details: parsed.details || opts.details || '',
         confirmText: confirmLabel,
-        cancelText: opts.cancelText || 'Cancel',
+        cancelText: opts.cancelText || t('common.cancel'),
         copyText: text
       });
     }
@@ -874,8 +881,8 @@ window.onerror = function(msg, url, line, col, error) {
       const proto = (params.protocol || 'SFTP').toUpperCase();
       const user = params.username || 'user';
 
-      document.getElementById('loadingTitle').innerText = `Connecting to ${host}...`;
-      document.getElementById('loadingSubtitle').innerText = `Authenticating (${user}) via ${proto} protocol`;
+      document.getElementById('loadingTitle').innerText = t('log.connecting_host', { host: host });
+      document.getElementById('loadingSubtitle').innerText = t('log.loading_subtitle', { user: user, proto: proto });
 
       const spinner = document.getElementById('loadingSpinner');
       spinner.style.borderColor = 'rgba(59, 130, 246, 0.2)';
@@ -884,37 +891,37 @@ window.onerror = function(msg, url, line, col, error) {
       const existingFinal = document.getElementById('loadFinalSuccess');
       if (existingFinal) existingFinal.remove();
 
-      setLoadStep(1, `<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Initializing socket connection: ${host}:${port}`, 'active');
-      setLoadStep(2, `<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Negotiating ${proto} cryptographic handshake`, 'pending');
-      setLoadStep(3, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Authenticating credentials & verifying host key`, 'pending');
-      setLoadStep(4, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Retrieving remote directory tree`, 'pending');
+      setLoadStep(1, `<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> ${escapeHtml(t('log.step_socket', { host: host, port: port }))}`, 'active');
+      setLoadStep(2, `<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ${escapeHtml(t('log.step_handshake', { proto: proto }))}`, 'pending');
+      setLoadStep(3, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> ${escapeHtml(t('log.step_auth'))}`, 'pending');
+      setLoadStep(4, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ${escapeHtml(t('log.step_tree'))}`, 'pending');
 
       overlay.classList.add('active');
 
       connectionStepTimers.push(setTimeout(() => {
         if (pendingConnection) {
-          setLoadStep(1, `<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Connected to port ${port} (${host})`, 'done');
-          setLoadStep(2, `<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Negotiating ${proto} protocol handshake...`, 'active');
+          setLoadStep(1, `<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> ${escapeHtml(t('log.step_connected_port', { port: port, host: host }))}`, 'done');
+          setLoadStep(2, `<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ${escapeHtml(t('log.step_handshake_active', { proto: proto }))}`, 'active');
         }
       }, 350));
 
       connectionStepTimers.push(setTimeout(() => {
         if (pendingConnection) {
-          setLoadStep(2, `<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Cryptographic handshake complete with server`, 'done');
-          setLoadStep(3, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Verifying credentials for user '${user}'...`, 'active');
+          setLoadStep(2, `<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ${escapeHtml(t('log.step_handshake_done'))}`, 'done');
+          setLoadStep(3, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> ${escapeHtml(t('log.step_verify_user', { user: user }))}`, 'active');
         }
       }, 750));
     }
 
     function finishConnectionSuccess(remotePwd) {
       clearLoadingTimers();
-      setLoadStep(1, `<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Connected to remote port successfully`, 'done');
-      setLoadStep(2, `<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Cryptographic handshake secured`, 'done');
-      setLoadStep(3, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> User credentials authenticated`, 'done');
-      setLoadStep(4, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Remote working directory loaded: ${remotePwd || '/'}`, 'done');
+      setLoadStep(1, `<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> ${escapeHtml(t('log.step_port_ok'))}`, 'done');
+      setLoadStep(2, `<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ${escapeHtml(t('log.step_handshake_secured'))}`, 'done');
+      setLoadStep(3, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> ${escapeHtml(t('log.step_user_authed'))}`, 'done');
+      setLoadStep(4, `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ${escapeHtml(t('log.step_cwd_loaded', { path: remotePwd || '/' }))}`, 'done');
 
-      document.getElementById('loadingTitle').innerText = 'Connection Established!';
-      document.getElementById('loadingSubtitle').innerText = 'Session initialized and ready for file transfers';
+      document.getElementById('loadingTitle').innerText = t('log.connection_established');
+      document.getElementById('loadingSubtitle').innerText = t('log.session_ready');
 
       const spinner = document.getElementById('loadingSpinner');
       if (spinner) {
@@ -928,7 +935,7 @@ window.onerror = function(msg, url, line, col, error) {
         finalEl = document.createElement('div');
         finalEl.id = 'loadFinalSuccess';
         finalEl.className = 'loading-log-line final-success';
-        finalEl.innerHTML = `<span><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span> <span>Connection Linked Successfully</span>`;
+        finalEl.innerHTML = `<span><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span> <span>${escapeHtml(t('log.connection_linked'))}</span>`;
         box.appendChild(finalEl);
       }
 
@@ -1065,10 +1072,11 @@ window.onerror = function(msg, url, line, col, error) {
 
     // App Initialization
     async function initApp() {
+      initLanguage();
       initTheme();
       initOptions();
       loadExclusionMaskConfig();
-      addLog('Starting 90FTP Modern Site Manager...', 'info');
+      addLog(t('log.starting'), 'info');
       setupDragAndDrop();
 
       // Setup Pane-level right click for blank areas
@@ -1145,11 +1153,17 @@ window.onerror = function(msg, url, line, col, error) {
           if (data.app_version) {
             APP_CURRENT_VERSION = data.app_version;
             const curBadge = document.getElementById('updateCurrentBadge');
-            if (curBadge) curBadge.textContent = 'Current: v' + APP_CURRENT_VERSION;
+            if (curBadge) curBadge.textContent = t('upd.current_badge', { version: APP_CURRENT_VERSION });
             const aboutVer = document.getElementById('aboutAppVersion');
-            if (aboutVer) aboutVer.textContent = 'Version ' + APP_CURRENT_VERSION + ' Dev (Windows x64)';
+            if (aboutVer) aboutVer.textContent = t('about.version_line', { version: APP_CURRENT_VERSION });
             const topBadge = document.getElementById('topBrandBadge');
-            if (topBadge) topBadge.textContent = 'Modern Site Manager v' + APP_CURRENT_VERSION;
+            if (topBadge) topBadge.textContent = t('app.brand_badge', { version: APP_CURRENT_VERSION });
+          }
+
+          // The boot script already applied the stored language; this is a
+          // defensive re-sync in case the preference file changed underneath.
+          if (data.ui_prefs && data.ui_prefs.language && data.ui_prefs.language !== I18N.getLanguage()) {
+            applyLanguage(data.ui_prefs.language, { skipPersist: true });
           }
 
           if (data.remote_history) {
@@ -1164,7 +1178,7 @@ window.onerror = function(msg, url, line, col, error) {
           }
           syncCurrentLocalTabState();
           renderRemoteTabsBar();
-          addLog('Local file manager initialized. Ready to connect.', 'success');
+          addLog(t('log.local_ready'), 'success');
         }
       } catch (err) {
         addLog('Initialization notice: ' + err.message, 'warning');
@@ -1387,7 +1401,7 @@ window.onerror = function(msg, url, line, col, error) {
       if (rightPane) rightPane.classList.toggle('pane-focused', isRem);
 
       if (paneBadge) {
-        paneBadge.textContent = isRem ? 'REMOTE PANE' : 'LOCAL PANE';
+        paneBadge.textContent = isRem ? t('status.remote_pane') : t('pane.local_pane');
         paneBadge.style.color = isRem ? '#22c55e' : '#38bdf8';
         paneBadge.style.borderColor = isRem ? 'rgba(34, 197, 94, 0.35)' : 'rgba(56, 189, 248, 0.35)';
         paneBadge.style.background = isRem ? 'rgba(34, 197, 94, 0.14)' : 'rgba(56, 189, 248, 0.14)';
@@ -1400,10 +1414,10 @@ window.onerror = function(msg, url, line, col, error) {
           const totalBytes = selItems.reduce((acc, it) => acc + (it.is_dir ? (calculatedFolderSizes.get(it.path) || 0) : (Number(it.size) || 0)), 0);
           const dirsCount = selItems.filter(i => i.is_dir).length;
           const filesCount = selItems.length - dirsCount;
-          statusText.innerHTML = `<strong style="color: var(--text-main);">${selItems.length} selected</strong> (<span style="color: #38bdf8; font-weight: 600;">${filesCount} file${filesCount === 1 ? '' : 's'}</span>, <span style="color: #fbbf24; font-weight: 600;">📁 ${dirsCount} folder${dirsCount === 1 ? '' : 's'}</span> — <span style="color: var(--accent); font-family: monospace;">${formatBytes(totalBytes)}</span>)`;
+          statusText.innerHTML = `<strong style="color: var(--text-main);">${escapeHtml(t('status.selected', { n: selItems.length }))}</strong> (<span style="color: #38bdf8; font-weight: 600;">${escapeHtml(tn('count.files', filesCount))}</span>, <span style="color: #fbbf24; font-weight: 600;">📁 ${escapeHtml(tn('count.folders', dirsCount))}</span> — <span style="color: var(--accent); font-family: monospace;">${formatBytes(totalBytes)}</span>)`;
         } else {
           const totalDirBytes = allItems.reduce((acc, it) => acc + (it.is_dir ? 0 : (Number(it.size) || 0)), 0);
-          statusText.innerHTML = `${allItems.length} item${allItems.length === 1 ? '' : 's'} in current folder (${formatBytes(totalDirBytes)}) — <span style="opacity:0.8;">Use ↑↓ Enter Backspace Tab F2–F8</span>`;
+          statusText.innerHTML = `${escapeHtml(t('status.items_in_folder', { count: tn('count.items', allItems.length), size: formatBytes(totalDirBytes) }))} — <span style="opacity:0.8;">${escapeHtml(t('status.hint_keys'))}</span>`;
         }
       }
     }
@@ -4744,6 +4758,8 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     function setConnectedState(connected, title = '') {
+      lastConnectedFlag = !!connected;
+      lastConnectedLabel = title;
       const dot = document.getElementById('statusDot');
       const text = document.getElementById('statusText');
       const btnConn = document.getElementById('btnConnect');
@@ -4756,14 +4772,14 @@ window.onerror = function(msg, url, line, col, error) {
 
       if (termBadge) {
         termBadge.style.display = 'inline-block';
-        termBadge.textContent = connected ? 'SSH Online' : 'Local PS';
+        termBadge.textContent = connected ? t('status.ssh_online') : t('status.local_ps');
         termBadge.style.color = connected ? '#22c55e' : '#a855f7';
         termBadge.style.background = connected ? 'rgba(34, 197, 94, 0.18)' : 'rgba(168, 85, 247, 0.18)';
       }
 
       if (connected) {
         dot.className = 'status-dot connected';
-        text.innerText = 'Connected: ' + title;
+        text.innerText = t('status.connected_with', { title: title });
         btnConn.style.display = 'none';
         if (btnRec) btnRec.style.display = 'none';
         btnDisc.style.display = 'inline-flex';
@@ -4774,8 +4790,10 @@ window.onerror = function(msg, url, line, col, error) {
         const hasMatchingPrev = !!(lastConnectedProfile && lastConnectedProfile.host && (!selectedQuickSite || isProfileMatchingSite(lastConnectedProfile, selectedQuickSite)));
         dot.className = 'status-dot';
         text.innerText = hasMatchingPrev
-          ? `Disconnected (${lastConnectedProfile.host})`
-          : (selectedQuickSite ? `Ready: ${selectedQuickSite.name} (${selectedQuickSite.host})` : 'Disconnected');
+          ? t('status.disconnected_host', { host: lastConnectedProfile.host })
+          : (selectedQuickSite
+              ? t('status.ready_site', { name: selectedQuickSite.name, host: selectedQuickSite.host })
+              : t('top.disconnected'));
         btnDisc.style.display = 'none';
         if (hasMatchingPrev) {
           if (btnRec) btnRec.style.display = 'inline-flex';
@@ -5791,6 +5809,9 @@ window.onerror = function(msg, url, line, col, error) {
       if (!menu) return;
 
       renderContextMenuItems(type, item);
+      // Menu labels are built from English literals; translate the freshly
+      // built subtree so the menu matches the active interface language.
+      try { I18N.applyTranslations(menu); } catch (_) {}
 
       // Measure actual rendered height & width before showing to prevent any bottom/right clipping
       menu.style.visibility = 'hidden';
@@ -5839,7 +5860,12 @@ window.onerror = function(msg, url, line, col, error) {
           const subW = subRect.width || 245;
           const subH = subRect.height || 180;
 
-          if (parentRect.right + subW + pad > window.innerWidth) {
+          // In RTL the submenu opens to the left by default, so the collision
+          // check looks at the opposite window edge.
+          const overflows = I18N.isRtl()
+            ? (parentRect.left - subW - pad < 0)
+            : (parentRect.right + subW + pad > window.innerWidth);
+          if (overflows) {
             sub.classList.add('open-left');
           }
           if (parentRect.top + subH + pad > window.innerHeight) {
@@ -9114,7 +9140,11 @@ window.onerror = function(msg, url, line, col, error) {
         const rect = workspace.getBoundingClientRect();
         const offsetX = e.clientX - rect.left;
         const totalW = rect.width;
-        let percentage = (offsetX / totalW) * 100;
+        // In RTL the flex row is mirrored, so the resized pane sits on the
+        // right edge and the percentage has to be inverted.
+        let percentage = I18N.isRtl()
+          ? (1 - offsetX / totalW) * 100
+          : (offsetX / totalW) * 100;
         if (percentage < 20) percentage = 20;
         if (percentage > 80) percentage = 80;
         leftPane.style.width = percentage + '%';
@@ -9149,6 +9179,66 @@ window.onerror = function(msg, url, line, col, error) {
         document.body.style.cursor = '';
       }
     });
+
+    // =====================================================================
+    // Internationalization (English / Arabic)
+    // =====================================================================
+
+    // Reads the language chosen at the previous session. The Rust side injects
+    // window.__UI_PREFS__ before any page script runs, so the very first paint
+    // is already in the right language and direction.
+    function initLanguage() {
+      const boot = (window.__UI_PREFS__ && window.__UI_PREFS__.language) || null;
+      let cached = null;
+      try { cached = appStorage.getItem('90ftp_lang'); } catch (_) {}
+      I18N.setLanguage(boot || cached || 'en');
+      I18N.applyTranslations(document);
+    }
+
+    // Single choke point for a language change: switch the dictionary, re-apply
+    // the static chrome, then re-run every renderer so generated markup (file
+    // rows, tabs, badges, tables) is rebuilt with the new language.
+    function applyLanguage(lang, opts = {}) {
+      const next = I18N.setLanguage(lang);
+      I18N.applyTranslations(document);
+      try { appStorage.setItem('90ftp_lang', next); } catch (_) {}
+
+      const safe = (fn) => { try { fn(); } catch (err) { console.warn('[i18n] re-render failed', err); } };
+
+      safe(() => setConnectedState(lastConnectedFlag, lastConnectedLabel));
+      safe(() => updateCommanderStatusFooter());
+      safe(() => updatePaneStatsBadge(false));
+      safe(() => updatePaneStatsBadge(true));
+      safe(() => renderLocalTabsBar());
+      safe(() => renderRemoteTabsBar());
+      safe(() => updateQuickSiteSelect());
+      safe(() => renderTransfersTable());
+      safe(() => renderSitesList());
+      safe(() => renderMaskRulesBadges());
+      safe(() => renderTerminalTabs());
+      safe(() => renderPuttyTabs());
+      safe(() => updateSyncBrowsingToolbarUI());
+      safe(() => loadOptionsToForm());
+
+      // Selection- and scroll-preserving refresh instead of a hard re-render.
+      if (localFiles && localFiles.length) {
+        Promise.resolve()
+          .then(() => silentRefreshLocal())
+          .catch(() => safe(() => renderLocalFiles(localFiles)));
+      }
+      if (isConnected && remoteFiles && remoteFiles.length) {
+        Promise.resolve()
+          .then(() => silentRefreshRemote())
+          .catch(() => safe(() => renderRemoteFiles(remoteFiles)));
+      }
+
+      if (!opts.skipPersist) {
+        // Fire and forget: a failed write must never surface a dialog, the
+        // in-memory language is already applied.
+        try { sendRust('save_ui_prefs', { language: next }).catch(() => {}); } catch (_) {}
+      }
+      return next;
+    }
 
     // Theme Management (Light / Dark)
     function initTheme() {
@@ -9433,7 +9523,8 @@ window.onerror = function(msg, url, line, col, error) {
       fileCollision: 'overwrite',
       wipeOnDisconnect: false,
       maxLogLines: 500,
-      logTimestamps: true
+      logTimestamps: true,
+      language: 'en'
     };
 
     let appOptions = Object.assign({}, defaultOptions);
@@ -9447,6 +9538,9 @@ window.onerror = function(msg, url, line, col, error) {
           appOptions = Object.assign({}, defaultOptions, JSON.parse(saved));
         }
       } catch (_) {}
+      // Rust owns the language preference; the localStorage copy is only a
+      // session cache, so never let it override what was actually applied.
+      appOptions.language = I18N.getLanguage();
       loadOptionsToForm();
       showHiddenFilesState = !!appOptions.showHidden;
       const menuCheck = document.getElementById('menuCheckHidden');
@@ -9483,7 +9577,8 @@ window.onerror = function(msg, url, line, col, error) {
         fileCollision: getVal('optFileCollision', 'overwrite'),
         wipeOnDisconnect: getCheck('optWipeOnDisconnect', false),
         maxLogLines: parseInt(getVal('optMaxLogLines', '500'), 10) || 500,
-        logTimestamps: getCheck('optLogTimestamps', true)
+        logTimestamps: getCheck('optLogTimestamps', true),
+        language: getVal('optLanguage', 'en')
       };
     }
 
@@ -9495,7 +9590,7 @@ window.onerror = function(msg, url, line, col, error) {
 
       if (isDirty) {
         if (statusEl) {
-          statusEl.innerHTML = '<span style="color: #f59e0b; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>●</span> <span>Unsaved changes</span></span>';
+          statusEl.innerHTML = `<span style="color: #f59e0b; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>●</span> <span>${escapeHtml(t('opt.unsaved'))}</span></span>`;
         }
         if (applyBtn) {
           applyBtn.style.borderColor = 'var(--accent)';
@@ -9504,7 +9599,7 @@ window.onerror = function(msg, url, line, col, error) {
         }
       } else {
         if (statusEl) {
-          statusEl.innerHTML = '<span style="color: var(--text-dim); display: inline-flex; align-items: center; gap: 5px;"><span>✓</span> <span>All settings up to date</span></span>';
+          statusEl.innerHTML = `<span style="color: var(--text-dim); display: inline-flex; align-items: center; gap: 5px;"><span>✓</span> <span>${escapeHtml(t('opt.up_to_date'))}</span></span>`;
         }
         if (applyBtn) {
           applyBtn.style.borderColor = '';
@@ -9550,6 +9645,7 @@ window.onerror = function(msg, url, line, col, error) {
       setCheck('optWipeOnDisconnect', appOptions.wipeOnDisconnect);
 
       // Tab 4: Interface & Console
+      setVal('optLanguage', appOptions.language || I18N.getLanguage());
       setVal('optMaxLogLines', appOptions.maxLogLines);
       setCheck('optLogTimestamps', appOptions.logTimestamps);
 
@@ -9588,6 +9684,12 @@ window.onerror = function(msg, url, line, col, error) {
       const prevOpts = Object.assign({}, appOptions);
       appOptions = Object.assign({}, defaultOptions, newOpts);
 
+      // The language is committed first so every re-render below — including
+      // the hidden-files navigation — already runs with the new dictionary.
+      if (prevOpts.language !== appOptions.language) {
+        applyLanguage(appOptions.language);
+      }
+
       try {
         appStorage.setItem('90ftp_options', JSON.stringify(appOptions));
       } catch (_) {}
@@ -9620,11 +9722,11 @@ window.onerror = function(msg, url, line, col, error) {
       const statusEl = document.getElementById('optionsStatusMsg');
       const applyBtn = document.getElementById('btnApplyOptions');
       if (statusEl) {
-        statusEl.innerHTML = '<span style="color: #22c55e; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>✓</span> <span>Settings applied successfully</span></span>';
+        statusEl.innerHTML = `<span style="color: #22c55e; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;"><span>✓</span> <span>${escapeHtml(t('opt.applied_status'))}</span></span>`;
       }
       if (applyBtn) {
-        const origText = 'Apply';
-        applyBtn.textContent = '✓ Applied!';
+        const origText = t('common.apply');
+        applyBtn.textContent = t('opt.applied');
         applyBtn.style.borderColor = '#22c55e';
         applyBtn.style.color = '#22c55e';
         setTimeout(() => {
@@ -9633,7 +9735,7 @@ window.onerror = function(msg, url, line, col, error) {
         }, 1500);
       }
 
-      addLog('Preferences applied and saved successfully', 'success');
+      addLog(t('opt.applied_status'), 'success');
     }
 
     function saveOptions(showNotice = true) {
@@ -9646,11 +9748,12 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function resetSettingsToDefault() {
-      if (await showAppConfirm('Are you sure you want to reset all preferences to factory defaults?', { title: 'Reset Preferences', confirmText: 'Reset Defaults', variant: 'danger' })) {
+      if (await showAppConfirm(t('opt.reset_confirm'), { title: t('opt.reset_title'), confirmText: t('common.reset_defaults'), variant: 'danger' })) {
         appOptions = Object.assign({}, defaultOptions);
         try {
           appStorage.removeItem('90ftp_options');
         } catch (_) {}
+        applyLanguage(appOptions.language);
         loadOptionsToForm();
         addLog('Preferences reset to default values', 'info');
       }
@@ -10880,7 +10983,9 @@ window.onerror = function(msg, url, line, col, error) {
       let visible = 0;
 
       body.querySelectorAll('.tool-card').forEach((card) => {
-        const haystack = ((card.dataset.tool || '') + ' ' + card.textContent).toLowerCase();
+        // Include the English source text so keyword search keeps working
+        // after the visible card text has been translated.
+        const haystack = ((card.dataset.tool || '') + ' ' + card.textContent + ' ' + I18N.enSourceOf(card)).toLowerCase();
         const show = !needle || haystack.includes(needle);
         card.hidden = !show;
         if (show) visible++;
@@ -10896,7 +11001,7 @@ window.onerror = function(msg, url, line, col, error) {
       if (empty) empty.classList.toggle('visible', visible === 0);
 
       const count = document.getElementById('toolsCountLabel');
-      if (count) count.textContent = visible === 1 ? '1 tool' : visible + ' tools';
+      if (count) count.textContent = tn('count.tools', visible);
     }
 
     async function clearKnownHostsCache() {

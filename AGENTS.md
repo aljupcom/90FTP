@@ -3,7 +3,11 @@
 ## 1. Project Overview & Architecture
 - **Product Name**: 90FTP - Modern Site Manager (Desktop FTP/FTPS/SFTP Client).
 - **Core Stack**: Rust (`tao` windowing + `wry` WebView2 host + `russh` SFTP + `suppaftp` FTP) + Single-Page UI in `src/ui/index.html` (Vanilla JS, modern CSS, vector SVGs).
-- **Strict UI Language Rule**: All code, UI elements, button labels, logs, messages, and HTML attributes MUST be 100% in English. Arabic is used exclusively for chat communication with the user.
+- **Strict UI Language Rule**: All code, identifiers, HTML attributes, and every string literal in `src/**` MUST be English. The application ships two UI languages (English and Arabic) resolved at runtime through the translation layer in `src/ui/i18n.js`:
+  - Arabic text may appear **only** as a value inside `src/ui/i18n.ar.js`. Never write Arabic into `index.html`, `app.js`, `terminal.html`, or any `.rs` file.
+  - Never write mixed-language literals (`"Update تحديث"`). Each visible string is one dictionary key, translated at render time.
+  - English is the default language and the fallback for any missing key.
+  - Arabic is used exclusively for chat communication with the user; the UI stays English unless the user selects Arabic in Settings.
 - **Strict Browser Rule**: NEVER launch external web browsers (Chrome, Edge, etc.) unless the user explicitly requests it (`لا تقم بتشغيل المتصفح الا بطلب مني`).
 
 ## 2. Release & Versioning Pipeline (Mandatory Workflow)
@@ -70,3 +74,14 @@
 - `updateFsWatcher()` is invoked at the end of `renderLocalFiles`, `renderRemoteFiles` and `setConnectedState`. Do not remove those hooks, and add the same call to any new file-listing view.
 - Tests must never touch a real user profile — set `NINETYFTP_HOME` to redirect storage.
 - Full detail lives in `.gemini/rules/live_sync_rules.md`.
+
+## 9. Localization (English + Arabic)
+- **Files**: `src/ui/i18n.js` (runtime), `src/ui/i18n.en.js` (key registry), `src/ui/i18n.ar.js` (Arabic values only). All three are injected into the single document by `main.rs` through `// __I18N_EN__`, `// __I18N_AR__` and `// __I18N_JS__` placeholders — never add a `<script src>`.
+- **Static markup is translated without editing the HTML.** On every sweep the runtime promotes an exact English text node (or `title` / `placeholder` / `aria-label` value) into a `data-i18n*` attribute, then resolves it. Add a key to the dictionaries instead of rewriting literals; use explicit `data-i18n` only when an element mixes text and child elements.
+- **Never replace an element's whole `textContent`** for translation — only the first non-empty text node. The `<th>` sort headers embed `<span class="sort-indicator">` children that must survive.
+- **`t()` returns raw text.** Escape at the sink (`escapeHtml` for `innerHTML`, `addLog` escapes internally). Never put HTML in a dictionary value.
+- **Arabic keywords for the dialog severity heuristics live in the dictionaries** under `re.*` and are read through `I18N.matches(group, text)`. Never write Arabic literals in `app.js`.
+- **Persisted in Rust**, not localStorage: `ui_prefs.json` via `get_ui_prefs` / `save_ui_prefs`. `appStorage` is a session cache only (opaque origin never persists).
+- **RTL** is driven by `<html dir>` plus the `[dir="rtl"]` block at the end of `index.html`'s stylesheet. Machine data (paths, terminals, xterm) is pinned back to `direction: ltr; unicode-bidi: isolate`.
+- **Do not add `data-i18n` to the version-bearing nodes** (`#topBrandBadge`, `#aboutAppVersion`, `#updateCurrentBadge`): `scripts/release.ps1` rewrites them with regexes. Localize them at runtime instead.
+- Run `scripts/i18n_audit.ps1` before every release; it must exit 0.

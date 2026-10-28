@@ -364,7 +364,7 @@
       flex-direction: column;
       overflow: hidden;
       font-size: 12.5px;
-      direction: ltr;
+      direction: inherit;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -4207,6 +4207,81 @@
       border-color: rgba(220, 38, 38, 0.25) !important;
       color: #b91c1c !important;
     }
+
+    /* ===================================================================
+       RTL overrides. Every rule is scoped to [dir="rtl"] or [lang="ar"],
+       so the English left-to-right layout is never affected.
+       =================================================================== */
+
+    /* Arabic shaping: letter-spacing breaks glyph joining. */
+    html[lang="ar"] body {
+      font-family: "Segoe UI", "Segoe UI Variable Text", Tahoma, Arial, sans-serif;
+    }
+    html[lang="ar"] body *:not(svg):not(svg *) {
+      letter-spacing: normal !important;
+    }
+    html[lang="ar"] .options-groupbox-legend,
+    html[lang="ar"] .brand-badge {
+      text-transform: none !important;
+    }
+
+    /* Cascading submenus open on the mirrored side. */
+    [dir="rtl"] .context-submenu {
+      left: auto;
+      right: calc(100% + 2px);
+    }
+    [dir="rtl"] .context-submenu::before {
+      left: auto;
+      right: -8px;
+    }
+    [dir="rtl"] .context-menu-sub.open-left > .context-submenu {
+      right: auto;
+      left: calc(100% + 2px);
+    }
+    [dir="rtl"] .context-menu-sub.open-left > .context-submenu::before {
+      right: auto;
+      left: -8px;
+    }
+    [dir="rtl"] .context-menu-sub-chevron {
+      transform: scaleX(-1);
+    }
+
+    /* Trailing keyboard hints follow the mirrored edge. */
+    [dir="rtl"] .shortcut {
+      margin-left: 0;
+      margin-right: auto;
+    }
+
+    /* Machine data keeps left-to-right ordering inside the RTL shell. */
+    [dir="rtl"] input[type="text"],
+    [dir="rtl"] input[type="number"],
+    [dir="rtl"] input[type="password"],
+    [dir="rtl"] input[type="search"],
+    [dir="rtl"] textarea,
+    [dir="rtl"] .path-text,
+    [dir="rtl"] #terminalContainer,
+    [dir="rtl"] #puttyXtermContainer,
+    [dir="rtl"] .xterm,
+    [dir="rtl"] .xterm-screen,
+    [dir="rtl"] .xterm-helper-textarea {
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+
+    /* Mixed Arabic / English sentences follow their first strong character. */
+    [dir="rtl"] .log-msg,
+    [dir="rtl"] .desktop-dialog-message,
+    [dir="rtl"] .desktop-dialog-detail,
+    [dir="rtl"] .site-notice {
+      unicode-bidi: plaintext;
+    }
+
+    /* Arabic glyphs are slightly taller; avoid clipping in fixed-height chrome. */
+    html[lang="ar"] .btn,
+    html[lang="ar"] .dropdown-item,
+    html[lang="ar"] .menu-item > span:first-child {
+      line-height: 1.35;
+    }
   </style>
 </head>
 <body>
@@ -4271,7 +4346,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.70</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.71</span>
         </div>
       </div>
 
@@ -5825,6 +5900,20 @@
 
         <!-- Tab 4: Interface & Console -->
         <div class="options-pane" id="paneOptInterface">
+          <div class="options-groupbox">
+            <div class="options-groupbox-legend" data-i18n="opt.language_group">Language &amp; Region</div>
+            <div class="options-select-row">
+              <span style="color: var(--text-muted);" data-i18n="opt.language_label">Interface Language:</span>
+              <select id="optLanguage" onchange="checkOptionsFormDirty()" style="min-width: 150px;">
+                <option value="en" data-i18n="opt.language_en">English</option>
+                <option value="ar" data-i18n="opt.language_ar">Arabic</option>
+              </select>
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 6px; line-height: 1.5;" data-i18n="opt.language_hint">
+              Applies immediately on Apply. Saved to your profile and restored on next launch.
+            </div>
+          </div>
+
           <div class="options-groupbox">
             <div class="options-groupbox-legend">Theme & Layout</div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -7670,6 +7759,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   </script>
   <script>
     // __XTERM_FIT_JS__
+  </script>
+
+  <script>
+    // __I18N_EN__
+  </script>
+  <script>
+    // __I18N_AR__
+  </script>
+  <script>
+    // __I18N_JS__
   </script>
 
   <script>
