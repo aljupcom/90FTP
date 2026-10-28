@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.72';
+    let APP_CURRENT_VERSION = '0.0.0.73';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -11011,7 +11011,17 @@ window.onerror = function(msg, url, line, col, error) {
         search.value = '';
         filterTools('');
         // Focus after the pop-in animation, otherwise the caret fights it.
-        setTimeout(() => { try { search.focus(); } catch (_) {} }, 70);
+        // Only when the window already owns focus: handing focus to a text
+        // field inside an inactive window makes Windows build an input context
+        // for a window that is not ready for one.
+        setTimeout(() => {
+          if (!document.hasFocus()) return;
+          try {
+            search.focus({ preventScroll: true });
+          } catch (_) {
+            try { search.focus(); } catch (__) { /* focus is best-effort */ }
+          }
+        }, 70);
       }
     }
 
