@@ -253,9 +253,18 @@
       if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'TEXTAREA') continue;
       if (isSkipped(parent)) continue;
       if (parent.closest(NO_PROMOTE_SELECTOR)) continue;
-      /* Only promote when the element's whole text is exactly this phrase,
-         so multi-fragment labels are never half-translated. */
-      if (normalizePhrase(parent.textContent) !== phrase) continue;
+      /* Only promote when this is the element's sole piece of text. An element
+         like `<th>Name <span class="sort-indicator">▲</span></th>` qualifies:
+         the label is the only text, the span is decorative, and the swap below
+         rewrites just the label. A label split across two text nodes
+         (`<span>Hello <b>world</b> again</span>`) still fails this test, so
+         multi-fragment labels are never half-translated. */
+      var textNodeCount = 0;
+      for (var c = 0; c < parent.childNodes.length; c++) {
+        var child = parent.childNodes[c];
+        if (child.nodeType === 3 && child.nodeValue && child.nodeValue.trim()) textNodeCount++;
+      }
+      if (textNodeCount !== 1) continue;
       var key = idx.get(phrase);
       if (key) pending.push([parent, key]);
     }

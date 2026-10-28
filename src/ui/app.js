@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.73';
+    let APP_CURRENT_VERSION = '0.0.0.74';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -811,8 +811,8 @@ window.onerror = function(msg, url, line, col, error) {
           rList.innerHTML = `
             <tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 42px 15px;">
               <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
-                <span style="color: var(--text-main); font-weight: 700; font-size: 13px;">Selected Server: ${escapeHtml(site.name)} (${escapeHtml(site.host)})</span>
-                <span style="font-size: 11.5px; color: var(--text-muted);">Ready to connect (${site.protocol.toUpperCase()}://${escapeHtml(site.username)}@${escapeHtml(site.host)}:${site.port})</span>
+                <span style="color: var(--text-main); font-weight: 700; font-size: 14px;">Selected Server: ${escapeHtml(site.name)} (${escapeHtml(site.host)})</span>
+                <span style="font-size: 12.5px; color: var(--text-muted);">Ready to connect (${site.protocol.toUpperCase()}://${escapeHtml(site.username)}@${escapeHtml(site.host)}:${site.port})</span>
                 <button type="button" class="btn btn-primary" onclick="handleConnectClick()" style="padding: 5px 16px; font-weight: 600; margin-top: 2px;">
                   <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Connect to ${escapeHtml(site.name)}
                 </button>
@@ -846,8 +846,8 @@ window.onerror = function(msg, url, line, col, error) {
           <svg class="icon icon-sm" viewBox="0 0 24 24" style="color:#38bdf8; flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           <span style="color:#f8fafc; font-weight:700;">${escapeHtml(site.name)}</span>
           <span style="color:var(--text-dim);">&bull;</span>
-          <span style="color:#38bdf8; font-family:var(--font-mono); font-size:12px;">${site.protocol.toUpperCase()}://${site.username}@${site.host}:${site.port}</span>
-          <span style="background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.3); padding:1px 7px; border-radius:4px; font-size:11px; color:#4ade80;">${authDesc}</span>
+          <span style="color:#38bdf8; font-family:var(--font-mono); font-size:13px;">${site.protocol.toUpperCase()}://${site.username}@${site.host}:${site.port}</span>
+          <span style="background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.3); padding:1px 7px; border-radius:4px; font-size:12px; color:#4ade80;">${authDesc}</span>
         `;
       }
     }
@@ -1465,11 +1465,11 @@ window.onerror = function(msg, url, line, col, error) {
         });
 
         if (selDirs > 0 && selFiles > 0) {
-          badge.innerHTML = `<span style="color:#fbbf24; font-weight:700;">📁 ${selDirs} dir${selDirs===1?'':'s'}</span> + <span style="color:#38bdf8; font-weight:700;">📄 ${selFiles} file${selFiles===1?'':'s'}</span> <span style="opacity:0.75; font-size: 10px;">(${selCount}/${allList.length})</span>`;
+          badge.innerHTML = `<span style="color:#fbbf24; font-weight:700;">📁 ${selDirs} dir${selDirs===1?'':'s'}</span> + <span style="color:#38bdf8; font-weight:700;">📄 ${selFiles} file${selFiles===1?'':'s'}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
         } else if (selDirs > 0) {
-          badge.innerHTML = `<span style="color:#fbbf24; font-weight:700;">📁 ${selDirs} folder${selDirs===1?'':'s'}</span> <span style="opacity:0.75; font-size: 10px;">(${selCount}/${allList.length})</span>`;
+          badge.innerHTML = `<span style="color:#fbbf24; font-weight:700;">📁 ${selDirs} folder${selDirs===1?'':'s'}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
         } else {
-          badge.innerHTML = `<span style="color:#38bdf8; font-weight:700;">📄 ${selFiles} file${selFiles===1?'':'s'}</span> <span style="opacity:0.75; font-size: 10px;">(${selCount}/${allList.length})</span>`;
+          badge.innerHTML = `<span style="color:#38bdf8; font-weight:700;">📄 ${selFiles} file${selFiles===1?'':'s'}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
         }
         badge.title = `${selCount} selected (${selFiles} files, ${selDirs} folders — ${formatBytes(selBytes)}). Click to cycle selection (All / Files / Folders / Clear)`;
         badge.classList.add('has-selection');
@@ -1714,7 +1714,7 @@ window.onerror = function(msg, url, line, col, error) {
             <div class="file-cell">
               <span class="file-icon ${iconClass}">${svg}</span>
               <span class="parent-dir-dots">..</span>
-              <span style="font-size: 10.5px; color: var(--text-dim); margin-left: 6px;">(${escapeHtml(parentBaseName)})</span>
+              <span style="font-size: 11.5px; color: var(--text-dim); margin-left: 6px;">(${escapeHtml(parentBaseName)})</span>
             </div>
           </td>
           <td class="mono-cell">-</td>
@@ -2251,10 +2251,10 @@ window.onerror = function(msg, url, line, col, error) {
       let sitesHtml = '';
       if (savedSites && savedSites.length > 0) {
         sitesHtml = savedSites.map(s => `
-          <button type="button" class="btn btn-secondary" onclick="connectRemoteTabToSavedSite('${escapeJsString(s.id)}')" style="display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; height: auto; font-size: 12px; border-color: rgba(56, 189, 248, 0.3);">
+          <button type="button" class="btn btn-secondary" onclick="connectRemoteTabToSavedSite('${escapeJsString(s.id)}')" style="display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; height: auto; font-size: 13px; border-color: rgba(56, 189, 248, 0.3);">
             <span style="width: 7px; height: 7px; border-radius: 50%; background: #38bdf8;"></span>
             <span style="font-weight: 700;">${escapeHtml(s.name)}</span>
-            <span style="color: var(--text-dim); font-family: var(--font-mono); font-size: 11px;">(${escapeHtml(s.host)})</span>
+            <span style="color: var(--text-dim); font-family: var(--font-mono); font-size: 12px;">(${escapeHtml(s.host)})</span>
           </button>
         `).join('');
       }
@@ -2263,10 +2263,10 @@ window.onerror = function(msg, url, line, col, error) {
         <tr>
           <td colspan="4" style="text-align: center; color: var(--text-dim); padding: 38px 18px;">
             <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 560px; margin: 0 auto;">
-              <div style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">
+              <div style="font-size: 14.5px; font-weight: 700; color: var(--text-main);">
                 <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Remote Tab Ready — Connect to a Server or Folder
               </div>
-              <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5;">
+              <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.5;">
                 Each remote tab maintains its own independent live server session and directory path. Select a saved server below or use the Quick Connect bar above.
               </div>
               ${cloneProfile ? `
@@ -2750,7 +2750,7 @@ window.onerror = function(msg, url, line, col, error) {
             html += `
               <div class="commander-popup-item" onclick="closeAllCommanderPopups(); createNewRemoteTab({ siteId: '${escapeJsString(s.id)}', title: '${escapeJsString(s.host)}' })">
                 <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> ${escapeHtml(s.name)} (${escapeHtml(s.host)})</span>
-                <span style="font-size: 10px; opacity: 0.7;">New Tab</span>
+                <span style="font-size: 11px; opacity: 0.7;">New Tab</span>
               </div>
             `;
           });
@@ -3172,7 +3172,7 @@ window.onerror = function(msg, url, line, col, error) {
             <div class="file-cell">
               <span class="file-icon ${iconClass}">${svg}</span>
               <span class="parent-dir-dots">..</span>
-              <span style="font-size: 10.5px; color: var(--text-dim); margin-left: 6px;">(${escapeHtml(parentBaseName)})</span>
+              <span style="font-size: 11.5px; color: var(--text-dim); margin-left: 6px;">(${escapeHtml(parentBaseName)})</span>
             </div>
           </td>
           <td class="mono-cell">-</td>
@@ -3188,7 +3188,7 @@ window.onerror = function(msg, url, line, col, error) {
         errTr.innerHTML = `
           <td colspan="4" style="text-align: center; color: #ef4444; padding: ${canGoUp ? '20px' : '35px'} 15px;">
             <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-              <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px;">
+              <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px;">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#ef4444" stroke-width="2">
                   <circle cx="12" cy="12" r="10"/>
                   <line x1="12" y1="8" x2="12" y2="12"/>
@@ -3196,7 +3196,7 @@ window.onerror = function(msg, url, line, col, error) {
                 </svg>
                 <span>Directory Access Notice</span>
               </div>
-              <div style="font-size: 11.5px; color: var(--text-muted); font-family: monospace; max-width: 90%; word-break: break-all;">
+              <div style="font-size: 12.5px; color: var(--text-muted); font-family: monospace; max-width: 90%; word-break: break-all;">
                 ${escapeHtml(listError)}
               </div>
             </div>
@@ -3803,7 +3803,7 @@ window.onerror = function(msg, url, line, col, error) {
         });
 
         if (!chipsHtml) {
-          chipsHtml = `<span style="font-size: 11px; color: var(--text-dim); font-style: italic;">Type any target directory path below</span>`;
+          chipsHtml = `<span style="font-size: 12px; color: var(--text-dim); font-style: italic;">Type any target directory path below</span>`;
         }
         chipsBox.innerHTML = chipsHtml;
       }
@@ -7694,7 +7694,7 @@ window.onerror = function(msg, url, line, col, error) {
       if (!container) return;
       container.innerHTML = '';
       if (exclusionMaskState.rules.length === 0) {
-        container.innerHTML = '<span style="color: var(--text-dim); font-style: italic; font-size: 11.5px;">No exclusion rules defined (all files will be transferred)</span>';
+        container.innerHTML = '<span style="color: var(--text-dim); font-style: italic; font-size: 12.5px;">No exclusion rules defined (all files will be transferred)</span>';
         return;
       }
       exclusionMaskState.rules.forEach((rule, idx) => {
@@ -7903,7 +7903,7 @@ window.onerror = function(msg, url, line, col, error) {
               <span style="font-weight: 600; color: var(--text-main); word-break: break-all;">${escapeHtml(item.name)}</span>
             </div>
           </td>
-          <td style="padding: 6px 10px; color: var(--text-dim); font-family: monospace; font-size: 11px; word-break: break-all;">
+          <td style="padding: 6px 10px; color: var(--text-dim); font-family: monospace; font-size: 12px; word-break: break-all;">
             ${escapeHtml(item.dir || item.path)}
           </td>
           <td style="padding: 6px 10px; text-align: right; color: var(--text-muted); font-family: monospace;">
@@ -7911,10 +7911,10 @@ window.onerror = function(msg, url, line, col, error) {
           </td>
           <td style="padding: 6px 10px; text-align: center;">
             <div style="display: flex; gap: 4px; justify-content: center;">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="jumpToFoundRemoteItem(findFilesResults[${idx}])" title="Open folder in ${isLocalScope ? 'Local' : 'Remote'} Pane" style="padding: 1px 7px; font-size: 10.5px;">Go</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="jumpToFoundRemoteItem(findFilesResults[${idx}])" title="Open folder in ${isLocalScope ? 'Local' : 'Remote'} Pane" style="padding: 1px 7px; font-size: 11.5px;">Go</button>
               ${!item.is_dir ? `
-                ${!isLocalScope ? `<button type="button" class="btn btn-secondary btn-sm" onclick="downloadFoundItem(findFilesResults[${idx}])" title="Download to local directory" style="padding: 1px 7px; font-size: 10.5px;"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>` : ''}
-                <button type="button" class="btn btn-secondary btn-sm" onclick="editFoundItem(findFilesResults[${idx}])" title="Edit in code editor" style="padding: 1px 7px; font-size: 10.5px;"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+                ${!isLocalScope ? `<button type="button" class="btn btn-secondary btn-sm" onclick="downloadFoundItem(findFilesResults[${idx}])" title="Download to local directory" style="padding: 1px 7px; font-size: 11.5px;"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>` : ''}
+                <button type="button" class="btn btn-secondary btn-sm" onclick="editFoundItem(findFilesResults[${idx}])" title="Edit in code editor" style="padding: 1px 7px; font-size: 11.5px;"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
               ` : ''}
             </div>
           </td>
@@ -9055,7 +9055,7 @@ window.onerror = function(msg, url, line, col, error) {
 
     function transferRowActions(task) {
       const btn = (label, title, action, color) =>
-        '<button type="button" class="btn btn-secondary" style="padding: 1px 6px; font-size: 10px;'
+        '<button type="button" class="btn btn-secondary" style="padding: 1px 6px; font-size: 11px;'
         + (color ? ' color: ' + color + '; border-color: ' + color + '55;' : '')
         + '" title="' + title + '" onclick="transferAction(\'' + action + '\', ' + task.id + ')">'
         + label + '</button>';
@@ -9070,7 +9070,7 @@ window.onerror = function(msg, url, line, col, error) {
       } else if (task.state === 'failed' || task.state === 'cancelled') {
         parts.push(btn('Retry', 'Queue this transfer again', 'transfer_requeue', '#38bdf8'));
       } else {
-        parts.push('<span style="color: var(--text-dim); font-size: 11px;">—</span>');
+        parts.push('<span style="color: var(--text-dim); font-size: 12px;">—</span>');
       }
       return '<div style="display: flex; gap: 4px; justify-content: center;">' + parts.join('') + '</div>';
     }
@@ -9086,8 +9086,8 @@ window.onerror = function(msg, url, line, col, error) {
       tbody.innerHTML = transferTasks.map((task, idx) => {
         const isUpload = task.kind === 'upload';
         const typeBadge = isUpload
-          ? '<span style="color: #38bdf8; font-weight: 700; font-size: 11px;">▲ UP</span>'
-          : '<span style="color: #4ade80; font-weight: 700; font-size: 11px;">▼ DOWN</span>';
+          ? '<span style="color: #38bdf8; font-weight: 700; font-size: 12px;">▲ UP</span>'
+          : '<span style="color: #4ade80; font-weight: 700; font-size: 12px;">▼ DOWN</span>';
 
         const percent = transferPercent(task);
         let statusBadge = '';
@@ -9123,17 +9123,17 @@ window.onerror = function(msg, url, line, col, error) {
           : (task.size ? percent + '%' : formatBytes(task.bytes || 0));
 
         return '<tr oncontextmenu="openContextMenu(event, \'transfer_item\', transferTasks[' + idx + '])" style="cursor: context-menu;">'
-          + '<td style="text-align: center; color: var(--text-dim); font-size: 11px;">' + (idx + 1) + '</td>'
+          + '<td style="text-align: center; color: var(--text-dim); font-size: 12px;">' + (idx + 1) + '</td>'
           + '<td>' + typeBadge + '</td>'
           + '<td style="font-weight: 600; color: var(--text-main); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(transferName(task)) + '">'
           + iconPrefix + escapeHtml(transferName(task))
           + '</td>'
-          + '<td style="color: var(--text-dim); font-size: 11px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(transferSource(task)) + ' ➔ ' + escapeHtml(transferDestination(task)) + '">'
+          + '<td style="color: var(--text-dim); font-size: 12px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(transferSource(task)) + ' ➔ ' + escapeHtml(transferDestination(task)) + '">'
           + escapeHtml(transferSource(task)) + ' &rarr; ' + escapeHtml(transferDestination(task))
           + '</td>'
-          + '<td style="text-align: right; font-family: var(--font-mono); color: var(--text-muted); font-size: 11px;">' + escapeHtml(sizeText) + '</td>'
+          + '<td style="text-align: right; font-family: var(--font-mono); color: var(--text-muted); font-size: 12px;">' + escapeHtml(sizeText) + '</td>'
           + '<td>'
-          + '<div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);">'
+          + '<div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); font-family: var(--font-mono);">'
           + '<span>' + progressLabel + '</span>'
           + '<span>' + (task.state === 'running' ? formatBytes(task.bytes || 0) : '') + '</span>'
           + '</div>'
@@ -9921,7 +9921,7 @@ window.onerror = function(msg, url, line, col, error) {
       if (!container) return;
       container.innerHTML = terminalSessions.map(s => `
         <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" onclick="switchTerminalSession('${s.id}')">
-          <span style="font-size: 8px; color: ${s.busy ? '#38bdf8' : (s.mode === 'remote' ? '#22c55e' : '#a855f7')};">●</span>
+          <span style="font-size: 9px; color: ${s.busy ? '#38bdf8' : (s.mode === 'remote' ? '#22c55e' : '#a855f7')};">●</span>
           <span>${escapeHtml(s.title)} (${escapeHtml(s.cwd.length > 15 ? '...' + s.cwd.slice(-12) : s.cwd)})</span>
           ${terminalSessions.length > 1 ? `<span class="terminal-tab-close" onclick="closeTerminalSession('${s.id}', event)" title="Close tab">✕</span>` : ''}
         </div>
@@ -10634,8 +10634,8 @@ window.onerror = function(msg, url, line, col, error) {
       const container = document.getElementById('puttyTabsContainer');
       if (!container) return;
       container.innerHTML = terminalSessions.map(s => `
-        <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" onclick="switchTerminalSession('${s.id}')" style="padding: 1px 8px; font-size: 11px;">
-          <span style="font-size: 7px; color: ${s.busy ? '#38bdf8' : (s.mode === 'remote' ? '#22c55e' : '#a855f7')};">●</span>
+        <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" onclick="switchTerminalSession('${s.id}')" style="padding: 1px 8px; font-size: 12px;">
+          <span style="font-size: 9px; color: ${s.busy ? '#38bdf8' : (s.mode === 'remote' ? '#22c55e' : '#a855f7')};">●</span>
           <span>${escapeHtml(s.title)}</span>
           ${terminalSessions.length > 1 ? `<span class="terminal-tab-close" onclick="closeTerminalSession('${s.id}', event)" title="Close tab">✕</span>` : ''}
         </div>
@@ -11371,7 +11371,7 @@ window.onerror = function(msg, url, line, col, error) {
       
       const topBadge = document.getElementById('topBrandBadge');
       if (topBadge) {
-        topBadge.innerHTML = 'Modern Site Manager v' + APP_CURRENT_VERSION + ' <span style="background: #22c55e; color: #fff; font-size: 9.5px; padding: 1px 6px; border-radius: 10px; margin-left: 5px; animation: pulse 1s infinite alternate;">Update v' + cleanLatest + '</span>';
+        topBadge.innerHTML = 'Modern Site Manager v' + APP_CURRENT_VERSION + ' <span style="background: #22c55e; color: #fff; font-size: 10.5px; padding: 1px 6px; border-radius: 10px; margin-left: 5px; animation: pulse 1s infinite alternate;">Update v' + cleanLatest + '</span>';
         topBadge.style.cursor = 'pointer';
         topBadge.title = 'Click to open update manager';
         topBadge.onclick = () => openUpdateModal(true);
@@ -11453,16 +11453,16 @@ window.onerror = function(msg, url, line, col, error) {
           }
 
           // Render as clean colored text without stickers, borders or boxes
-          out += `<div style="font-weight: 700; color: ${headingColor}; font-size: 12px; margin-top: 6px; margin-bottom: 2px;">${headingIcon}${escapeHtml(displayTitle)}</div>`;
+          out += `<div style="font-weight: 700; color: ${headingColor}; font-size: 13px; margin-top: 6px; margin-bottom: 2px;">${headingIcon}${escapeHtml(displayTitle)}</div>`;
         } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('+ ')) {
           let bullet = trimmed.substring(2).trim();
           
           // Clean legacy bracket tags to keep text clean and minimal
           bullet = bullet.replace(/^(\[(added|changed|fixed|security)\]|(added|changed|fixed|security):)\s*/i, '');
 
-          out += `<div style="display: flex; gap: 6px; margin-bottom: 2px; align-items: baseline; padding-left: 4px; line-height: 1.35;"><span style="color: var(--text-dim); font-size: 10px; flex-shrink: 0;">•</span><span style="color: var(--text-main); font-size: 11.5px;">${escapeHtml(bullet)}</span></div>`;
+          out += `<div style="display: flex; gap: 6px; margin-bottom: 2px; align-items: baseline; padding-left: 4px; line-height: 1.35;"><span style="color: var(--text-dim); font-size: 11px; flex-shrink: 0;">•</span><span style="color: var(--text-main); font-size: 12.5px;">${escapeHtml(bullet)}</span></div>`;
         } else {
-          out += `<div style="margin-bottom: 3px; color: var(--text-muted); font-size: 11.5px; line-height: 1.35;">${escapeHtml(trimmed)}</div>`;
+          out += `<div style="margin-bottom: 3px; color: var(--text-muted); font-size: 12.5px; line-height: 1.35;">${escapeHtml(trimmed)}</div>`;
         }
       });
       return out;
@@ -11743,23 +11743,23 @@ window.onerror = function(msg, url, line, col, error) {
           box.innerHTML = `
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;">
               <div style="background: rgba(255,255,255,0.03); padding: 7px; border-radius: 5px; border: 1px solid var(--border-color);">
-                <div style="font-size: 10px; color: var(--text-dim);">PORT STATUS</div>
-                <div style="font-weight: 700; color: ${statusColor}; font-size: 12px; margin-top: 2px;">${statusLabel}</div>
+                <div style="font-size: 11px; color: var(--text-dim);">PORT STATUS</div>
+                <div style="font-weight: 700; color: ${statusColor}; font-size: 13px; margin-top: 2px;">${statusLabel}</div>
               </div>
               <div style="background: rgba(255,255,255,0.03); padding: 7px; border-radius: 5px; border: 1px solid var(--border-color);">
-                <div style="font-size: 10px; color: var(--text-dim);">RESOLVED IP & DNS</div>
-                <div style="font-weight: 600; font-family: monospace; font-size: 11px; margin-top: 2px;">${escapeHtml(ips)} (${res.dns_ms || 0}ms)</div>
+                <div style="font-size: 11px; color: var(--text-dim);">RESOLVED IP & DNS</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 12px; margin-top: 2px;">${escapeHtml(ips)} (${res.dns_ms || 0}ms)</div>
               </div>
               <div style="background: rgba(255,255,255,0.03); padding: 7px; border-radius: 5px; border: 1px solid var(--border-color);">
-                <div style="font-size: 10px; color: var(--text-dim);">TCP RTT LATENCY</div>
-                <div style="font-weight: 700; color: #38bdf8; font-family: monospace; font-size: 11.5px; margin-top: 2px;">${escapeHtml(rttText)}</div>
+                <div style="font-size: 11px; color: var(--text-dim);">TCP RTT LATENCY</div>
+                <div style="font-weight: 700; color: #38bdf8; font-family: monospace; font-size: 12.5px; margin-top: 2px;">${escapeHtml(rttText)}</div>
               </div>
               <div style="background: rgba(255,255,255,0.03); padding: 7px; border-radius: 5px; border: 1px solid var(--border-color);">
-                <div style="font-size: 10px; color: var(--text-dim);">JITTER</div>
-                <div style="font-weight: 600; font-family: monospace; font-size: 11.5px; margin-top: 2px;">${escapeHtml(jitterText)}</div>
+                <div style="font-size: 11px; color: var(--text-dim);">JITTER</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 12.5px; margin-top: 2px;">${escapeHtml(jitterText)}</div>
               </div>
             </div>
-            <div style="background: #090d16; border: 1px solid var(--border-color); border-radius: 5px; padding: 8px 10px; font-family: monospace; font-size: 11px; line-height: 1.45;">
+            <div style="background: #090d16; border: 1px solid var(--border-color); border-radius: 5px; padding: 8px 10px; font-family: monospace; font-size: 12px; line-height: 1.45;">
               <div style="color: #fbbf24; margin-bottom: 6px; font-weight: 600;">Banner: ${escapeHtml(res.banner || '(No service greeting banner returned)')}</div>
               ${sampleRows}
             </div>
@@ -11797,16 +11797,16 @@ window.onerror = function(msg, url, line, col, error) {
         const keys = res.keys || [];
         window._cachedVaultKeys = keys;
         if (keys.length === 0) {
-          container.innerHTML = `<div style="padding: 14px; text-align: center; color: var(--text-dim); font-size: 11.5px;">No SSH keys generated yet in <code>%APPDATA%\\90FTP\\ssh_keys</code></div>`;
+          container.innerHTML = `<div style="padding: 14px; text-align: center; color: var(--text-dim); font-size: 12.5px;">No SSH keys generated yet in <code>%APPDATA%\\90FTP\\ssh_keys</code></div>`;
           return;
         }
         container.innerHTML = keys.map((k, idx) => `
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); gap: 8px;">
             <div style="min-width: 0; flex: 1;">
-              <div style="font-weight: 600; font-size: 11.5px; color: var(--text-main);"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> ${escapeHtml(k.name)}</div>
-              <div style="font-family: monospace; font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(k.private_key_path)}</div>
+              <div style="font-weight: 600; font-size: 12.5px; color: var(--text-main);"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> ${escapeHtml(k.name)}</div>
+              <div style="font-family: monospace; font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(k.private_key_path)}</div>
             </div>
-            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 10.5px;" onclick="selectVaultSshKey(${idx})">Select Key</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11.5px;" onclick="selectVaultSshKey(${idx})">Select Key</button>
           </div>
         `).join('');
       } catch (err) {
@@ -11903,7 +11903,7 @@ window.onerror = function(msg, url, line, col, error) {
           return `
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
               <td style="padding: 6px 10px; font-weight: 600; font-family: monospace; color: var(--text-main);">${escapeHtml(d.mount)}</td>
-              <td style="padding: 6px 10px; font-family: monospace; color: var(--text-dim); font-size: 11px;">${escapeHtml(d.filesystem)}</td>
+              <td style="padding: 6px 10px; font-family: monospace; color: var(--text-dim); font-size: 12px;">${escapeHtml(d.filesystem)}</td>
               <td style="padding: 6px 10px; text-align: right; font-family: monospace;">${escapeHtml(d.used)} / ${escapeHtml(d.size)}</td>
               <td style="padding: 6px 10px; text-align: right; font-family: monospace; color: #10b981;">${escapeHtml(d.avail)}</td>
               <td style="padding: 6px 10px; width: 140px;">
@@ -11911,7 +11911,7 @@ window.onerror = function(msg, url, line, col, error) {
                   <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
                     <div style="height: 100%; width: ${Math.min(100, pctNum)}%; background: ${barColor};"></div>
                   </div>
-                  <span style="font-family: monospace; font-size: 10.5px; min-width: 32px; text-align: right;">${escapeHtml(d.use_percent)}</span>
+                  <span style="font-family: monospace; font-size: 11.5px; min-width: 32px; text-align: right;">${escapeHtml(d.use_percent)}</span>
                 </div>
               </td>
             </tr>
@@ -11922,16 +11922,16 @@ window.onerror = function(msg, url, line, col, error) {
           body.innerHTML = `
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
               <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;">
-                <div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Kernel & Host</div>
-                <div style="font-weight: 700; font-family: monospace; font-size: 12px; color: #38bdf8; margin-top: 3px;">${escapeHtml(res.uname || 'Linux Server')}</div>
+                <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase;">Kernel & Host</div>
+                <div style="font-weight: 700; font-family: monospace; font-size: 13px; color: #38bdf8; margin-top: 3px;">${escapeHtml(res.uname || 'Linux Server')}</div>
               </div>
               <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;">
-                <div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Uptime & Load Average</div>
-                <div style="font-weight: 600; font-family: monospace; font-size: 12px; color: #10b981; margin-top: 3px;">${escapeHtml(res.uptime || '—')} ${res.loadavg ? '(Load: ' + escapeHtml(res.loadavg.split(' ').slice(0, 3).join(' ')) + ')' : ''}</div>
+                <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase;">Uptime & Load Average</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 13px; color: #10b981; margin-top: 3px;">${escapeHtml(res.uptime || '—')} ${res.loadavg ? '(Load: ' + escapeHtml(res.loadavg.split(' ').slice(0, 3).join(' ')) + ')' : ''}</div>
               </div>
             </div>
             <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;">
-              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px;">
+              <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px;">
                 <span style="color: var(--text-dim); font-weight: 600;">Physical RAM Utilization</span>
                 <span style="font-family: monospace; font-weight: 700;">${escapeHtml(ramStr)}</span>
               </div>
@@ -12365,13 +12365,13 @@ window.onerror = function(msg, url, line, col, error) {
         dirs.sort((a, b) => a.name.localeCompare(b.name));
 
         if (dirs.length === 0) {
-          html += '<div style="padding: 10px; color: var(--text-dim); font-size: 11px;">No subdirectories found. Click "Select This Folder" to choose current directory.</div>';
+          html += '<div style="padding: 10px; color: var(--text-dim); font-size: 12px;">No subdirectories found. Click "Select This Folder" to choose current directory.</div>';
         } else {
           dirs.forEach(d => {
             html += `
               <div class="tool-native-row" style="padding: 6px 10px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px;" onclick="browseRemoteTransferTarget('${escapeJsString(d.path)}')">
                 <svg class="icon icon-sm" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                <span style="font-weight: 600; font-size: 11.5px; color: var(--text-main);">${escapeHtml(d.name)}</span>
+                <span style="font-weight: 600; font-size: 12.5px; color: var(--text-main);">${escapeHtml(d.name)}</span>
               </div>
             `;
           });
@@ -12379,7 +12379,7 @@ window.onerror = function(msg, url, line, col, error) {
         listContainer.innerHTML = html;
       } catch (err) {
         if (listContainer) {
-          listContainer.innerHTML = `<div style="padding: 12px; color: #ef4444; font-size: 11px;">✕ Error listing directory: ${escapeHtml(err.message || String(err))}</div>`;
+          listContainer.innerHTML = `<div style="padding: 12px; color: #ef4444; font-size: 12px;">✕ Error listing directory: ${escapeHtml(err.message || String(err))}</div>`;
         }
       }
     }
@@ -12512,7 +12512,7 @@ window.onerror = function(msg, url, line, col, error) {
           const leftBg = isSame ? 'transparent' : (l === undefined ? 'rgba(255,255,255,0.02)' : 'rgba(239, 68, 68, 0.14)');
           const rightBg = isSame ? 'transparent' : (r === undefined ? 'rgba(255,255,255,0.02)' : 'rgba(16, 185, 129, 0.14)');
           rowsHtml += `
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-family: 'Consolas', monospace; font-size: 11.5px;">
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-family: 'Consolas', monospace; font-size: 12.5px;">
               <td style="width: 42px; padding: 2px 6px; text-align: right; color: var(--text-dim); user-select: none; border-right: 1px solid var(--border-color);">${l === undefined ? '' : lNum}</td>
               <td style="width: 50%; padding: 2px 8px; background: ${leftBg}; white-space: pre-wrap; word-break: break-all;">${escapeHtml(l ?? '')}</td>
               <td style="width: 42px; padding: 2px 6px; text-align: right; color: var(--text-dim); user-select: none; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">${r === undefined ? '' : lNum}</td>
@@ -12643,13 +12643,13 @@ window.onerror = function(msg, url, line, col, error) {
       tbody.innerHTML = list.map((b, idx) => `
         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
           <td style="padding: 7px 10px; font-weight: 600; color: var(--text-main);"><svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ${escapeHtml(b.label)}</td>
-          <td style="padding: 7px 10px; font-family: monospace; font-size: 11px; color: var(--text-dim);">
+          <td style="padding: 7px 10px; font-family: monospace; font-size: 12px; color: var(--text-dim);">
             ${b.local_path ? `<div><svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> ${escapeHtml(b.local_path)}</div>` : ''}
             ${b.remote_path ? `<div><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> ${escapeHtml(b.remote_path)}</div>` : ''}
           </td>
           <td style="padding: 7px 8px; text-align: center; white-space: nowrap;">
-            <button type="button" class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 10.5px;" onclick="jumpToSavedWorkspaceBookmark(${idx})">Go</button>
-            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 10.5px; color: #ef4444;" onclick="deleteSavedWorkspaceBookmark(${idx})">✕</button>
+            <button type="button" class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 11.5px;" onclick="jumpToSavedWorkspaceBookmark(${idx})">Go</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 11.5px; color: #ef4444;" onclick="deleteSavedWorkspaceBookmark(${idx})">✕</button>
           </td>
         </tr>
       `).join('');
@@ -12755,14 +12755,14 @@ window.onerror = function(msg, url, line, col, error) {
       tbody.innerHTML = currentGrepMatches.map((m, idx) => `
         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer;" ondblclick="openGrepMatchInEditor(${idx})">
           <td style="padding: 6px 10px;">
-            <div style="font-weight: 600; color: var(--text-main); font-size: 11.5px;">${escapeHtml(m.name)}</div>
-            <div style="font-family: monospace; font-size: 10px; color: var(--text-dim); word-break: break-all;">${escapeHtml(m.dir)}</div>
+            <div style="font-weight: 600; color: var(--text-main); font-size: 12.5px;">${escapeHtml(m.name)}</div>
+            <div style="font-family: monospace; font-size: 11px; color: var(--text-dim); word-break: break-all;">${escapeHtml(m.dir)}</div>
           </td>
           <td style="padding: 6px 8px; text-align: right; font-family: monospace; color: #fbbf24; font-weight: 700;">:${m.line}</td>
-          <td style="padding: 6px 10px; font-family: monospace; font-size: 11px; color: #38bdf8; word-break: break-all;">${escapeHtml(m.snippet)}</td>
+          <td style="padding: 6px 10px; font-family: monospace; font-size: 12px; color: #38bdf8; word-break: break-all;">${escapeHtml(m.snippet)}</td>
           <td style="padding: 6px 8px; text-align: center; white-space: nowrap;">
-            <button type="button" class="btn btn-primary btn-sm" style="padding: 2px 7px; font-size: 10px;" onclick="openGrepMatchInEditor(${idx})"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg> Edit</button>
-            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 10px;" onclick="jumpToGrepMatchFolder(${idx})"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="2" y1="10" x2="22" y2="10"/></svg> Go</button>
+            <button type="button" class="btn btn-primary btn-sm" style="padding: 2px 7px; font-size: 11px;" onclick="openGrepMatchInEditor(${idx})"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg> Edit</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 11px;" onclick="jumpToGrepMatchFolder(${idx})"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="2" y1="10" x2="22" y2="10"/></svg> Go</button>
           </td>
         </tr>
       `).join('');
@@ -12879,7 +12879,7 @@ window.onerror = function(msg, url, line, col, error) {
           <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
             <td style="padding: 5px 10px; font-family: monospace; color: var(--text-muted);">${escapeHtml(it.name)}</td>
             <td style="padding: 5px 10px; font-family: monospace; font-weight: ${changed ? '700' : '400'}; color: ${changed ? '#10b981' : 'var(--text-dim)'};">${escapeHtml(newName)}</td>
-            <td style="padding: 5px 8px; text-align: center; font-size: 10.5px;">${changed ? '<span style="color:#10b981;">RENAME</span>' : '<span style="color:var(--text-dim);">—</span>'}</td>
+            <td style="padding: 5px 8px; text-align: center; font-size: 11.5px;">${changed ? '<span style="color:#10b981;">RENAME</span>' : '<span style="color:var(--text-dim);">—</span>'}</td>
           </tr>
         `;
       }).join('');
@@ -12995,10 +12995,10 @@ window.onerror = function(msg, url, line, col, error) {
                   <td style="padding: 5px 8px; font-family: monospace;">${escapeHtml(p.user)}</td>
                   <td style="padding: 5px 8px; text-align: right; font-family: monospace; color: ${parseFloat(p.cpu) > 25 ? '#ef4444' : '#10b981'}; font-weight: 600;">${escapeHtml(p.cpu)}%</td>
                   <td style="padding: 5px 8px; text-align: right; font-family: monospace;">${escapeHtml(p.mem)}%</td>
-                  <td style="padding: 5px 10px; font-family: monospace; font-size: 11px; color: var(--text-main); word-break: break-all;">${escapeHtml(p.command)}</td>
+                  <td style="padding: 5px 10px; font-family: monospace; font-size: 12px; color: var(--text-main); word-break: break-all;">${escapeHtml(p.command)}</td>
                   <td style="padding: 5px 8px; text-align: center; white-space: nowrap;">
-                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 10px;" onclick="killRemoteProcessByPid('${escapeJsString(p.pid)}', '15')">TERM</button>
-                    <button type="button" class="btn btn-danger btn-sm" style="padding: 1px 6px; font-size: 10px;" onclick="killRemoteProcessByPid('${escapeJsString(p.pid)}', '9')">KILL</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="killRemoteProcessByPid('${escapeJsString(p.pid)}', '15')">TERM</button>
+                    <button type="button" class="btn btn-danger btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="killRemoteProcessByPid('${escapeJsString(p.pid)}', '9')">KILL</button>
                   </td>
                 </tr>
               `).join('') || `<tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text-dim);">No processes match filter</td></tr>`}
@@ -13025,7 +13025,7 @@ window.onerror = function(msg, url, line, col, error) {
                   <td style="padding: 6px 10px; font-family: monospace; font-weight: 700; color: #38bdf8;">${escapeHtml(p.proto.toUpperCase())}</td>
                   <td style="padding: 6px 10px; font-family: monospace; color: #10b981;">${escapeHtml(p.state)}</td>
                   <td style="padding: 6px 10px; font-family: monospace; font-weight: 600; color: var(--text-main);">${escapeHtml(p.local_addr)}</td>
-                  <td style="padding: 6px 10px; font-family: monospace; font-size: 11px; color: var(--text-muted);">${escapeHtml(p.process)}</td>
+                  <td style="padding: 6px 10px; font-family: monospace; font-size: 12px; color: var(--text-muted);">${escapeHtml(p.process)}</td>
                 </tr>
               `).join('') || `<tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-dim);">No listening sockets match filter</td></tr>`}
             </tbody>
@@ -13050,10 +13050,10 @@ window.onerror = function(msg, url, line, col, error) {
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
                   <td style="padding: 6px 10px; font-family: monospace; font-weight: 600; color: var(--text-main);">${escapeHtml(s.unit)}</td>
                   <td style="padding: 6px 8px; font-family: monospace; color: ${s.sub === 'running' ? '#10b981' : '#ef4444'}; font-weight: 700;">${escapeHtml(s.sub)}</td>
-                  <td style="padding: 6px 10px; font-size: 11px; color: var(--text-muted);">${escapeHtml(s.description)}</td>
+                  <td style="padding: 6px 10px; font-size: 12px; color: var(--text-muted);">${escapeHtml(s.description)}</td>
                   <td style="padding: 6px 8px; text-align: center; white-space: nowrap;">
-                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 10px;" onclick="controlRemoteSystemdService('${escapeJsString(s.unit)}', 'restart')">↻ Restart</button>
-                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 10px;" onclick="controlRemoteSystemdService('${escapeJsString(s.unit)}', 'reload')">Reload</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="controlRemoteSystemdService('${escapeJsString(s.unit)}', 'restart')">↻ Restart</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="controlRemoteSystemdService('${escapeJsString(s.unit)}', 'reload')">Reload</button>
                   </td>
                 </tr>
               `).join('') || `<tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-dim);">No systemd services reported</td></tr>`}
@@ -13331,10 +13331,10 @@ window.onerror = function(msg, url, line, col, error) {
         const isSel = idx === cmdPaletteSelectedIndex;
         return `
           <div onclick="executeCommandPaletteItem(${idx})" onmouseenter="cmdPaletteSelectedIndex=${idx}; renderCommandPaletteItems();" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 5px; cursor: pointer; background: ${isSel ? 'rgba(56, 189, 248, 0.16)' : 'transparent'}; border: 1px solid ${isSel ? 'rgba(56, 189, 248, 0.35)' : 'transparent'};">
-            <span style="font-size: 14px; width: 20px; text-align: center;">${it.icon}</span>
-            <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: #38bdf8;">${escapeHtml(it.category)}</span>
-            <span style="flex: 1; font-size: 12px; font-weight: ${isSel ? '600' : '500'}; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(it.title)}</span>
-            ${it.shortcut ? `<span style="font-family: monospace; font-size: 10.5px; color: var(--text-dim); max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(it.shortcut)}</span>` : ''}
+            <span style="font-size: 15.5px; width: 20px; text-align: center;">${it.icon}</span>
+            <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: #38bdf8;">${escapeHtml(it.category)}</span>
+            <span style="flex: 1; font-size: 13px; font-weight: ${isSel ? '600' : '500'}; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(it.title)}</span>
+            ${it.shortcut ? `<span style="font-family: monospace; font-size: 11.5px; color: var(--text-dim); max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(it.shortcut)}</span>` : ''}
           </div>
         `;
       }).join('');
