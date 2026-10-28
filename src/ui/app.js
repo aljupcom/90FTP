@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.77';
+    let APP_CURRENT_VERSION = '0.0.0.78';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -1469,7 +1469,7 @@ window.onerror = function(msg, url, line, col, error) {
           statusText.innerHTML = `<strong style="color: var(--text-main);">${escapeHtml(t('status.selected', { n: selItems.length }))}</strong> (<span style="color: #38bdf8; font-weight: 600;">${escapeHtml(tn('count.files', filesCount))}</span>, <span style="color: #fbbf24; font-weight: 600;">📁 ${escapeHtml(tn('count.folders', dirsCount))}</span> — <span style="color: var(--accent); font-family: monospace;">${formatBytes(totalBytes)}</span>)`;
         } else {
           const totalDirBytes = allItems.reduce((acc, it) => acc + (it.is_dir ? 0 : (Number(it.size) || 0)), 0);
-          statusText.innerHTML = `${escapeHtml(t('status.items_in_folder', { count: tn('count.items', allItems.length), size: formatBytes(totalDirBytes) }))} — <span style="opacity:0.8;">${escapeHtml(t('status.hint_keys'))}</span>`;
+          statusText.innerHTML = escapeHtml(t('status.items_in_folder', { count: tn('count.items', allItems.length), size: formatBytes(totalDirBytes) }));
         }
       }
     }
@@ -8785,8 +8785,26 @@ window.onerror = function(msg, url, line, col, error) {
 
     let lastLogHeight = 160;
 
-    // Dual-Tab Bottom Panel Management (Transfers, Activity Log & Terminal)
+    // Dual-Tab Bottom Panel Management (Transfers & Activity Log)
     let activeBottomTab = 'transfers';
+
+    /* The tab doubles as the handle for the dock: clicking the tab of a panel
+       that is already open and active collapses it, instead of doing nothing.
+       Programmatic calls keep using switchBottomTab() so a transfer that starts
+       still surfaces its own tab without closing the panel. */
+    function onBottomTabClick(tab, event) {
+      if (event) event.stopPropagation();
+      const panel = document.getElementById('logPanel');
+      const isOpen = panel && !panel.classList.contains('collapsed');
+      if (isOpen && activeBottomTab === tab) {
+        toggleLogPanel();
+        return;
+      }
+      switchBottomTab(tab, event);
+      if (panel && panel.classList.contains('collapsed')) {
+        toggleLogPanel();
+      }
+    }
 
     function switchBottomTab(tab, event) {
       if (event) {
@@ -8829,9 +8847,9 @@ window.onerror = function(msg, url, line, col, error) {
       if (actTerm) actTerm.style.display = isTerminal ? 'flex' : 'none';
 
       const panel = document.getElementById('logPanel');
-      if (panel && panel.classList.contains('collapsed')) {
-        toggleLogPanel();
-      }
+      /* A programmatic switch (a transfer starting, for instance) must not
+         expand a panel the user collapsed: it only updates the tab and its
+         badge. Expanding is an explicit act, done from onBottomTabClick(). */
       if (isTerminal) {
         if (typeof terminalSessions !== 'undefined' && terminalSessions.length === 0 && typeof initTerminalSession === 'function') {
           initTerminalSession();
@@ -9012,6 +9030,17 @@ window.onerror = function(msg, url, line, col, error) {
       }
     }
 
+    /* One button for pause/resume: the queue is never partly paused by the
+       user in practice, so two buttons were redundant chrome. */
+    async function togglePauseResumeAll() {
+      const hasPaused = transferTasks.some(t => t.state === 'paused');
+      if (hasPaused) {
+        await resumeAllTransfers();
+      } else {
+        await pauseAllTransfers();
+      }
+    }
+
     async function cancelAllTransfers() {
       if (!transferTasks.some(t => t.state === 'running' || t.state === 'pending' || t.state === 'paused')) {
         return;
@@ -9046,6 +9075,22 @@ window.onerror = function(msg, url, line, col, error) {
       const btnCopyErrs = document.getElementById('btnCopyTransferErrors');
       if (btnCopyErrs) {
         btnCopyErrs.style.display = failedCount > 0 ? 'inline-flex' : 'none';
+      }
+
+      /* Pause/Resume is a single toggle: it shows "resume" only when the queue
+         is paused and nothing else is moving. */
+      const pauseBtn = document.getElementById('btnTransferPauseResume');
+      const pauseIcon = document.getElementById('btnTransferPauseResumeIcon');
+      if (pauseBtn && pauseIcon) {
+        const showingResume = pausedCount > 0 && activeCount === 0 && pendingCount === 0;
+        const wanted = showingResume ? 'resume' : 'pause';
+        if (pauseBtn.dataset.mode !== wanted) {
+          pauseBtn.dataset.mode = wanted;
+          pauseBtn.title = t(showingResume ? 'foot.resume_all' : 'foot.pause_all');
+          pauseIcon.innerHTML = showingResume
+            ? '<svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>'
+            : '<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+        }
       }
 
       if (badge) {

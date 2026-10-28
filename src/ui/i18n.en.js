@@ -877,6 +877,14 @@ window.I18N_EN = {
      type column, and the mirrored menubar dropdown fix. Appended as a
      block so the hand-sorted body above stays readable.
      ------------------------------------------------------------------ */
+  "foot.clear_finished": "Clear finished transfers",
+  "foot.clear_log": "Clear the log console",
+  "foot.export_log": "Export log to a text file",
+  "foot.pause_all": "Pause all transfers",
+  "foot.resume_all": "Resume all paused transfers",
+  "foot.stop_all": "Stop all queued and running transfers",
+  "foot.toggle_panel": "Show / hide bottom panel (Ctrl+L)",
+  "foot.transfers_queue": "File Transfers queue",
   "ftype.config": "Config File",
   "ftype.directory": "Directory",
   "ftype.dotfile": "Dotfile Config",

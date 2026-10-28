@@ -1384,6 +1384,93 @@
       display: flex;
     }
 
+    /* Footer chrome: two tabs on the leading edge, a single compact control
+       cluster on the trailing edge. Text buttons became icon buttons so the
+       30px bar stays quiet; every one of them keeps a tooltip. */
+    .bottom-tab-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+    .bottom-actions-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .bottom-action-set {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .bottom-queue-summary {
+      font-size: 12px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+    .bottom-queue-summary svg {
+      width: 11px;
+      height: 11px;
+      vertical-align: -1px;
+    }
+    .bottom-action-sep {
+      width: 1px;
+      height: 15px;
+      background: var(--border-color);
+      flex-shrink: 0;
+    }
+    .bottom-mini-select {
+      height: 21px;
+      padding: 0 4px;
+      font-size: 11.5px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 21px;
+      padding: 0;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-muted);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.1s, color 0.1s, border-color 0.1s;
+    }
+    .icon-btn:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-main);
+      border-color: var(--accent);
+    }
+    .icon-btn.danger {
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.35);
+    }
+    .icon-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.14);
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.6);
+    }
+    .icon-btn.collapse-btn {
+      background: transparent;
+      border-color: transparent;
+    }
+    .icon-btn.collapse-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-color);
+    }
+
     /* Terminal Container & Styling (Xshell-inspired) */
     .terminal-container {
       flex: 1;
@@ -4146,8 +4233,21 @@
       align-items: center;
       gap: 8px;
       min-width: 0;
+      flex: 1 1 0%;
       overflow: hidden;
       white-space: nowrap;
+    }
+    /* The hint text gives way before the function-key chips do: a truncated
+       hint is harmless, a half-hidden F8 button is not. */
+    #fkeySelectionStatus {
+      flex: 1 1 0%;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .fkey-pane-pill {
+      flex: 0 0 auto;
     }
     .fkey-pane-pill {
       display: inline-flex;
@@ -4166,6 +4266,8 @@
       display: flex;
       align-items: center;
       gap: 4px;
+      flex: 0 1 auto;
+      min-width: 0;
       overflow-x: auto;
       scrollbar-width: none;
     }
@@ -4317,6 +4419,10 @@
     [data-theme="light"] .fkey-btn kbd,
     [data-theme="light"] .fkey-pane-pill { color: #b91c1c !important; }
     [data-theme="light"] .fkey-pane-pill { background: rgba(220, 38, 38, 0.08) !important; border-color: rgba(220, 38, 38, 0.3) !important; }
+    [data-theme="light"] .icon-btn { background: #ffffff; border-color: #d5dbe3; color: #475569; }
+    [data-theme="light"] .icon-btn:hover { border-color: #dc2626; color: #b91c1c; background: #fef2f2; }
+    [data-theme="light"] .icon-btn.danger { color: #dc2626; border-color: #fca5a5; }
+    [data-theme="light"] .icon-btn.collapse-btn { background: transparent; border-color: transparent; }
     [data-theme="light"] .tool-native-row { background: #ffffff !important; border-color: #dde3ea !important; }
     [data-theme="light"] .tool-native-row:hover { background: #f8fafc !important; border-color: #fca5a5 !important; }
     [data-theme="light"] .context-menu,
@@ -4625,7 +4731,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.77</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.78</span>
         </div>
       </div>
 
@@ -5381,10 +5487,11 @@
 
   <!-- Bottom: Multi-Tab Panel (File Transfers, Activity Log & Embedded SSH Terminal) -->
   <div class="log-panel collapsed" id="logPanel" style="height: 34px;">
-    <div class="log-header" onclick="handleLogHeaderClick(event)">
-      <!-- Left: Panel Tabs -->
-      <div style="display: flex; align-items: center; gap: 4px;" onclick="event.stopPropagation()">
-        <button type="button" class="bottom-tab-btn active" id="tabTransfers" onclick="switchBottomTab('transfers', event)">
+        <div class="log-header" onclick="handleLogHeaderClick(event)">
+      <!-- Left: panel tabs. Clicking the tab that is already open collapses
+           the panel, which is what people expect from a bottom dock. -->
+      <div class="bottom-tab-group" onclick="event.stopPropagation()">
+        <button type="button" class="bottom-tab-btn active" id="tabTransfers" onclick="onBottomTabClick('transfers', event)" title="File Transfers queue">
           <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/>
             <polyline points="17 14 12 9 7 14"/><line x1="12" y1="21" x2="12" y2="9"/>
@@ -5393,51 +5500,39 @@
           <span class="tab-badge" id="transfersBadge">0</span>
         </button>
 
-        <button type="button" class="bottom-tab-btn" id="tabActivityLog" onclick="switchBottomTab('log', event)">
+        <button type="button" class="bottom-tab-btn" id="tabActivityLog" onclick="onBottomTabClick('log', event)" title="Activity Log">
           <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
           </svg>
           <span>Activity Log</span>
         </button>
-
-        <button type="button" class="bottom-tab-btn" id="tabTerminal" onclick="switchBottomTab('terminal', event)">
-          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
-          </svg>
-          <span>Terminal</span>
-          <span class="tab-badge" id="terminalBadge" style="background: rgba(34, 197, 94, 0.18); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); display: none;">Online</span>
-        </button>
       </div>
 
-      <!-- Right: Actions & Collapse Button -->
-      <div style="display: flex; align-items: center; gap: 6px;">
-        <!-- Transfer Actions -->
-        <div id="transfersActions" style="display: flex; align-items: center; gap: 6px;" onclick="event.stopPropagation()">
-          <span id="transfersSummaryText" style="font-size: 12px; color: var(--text-dim); margin-right: 4px;">Queue idle</span>
+      <!-- Right: controls for the active tab only, then the collapse toggle -->
+      <div class="bottom-actions-group" onclick="event.stopPropagation()">
+        <!-- Transfer queue controls -->
+        <div id="transfersActions" class="bottom-action-set">
+          <span id="transfersSummaryText" class="bottom-queue-summary">Queue idle</span>
 
-          <button type="button" class="btn btn-secondary" onclick="pauseAllTransfers()" style="padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 3px;" title="Pause all active and queued transfers">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-            <span>Pause</span>
+          <button type="button" class="icon-btn" id="btnTransferPauseResume" onclick="togglePauseResumeAll()" title="Pause all transfers">
+            <span id="btnTransferPauseResumeIcon" style="display: flex; align-items: center;">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </span>
           </button>
-          <button type="button" class="btn btn-secondary" onclick="resumeAllTransfers()" style="padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 3px;" title="Resume all paused transfers">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            <span>Resume</span>
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="cancelAllTransfers()" style="padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 3px; color: #ef4444; border-color: rgba(239, 68, 68, 0.35);" title="Cancel every queued and running transfer">
+          <button type="button" class="icon-btn danger" onclick="cancelAllTransfers()" title="Stop all queued and running transfers">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-            <span>Stop All</span>
           </button>
 
-          <div style="width: 1px; height: 18px; background: var(--border-color); margin: 0 2px;"></div>
+          <span class="bottom-action-sep"></span>
 
-          <select id="transferParallelSelect" onchange="applyTransferSettings()" title="Max parallel transfers" style="padding: 2px 6px; font-size: 12px; min-width: 50px;">
-            <option value="1">1×</option>
-            <option value="2" selected>2×</option>
-            <option value="3">3×</option>
-            <option value="4">4×</option>
-            <option value="6">6×</option>
+          <select id="transferParallelSelect" onchange="applyTransferSettings()" title="Max parallel transfers" class="bottom-mini-select">
+            <option value="1">1&times;</option>
+            <option value="2" selected>2&times;</option>
+            <option value="3">3&times;</option>
+            <option value="4">4&times;</option>
+            <option value="6">6&times;</option>
           </select>
-          <select id="transferSpeedLimitSelect" onchange="applyTransferSettings()" title="Speed limit per transfer" style="padding: 2px 6px; font-size: 12px; min-width: 90px;">
+          <select id="transferSpeedLimitSelect" onchange="applyTransferSettings()" title="Speed limit per transfer" class="bottom-mini-select">
             <option value="0">No limit</option>
             <option value="65536">64 KB/s</option>
             <option value="262144">256 KB/s</option>
@@ -5448,61 +5543,33 @@
             <option value="10485760">10 MB/s</option>
           </select>
 
-          <div style="width: 1px; height: 18px; background: var(--border-color); margin: 0 2px;"></div>
+          <span class="bottom-action-sep"></span>
 
-          <button type="button" class="btn btn-secondary" id="btnCopyTransferErrors" onclick="copyAllTransferQueueErrors()" style="padding: 2px 8px; font-size: 12px; color: #ef4444; border-color: rgba(239, 68, 68, 0.35); display: none; align-items: center; gap: 4px;" title="Copy failed transfer errors to clipboard">
+          <button type="button" class="icon-btn danger" id="btnCopyTransferErrors" onclick="copyAllTransferQueueErrors()" style="display: none;" title="Copy failed transfer errors to clipboard">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span>Copy Errors</span>
           </button>
-          <button type="button" class="btn btn-secondary" onclick="clearCompletedTransfers()" style="padding: 2px 8px; font-size: 12px;" title="Clear completed transfers">
-            Clear Finished
+          <button type="button" class="icon-btn" onclick="clearCompletedTransfers()" title="Clear finished transfers">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
         </div>
 
-        <!-- Log Actions -->
-        <div id="logActions" style="display: none; align-items: center; gap: 6px;" onclick="event.stopPropagation()">
-          <button type="button" class="btn btn-secondary" onclick="copyErrorsOnly()" style="padding: 2px 9px; font-size: 12px; display: flex; align-items: center; gap: 4px; color: #ef4444; border-color: rgba(239, 68, 68, 0.35);" title="Copy error lines only to clipboard">
+        <!-- Activity log controls -->
+        <div id="logActions" class="bottom-action-set" style="display: none;">
+          <button type="button" class="icon-btn danger" onclick="copyErrorsOnly()" title="Copy error lines only to clipboard">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span>Copy Errors</span>
           </button>
-          <button type="button" class="btn btn-secondary" onclick="copyAllLogs()" style="padding: 2px 9px; font-size: 12px; display: flex; align-items: center; gap: 4px;" title="Copy all log output">
+          <button type="button" class="icon-btn" onclick="copyAllLogs()" title="Copy all log output">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span>Copy All</span>
           </button>
-          <button type="button" class="btn btn-secondary" onclick="exportLogsToFile()" style="padding: 2px 9px; font-size: 12px; display: flex; align-items: center; gap: 4px;" title="Export and save logs to a text file">
+          <button type="button" class="icon-btn" onclick="exportLogsToFile()" title="Export log to a text file">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span>Export Log</span>
           </button>
-          <button type="button" class="btn btn-secondary" onclick="clearLogs()" style="padding: 2px 8px; font-size: 12px;" title="Clear console">
-            Clear
-          </button>
-        </div>
-
-        <!-- Terminal Actions -->
-        <div id="terminalActions" style="display: none; align-items: center; gap: 6px;" onclick="event.stopPropagation()">
-          <span id="terminalCwdDisplay" style="font-size: 12px; color: var(--accent); font-family: monospace; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Current Terminal Working Directory">~</span>
-          <button type="button" class="btn btn-secondary" onclick="syncTerminalPathWithRemote()" style="padding: 2px 7px; font-size: 12px;" title="Sync Terminal to Remote Browser Path">
-            Sync Path
-          </button>
-          <div style="display: flex; align-items: center; gap: 3px;">
-            <button type="button" class="btn btn-secondary" onclick="runQuickCommand('ls -la')" style="padding: 2px 6px; font-size: 11.5px; font-family: monospace;" title="Run: ls -la">ls</button>
-            <button type="button" class="btn btn-secondary" onclick="runQuickCommand('pwd')" style="padding: 2px 6px; font-size: 11.5px; font-family: monospace;" title="Run: pwd">pwd</button>
-            <button type="button" class="btn btn-secondary" onclick="runQuickCommand('df -h')" style="padding: 2px 6px; font-size: 11.5px; font-family: monospace;" title="Run: df -h">df</button>
-            <button type="button" class="btn btn-secondary" onclick="runQuickCommand('free -m')" style="padding: 2px 6px; font-size: 11.5px; font-family: monospace;" title="Run: free -m">free</button>
-          </div>
-          <button type="button" class="btn btn-secondary" onclick="clearTerminalScreen()" style="padding: 2px 8px; font-size: 12px;" title="Clear Terminal Screen (Ctrl+L)">
-            Clear
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="openRemoteTerminal()" style="padding: 2px 8px; font-size: 12px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="Open Native Terminal Window">
-            ⧉ Pop Out (Terminal)
-          </button>
-          <button type="button" class="btn btn-secondary" id="btnTerminalMaximize" onclick="toggleTerminalMaximize()" style="padding: 2px 7px; font-size: 12px;" title="Maximize / Restore Terminal">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+          <button type="button" class="icon-btn danger" onclick="clearLogs()" title="Clear the log console">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
         </div>
 
-        <!-- Expand / Collapse Gutter Toggle -->
-        <button type="button" class="btn btn-secondary" onclick="toggleLogPanel()" title="Toggle Bottom Panel (Ctrl+L)" style="padding: 2px 6px;">
+        <button type="button" class="icon-btn collapse-btn" onclick="toggleLogPanel()" title="Show / hide bottom panel (Ctrl+L)">
           <span id="logToggleIcon" style="display: flex; align-items: center;">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
           </span>
@@ -5585,7 +5652,7 @@
   <div class="commander-fkey-bar" id="commanderFkeyBar">
     <div class="fkey-status-group">
       <span class="fkey-pane-pill" id="fkeyActivePaneBadge">LOCAL PANE</span>
-      <span id="fkeySelectionStatus" style="color: var(--text-muted); font-size: 12px;">Ready — Use Arrow keys, Enter, Backspace, Tab, F2–F8</span>
+      <span id="fkeySelectionStatus" style="color: var(--text-muted); font-size: 12px;">Ready</span>
     </div>
     <div class="fkey-actions-group">
       <button type="button" class="fkey-btn" onclick="triggerCommanderFkey('F2')" title="Rename Selected Item (F2)"><kbd>F2</kbd> Rename</button>
@@ -5595,8 +5662,6 @@
       <button type="button" class="fkey-btn" onclick="triggerCommanderFkey('F6')" title="Interactive Move / Copy Selected Items (F6)"><kbd>F6</kbd> Move/Copy</button>
       <button type="button" class="fkey-btn" onclick="triggerCommanderFkey('F7')" title="Create New Folder in Active Pane (F7)"><kbd>F7</kbd> New Folder</button>
       <button type="button" class="fkey-btn" onclick="triggerCommanderFkey('F8')" title="Delete Selected Item(s) (F8 / Del)"><kbd>F8</kbd> Delete</button>
-      <button type="button" class="fkey-btn" onclick="toggleCompareDirectories()" title="Compare Local & Remote Directories (Shift+F1)"><kbd>⇧F1</kbd> Compare</button>
-      <button type="button" class="fkey-btn" onclick="openToolsModal()" title="Open Power Tools & Diagnostics Suite"><kbd><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></kbd> Tools</button>
     </div>
   </div>
 
@@ -6330,7 +6395,7 @@
           </div>
           <div class="about-brand-sub">Modern Site Manager & Asynchronous File Transfer Engine</div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.77 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.78 Dev (Windows x64)</span>
             <span style="font-size: 12px; color: var(--text-dim);">Release Channel: Official</span>
           </div>
         </div>
@@ -6445,7 +6510,7 @@
         </div>
         <div class="about-code-box" id="aboutDiagnosticsText">
 Application: 90FTP Desktop Client
-Version: 0.0.0.77 (Release)
+Version: 0.0.0.78 (Release)
 OS: Windows NT 10.0 x64
 WebView2: Evergreen Host
 Renderer: DirectComposition Hardware Accelerated
@@ -8050,7 +8115,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         <button type="button" class="putty-btn-pill" id="puttyModeBtn" onclick="toggleCurrentSessionMode()" title="Switch Remote SSH / Local PowerShell Mode">SSH</button>
         <button type="button" class="putty-win-btn" onclick="minimizePuttyWindow()" title="Minimize to Dock">&#x2014;</button>
         <button type="button" class="putty-win-btn" id="btnPuttyMaximize" onclick="togglePuttyMaximize()" title="Maximize / Restore">&#x25A2;</button>
-        <button type="button" class="putty-win-btn" onclick="dockPuttyWindow()" title="Dock to Bottom Panel">&#x2913;</button>
         <button type="button" class="putty-win-btn putty-close-btn" onclick="closePuttyWindow()" title="Close Terminal">&#x2715;</button>
       </div>
     </div>

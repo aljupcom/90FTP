@@ -877,6 +877,14 @@ window.I18N_AR = {
      type column, and the mirrored menubar dropdown fix. Appended as a
      block so the hand-sorted body above stays readable.
      ------------------------------------------------------------------ */
+  "foot.clear_finished": "مسح عمليات النقل المكتملة",
+  "foot.clear_log": "مسح سجل الأحداث",
+  "foot.export_log": "تصدير السجل إلى ملف نصي",
+  "foot.pause_all": "إيقاف كل عمليات النقل مؤقتًا",
+  "foot.resume_all": "استئناف كل عمليات النقل المتوقفة",
+  "foot.stop_all": "إلغاء كل عمليات النقل المنتظرة والجارية",
+  "foot.toggle_panel": "إظهار / إخفاء اللوحة السفلية (Ctrl+L)",
+  "foot.transfers_queue": "قائمة عمليات النقل",
   "ftype.config": "ملف إعدادات",
   "ftype.directory": "مجلد",
   "ftype.dotfile": "ملف إعدادات مخفي",
