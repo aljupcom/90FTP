@@ -21,6 +21,9 @@ fn default_true() -> bool {
 fn default_overwrite() -> String {
     "overwrite".to_string()
 }
+fn default_compression() -> String {
+    "none".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteTransferTask {
@@ -45,6 +48,17 @@ pub struct RemoteTransferTask {
     pub recursive: bool,
     #[serde(default = "default_overwrite")]
     pub overwrite: String, // "overwrite", "skip"
+    /// Direct engine only: "none" | "gzip" | "zstd".
+    ///
+    /// Compression cannot be applied to a stream and still be measured: the
+    /// byte counter would report compressed bytes against a raw total. So
+    /// anything other than "none" switches the engine to a temporary archive,
+    /// whose exact size is known before it is shipped.
+    #[serde(default = "default_compression")]
+    pub compression: String,
+    /// Stream Relay only: parallel connections. 0 lets the engine decide.
+    #[serde(default)]
+    pub workers: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -430,99 +444,12 @@ pub fn parse_scp_progress_line(chunk: &str) -> Option<(f64, Option<String>, Opti
     pct_opt.map(|p| (p, speed_opt, file_opt, bytes_opt))
 }
 
+/// Kept for the regression tests that pin the SSH option set; the live path
+/// builds its command through [`crate::direct_engine::build`].
+#[allow(dead_code)]
 pub fn build_direct_transfer_command(task: &RemoteTransferTask) -> (String, String) {
-    let sources_joined = task
-        .sources
-        .iter()
-        .map(|s| format!("'{}'", s.replace('\'', "'\\''")))
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    let clean_target_dir = {
-        let trimmed = task.target_path.trim();
-        if trimmed.is_empty() || trimmed == "." {
-            "./".to_string()
-        } else if trimmed.ends_with('/') {
-            trimmed.to_string()
-        } else {
-            format!("{}/", trimmed)
-        }
-    };
-    let target_dest = format!(
-        "{}@{}:'{}'",
-        task.target_user,
-        task.target_host,
-        clean_target_dir.replace('\'', "'\\''")
-    );
-
-    // `accept-new` still trusts the key on first contact (there is no
-    // way to pre-seed a remote-to-remote host key) but it refuses a
-    // changed key, which is what stops a silent MITM on re-connect.
-    // `no` was disabling that check entirely.
-    //
-    // IMPORTANT: When authenticating with a password via `sshpass`, we MUST NOT
-    // pass `-o BatchMode=yes` because OpenSSH disables password prompts completely
-    // in BatchMode, causing `scp`/`ssh` to fail immediately with
-    // `Permission denied (publickey,password)`. Instead, disable pubkey probing
-    // so `sshpass` receives the password prompt immediately.
-    let has_password = !task.target_pass.is_empty();
-    let ssh_opts = if has_password {
-        "-o StrictHostKeyChecking=accept-new -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive -o ConnectTimeout=20"
-    } else {
-        "-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20"
-    };
-
-    // The password never goes on the sshpass command line (`-p`
-    // exposes it to `ps` for every local user) and never reaches the
-    // UI log. It is written to a 0600 file, consumed with `-f`, and
-    // removed immediately afterwards.
-    if task.transfer_mode == "direct_rsync" {
-        if has_password {
-            let esc_pass = task.target_pass.replace('\'', "'\\''");
-            let cmd = format!(
-                "umask 077; __p=$(mktemp /tmp/.90ftp.XXXXXX); printf '%s' '{p}' > \"$__p\"; \
-sshpass -f \"$__p\" rsync -avz --info=progress2 -e 'ssh -p {port} {opts}' {src} {dst}; __rc=$?; rm -f \"$__p\"; exit $__rc",
-                p = esc_pass,
-                port = task.target_port,
-                opts = ssh_opts,
-                src = sources_joined,
-                dst = target_dest
-            );
-            let shown = format!(
-                "sshpass -f <secure-temp-file> rsync -avz --info=progress2 -e 'ssh -p {} {}' {} {}",
-                task.target_port, ssh_opts, sources_joined, target_dest
-            );
-            (cmd, shown)
-        } else {
-            let cmd = format!(
-                "rsync -avz --info=progress2 -e 'ssh -p {} {}' {} {}",
-                task.target_port, ssh_opts, sources_joined, target_dest
-            );
-            (cmd.clone(), cmd)
-        }
-    } else if has_password {
-        let esc_pass = task.target_pass.replace('\'', "'\\''");
-        let cmd = format!(
-            "umask 077; __p=$(mktemp /tmp/.90ftp.XXXXXX); printf '%s' '{p}' > \"$__p\"; \
-sshpass -f \"$__p\" scp -P {port} -r {opts} {src} {dst}; __rc=$?; rm -f \"$__p\"; exit $__rc",
-            p = esc_pass,
-            port = task.target_port,
-            opts = ssh_opts,
-            src = sources_joined,
-            dst = target_dest
-        );
-        let shown = format!(
-            "sshpass -f <secure-temp-file> scp -P {} -r {} {} {}",
-            task.target_port, ssh_opts, sources_joined, target_dest
-        );
-        (cmd, shown)
-    } else {
-        let cmd = format!(
-            "scp -P {} -r {} {} {}",
-            task.target_port, ssh_opts, sources_joined, target_dest
-        );
-        (cmd.clone(), cmd)
-    }
+    let plan = crate::direct_engine::build(task, "/");
+    (plan.command, plan.display)
 }
 
 /// Result of trying to index a remote tree in one shot.
@@ -837,7 +764,6 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
 
                 if can_try_direct {
                     let sources_joined = task.sources.iter().map(|s| format!("'{}'", s.replace('\'', "'\\''"))).collect::<Vec<_>>().join(" ");
-                    let (direct_cmd, display_cmd) = build_direct_transfer_command(&task);
 
                     let total_files = task.sources.len();
                     let first_file = task.sources.first()
@@ -856,45 +782,223 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
                         }
                     }
 
+                    /* `dd status=progress` is the only portable byte counter on
+                       a stock Linux box — coreutils 8.24 (2015) and newer. An
+                       older `dd` rejects the flag outright, which would kill the
+                       whole pipeline, so it is probed once here and the transfer
+                       drops to a plain `cat` (no live bytes) if it is missing. */
+                    let dd_ok = matches!(
+                        src.exec_command_clean("dd if=/dev/null bs=1 count=0 status=progress 2>/dev/null && echo __DD_OK__"),
+                        Ok((0, out)) if out.contains("__DD_OK__")
+                    );
+
+                    /* zstd needs the binary on *both* ends; gzip rides on tar's
+                       own -z and is always there. */
+                    let mut compression = task.compression.clone();
+                    if crate::direct_engine::Compression::parse(&compression) == crate::direct_engine::Compression::Zstd {
+                        let has_zstd = matches!(
+                            src.exec_command_clean("command -v zstd >/dev/null 2>&1 && echo __ZSTD_OK__"),
+                            Ok((0, out)) if out.contains("__ZSTD_OK__")
+                        );
+                        if !has_zstd {
+                            emit_log(
+                                "zstd is not installed on the source server; using gzip for this transfer instead.",
+                                "warning",
+                            );
+                            compression = "gzip".to_string();
+                        }
+                    }
+
+                    /* A compressed transfer stages the whole tree in /tmp on the
+                       source. On a box with a small tmpfs that fails halfway
+                       through with "No space left on device", which reads as a
+                       broken transfer rather than a full disk. Check first and
+                       fall back to the streaming engine instead. */
+                    if crate::direct_engine::Compression::parse(&compression) != crate::direct_engine::Compression::None
+                        && total_bytes > 0
+                    {
+                        if let Ok((0, out)) = src.exec_command_clean("df -Pk /tmp 2>/dev/null | awk 'NR==2 {print $4}'") {
+                            if let Some(free_kb) = out.trim().lines().next().and_then(|l| l.trim().parse::<u64>().ok()) {
+                                if free_kb.saturating_mul(1024) < total_bytes {
+                                    emit_log(
+                                        &format!(
+                                            "Not enough free space in the source server's /tmp for a temporary archive ({} needed, {} free). Streaming without compression instead.",
+                                            format_size(total_bytes),
+                                            format_size(free_kb.saturating_mul(1024))
+                                        ),
+                                        "warning",
+                                    );
+                                    compression = "none".to_string();
+                                }
+                            }
+                        }
+                    }
+
+                    let mut plan_task = task.clone();
+                    plan_task.compression = compression.clone();                    let source_cwd = src.pwd();
+                    let plan = crate::direct_engine::build(&plan_task, &source_cwd);
+
+                    let mut direct_cmd = plan.command;
+                    if !dd_ok {
+                        /* Without dd's status line there is no byte counter, but
+                           the copy itself still has to work: keep the pipeline
+                           and drop only the unsupported flag, then say so
+                           instead of leaving a bar stuck at 0%. */
+                        direct_cmd = direct_cmd.replace(" status=progress", "");
+                        emit_log(
+                            "This server's dd has no status=progress support, so live byte counts are unavailable; the bar will update when the copy finishes.",
+                            "warning",
+                        );
+                    }
+
+                    let display_cmd = plan.display.clone();
+                    let staging = plan.staging;
+                    let plan_compression = plan.compression;
+                    let plan_engine = plan.engine;
+
                     emit_progress(&first_file, 0, total_files, 0, total_bytes, "Connecting to target...", Some(0.0));
                     emit_log(&format!("Executing: {}", display_cmd), "info");
+                    emit_log(
+                        &format!(
+                            "Direct engine: {} — {}.",
+                            plan_engine,
+                            if staging {
+                                "temporary archive on the source"
+                            } else {
+                                "single stream, no temporary files"
+                            }
+                        ),
+                        "info",
+                    );
+                    if staging {
+                        emit_log(
+                            &format!(
+                                "Compression is on ({}): the source is packed into a temporary archive, shipped, unpacked at the destination, and then only that temporary archive is deleted. Your files are never modified or removed.",
+                                plan_compression.label()
+                            ),
+                            "info",
+                        );
+                    } else {
+                        emit_log(
+                            "Streaming the tree over SSH: the bytes travel from the source server straight to the destination and never pass through this computer.",
+                            "info",
+                        );
+                    }
 
                     let direct_start_time = Instant::now();
                     let mut last_progress_tick = Instant::now();
                     let mut cur_file = first_file.clone();
                     let mut cur_speed = "Transferring...".to_string();
                     let mut cur_done_bytes = 0u64;
+                    let mut phase = crate::direct_engine::Phase::Ship;
+                    let mut archive_bytes = 0u64;
+                    let mut markers = crate::direct_engine::MarkerBuffer::default();
+
+                    /* The bar spans every phase of a staged transfer, so it
+                       never restarts: packing is the first quarter, shipping the
+                       bulk, extraction the last slice. A stream transfer is a
+                       single phase and maps straight onto 0-100%. */
+                    let composite = |phase: crate::direct_engine::Phase, done: u64, total: u64| -> f64 {
+                        let ratio = if total == 0 {
+                            0.0
+                        } else {
+                            (done as f64 / total as f64).clamp(0.0, 1.0)
+                        };
+                        if !staging {
+                            return ratio * 100.0;
+                        }
+                        match phase {
+                            crate::direct_engine::Phase::Pack => ratio * 25.0,
+                            crate::direct_engine::Phase::Ship => 25.0 + ratio * 70.0,
+                            crate::direct_engine::Phase::Extract => 97.0,
+                            crate::direct_engine::Phase::Cleanup => 99.0,
+                        }
+                    };
 
                     let exec_res = src.exec_command_stream_pty(
                         &direct_cmd,
                         Some(cancelled.clone()),
                         |chunk: &str| {
-                            if let Some((pct, spd_opt, file_opt, bytes_opt)) = parse_scp_progress_line(chunk) {
-                                if let Some(s) = spd_opt {
+                            for marker in markers.feed(chunk) {
+                                let mut parts = marker.splitn(2, ' ');
+                                let head = parts.next().unwrap_or("");
+                                let tail = parts.next().unwrap_or("").trim();
+                                match head {
+                                    "PHASE" => {
+                                        let mut bits = tail.splitn(2, ' ');
+                                        if let Some(p) = bits.next().and_then(crate::direct_engine::Phase::from_token) {
+                                            phase = p;
+                                        }
+                                        if let Some(size) = bits.next().and_then(|s| s.trim().parse::<u64>().ok()) {
+                                            archive_bytes = size;
+                                        }
+                                        cur_file = match phase {
+                                            crate::direct_engine::Phase::Pack => format!("[1/3] Packing ({})…", compression),
+                                            crate::direct_engine::Phase::Ship if staging => "[2/3] Sending the archive…".to_string(),
+                                            crate::direct_engine::Phase::Ship => "Streaming the files over SSH…".to_string(),
+                                            crate::direct_engine::Phase::Extract => "[3/3] Unpacking at the destination…".to_string(),
+                                            crate::direct_engine::Phase::Cleanup => "Removing the temporary archive…".to_string(),
+                                        };
+                                    }
+                                    "PACK" => {
+                                        if let Ok(bytes) = tail.parse::<u64>() {
+                                            cur_done_bytes = bytes;
+                                        }
+                                    }
+                                    "ERROR" => {
+                                        emit_log(&format!("Transfer step failed: {}", tail), "error");
+                                    }
+                                    _ => {}
+                                }
+                            }
+
+                            /* Two possible progress sources: `dd` for the tar
+                               engine, `--info=progress2` for rsync. Only one of
+                               them is ever active, so try both and take
+                               whichever produced a number. */
+                            if let Some(bytes) = crate::direct_engine::parse_dd_bytes(chunk) {
+                                cur_done_bytes = bytes;
+                            } else if let Some((pct, spd, file, bytes)) = parse_scp_progress_line(chunk) {
+                                if let Some(s) = spd {
                                     cur_speed = s;
                                 }
-                                if let Some(f) = file_opt {
+                                if let Some(f) = file {
                                     cur_file = f;
                                 }
-                                if let Some(b) = bytes_opt {
+                                if let Some(b) = bytes {
                                     cur_done_bytes = b;
                                 } else if total_bytes > 0 {
                                     cur_done_bytes = (total_bytes as f64 * (pct / 100.0)) as u64;
                                 }
-
-                                if last_progress_tick.elapsed().as_millis() >= 200 || pct >= 100.0 {
-                                    last_progress_tick = Instant::now();
-                                    emit_progress(
-                                        &cur_file,
-                                        if pct >= 100.0 { total_files } else { 0 },
-                                        total_files,
-                                        cur_done_bytes,
-                                        total_bytes,
-                                        &cur_speed,
-                                        Some(pct),
-                                    );
-                                }
                             }
+
+                            if last_progress_tick.elapsed().as_millis() < 200 {
+                                return;
+                            }
+                            last_progress_tick = Instant::now();
+
+                            let phase_total = match phase {
+                                crate::direct_engine::Phase::Pack => total_bytes,
+                                crate::direct_engine::Phase::Ship if staging => archive_bytes.max(cur_done_bytes),
+                                _ => total_bytes,
+                            };
+                            let pct = composite(phase, cur_done_bytes, phase_total);
+
+                            let elapsed = direct_start_time.elapsed().as_secs_f64().max(0.001);
+                            let speed = format!("{}/s", format_size((cur_done_bytes as f64 / elapsed) as u64));
+                            if cur_speed.is_empty() || cur_speed == "Transferring..." {
+                                cur_speed = speed;
+                            }
+
+                            emit_progress(
+                                &cur_file,
+                                if pct >= 100.0 { total_files } else { 0 },
+                                total_files,
+                                cur_done_bytes,
+                                phase_total.max(cur_done_bytes).max(total_bytes),
+                                &cur_speed,
+                                Some(pct),
+                            );
                         },
                     );
 
@@ -1153,6 +1257,7 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
         dest_base: &dest_base,
         source_is_remote: task.source_is_remote,
         overwrite_skip: task.overwrite == "skip",
+        workers: task.workers,
     };
 
     let outcome = crate::relay_engine::run(
@@ -1351,6 +1456,8 @@ mod tests {
             target_path: "/home/memychat/htdocs/memychat.com".to_string(),
             recursive: true,
             overwrite: "overwrite".to_string(),
+            compression: "none".to_string(),
+            workers: 0,
         };
 
         let (direct_cmd, display_cmd) = build_direct_transfer_command(&task);
@@ -1397,6 +1504,8 @@ mod tests {
             target_path: "/home/memychat/htdocs/memychat.com".to_string(),
             recursive: true,
             overwrite: "overwrite".to_string(),
+            compression: "none".to_string(),
+            workers: 0,
         };
 
         let (direct_cmd, _display_cmd) = build_direct_transfer_command(&task);

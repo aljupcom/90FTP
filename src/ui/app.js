@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.84';
+    let APP_CURRENT_VERSION = '0.0.0.85';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -12460,6 +12460,7 @@ window.onerror = function(msg, url, line, col, error) {
       }
 
       populateRtSavedSitesDropdown();
+      updateRtModeOptions();
 
       // Reset verification & progress status. A transfer that is still running
       // keeps its busy button and its console; only a finished session resets.
@@ -12554,6 +12555,8 @@ window.onerror = function(msg, url, line, col, error) {
       // has to bring it back.
       toggleRtAuthFields();
       updateRtSshpassVisibility();
+      // A protocol change also changes which engines are reachable.
+      updateRtModeOptions();
     }
 
     /* sshpass is only needed by the direct server-to-server path, which copies
@@ -12598,6 +12601,60 @@ window.onerror = function(msg, url, line, col, error) {
       if (keyRow) keyRow.style.display = (auth === 'key') ? 'block' : 'none';
     }
 
+    /* Each engine has its own knobs, and showing a knob the chosen engine will
+       never read is how the old dialog ended up with a compression setting that
+       did nothing. The rows swap with the strategy instead. */
+    function updateRtModeOptions() {
+      const modeSel = document.getElementById('rtTransferMode');
+      const proto = document.getElementById('rtProtocol')?.value || 'sftp';
+      const compressionRow = document.getElementById('rtCompressionRow');
+      const workersRow = document.getElementById('rtWorkersRow');
+      const hint = document.getElementById('rtEngineHint');
+
+      /* Every direct engine runs `tar`/`rsync` on the *source* server and talks
+         SSH to the destination. An FTP, FTPS or WebDAV destination has no shell
+         to run it in, so offering those strategies only produced a silent
+         fallback that looked like the chosen mode was ignored. */
+      const sshTarget = proto === 'sftp' || proto === 'scp' || proto === 'ssh';
+      if (modeSel) {
+        Array.from(modeSel.options).forEach(opt => {
+          opt.disabled = !sshTarget && opt.value !== 'stream_relay';
+        });
+        if (!sshTarget && modeSel.value !== 'stream_relay') {
+          modeSel.value = 'stream_relay';
+        }
+      }
+
+      const mode = modeSel?.value || 'auto';
+      const direct = mode === 'auto' || mode === 'direct_scp' || mode === 'direct_rsync';
+      const rsync = mode === 'direct_rsync';
+
+      if (compressionRow) compressionRow.style.display = direct ? 'block' : 'none';
+      if (workersRow) workersRow.style.display = direct ? 'none' : 'block';
+
+      /* rsync compresses on the fly (`-z`) and never stages an archive, so its
+         option is a plain on/off rather than a format choice. */
+      const compSelect = document.getElementById('rtCompression');
+      if (compSelect) {
+        const zstdOpt = compSelect.querySelector('option[value="zstd"]');
+        if (zstdOpt) zstdOpt.disabled = rsync;
+        if (rsync && compSelect.value === 'zstd') compSelect.value = 'gzip';
+      }
+
+      if (!hint) return;
+      let text = '';
+      if (mode === 'auto') {
+        text = t('rt.hint_auto');
+      } else if (mode === 'direct_scp') {
+        text = t('rt.hint_direct_scp');
+      } else if (mode === 'direct_rsync') {
+        text = t('rt.hint_direct_rsync');
+      } else {
+        text = t('rt.hint_relay');
+      }
+      hint.textContent = text;
+    }
+
     function buildRtTaskPayload() {
       const proto = document.getElementById('rtProtocol')?.value || 'sftp';
       const rawAuthType = document.getElementById('rtAuthType')?.value || 'password';
@@ -12609,10 +12666,17 @@ window.onerror = function(msg, url, line, col, error) {
       // Register before anything can print it.
       rememberSecret(pass);
       rememberSecret(phrase);
+      const mode = document.getElementById('rtTransferMode')?.value || 'auto';
+      const direct = mode === 'auto' || mode === 'direct_scp' || mode === 'direct_rsync';
+      const rawCompression = document.getElementById('rtCompression')?.value || 'none';
       return {
         source_is_remote: currentRtIsRemote,
         sources: currentRtSources,
-        transfer_mode: document.getElementById('rtTransferMode')?.value || 'auto',
+        transfer_mode: mode,
+        // Only the direct engine can decompress on the far side, so the value
+        // is sent as "none" for the relay instead of pretending it applies.
+        compression: direct ? rawCompression : 'none',
+        workers: parseInt(document.getElementById('rtWorkers')?.value || '0', 10) || 0,
         target_protocol: proto,
         target_host: (document.getElementById('rtHost')?.value || '').trim(),
         target_port: parseInt(document.getElementById('rtPort')?.value || defaultPortForProtocol(proto), 10) || 22,

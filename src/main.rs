@@ -2,6 +2,7 @@
 
 mod app_state;
 mod archive;
+mod direct_engine;
 mod ftp_client;
 mod local_fs;
 mod logger;

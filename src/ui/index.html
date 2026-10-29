@@ -3594,6 +3594,18 @@
       font-variant-numeric: tabular-nums;
       flex: none;
     }
+    .rt-engine-hint {
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: var(--text-muted);
+      background: rgba(56, 189, 248, 0.06);
+      border-inline-start: 2px solid rgba(56, 189, 248, 0.45);
+      border-radius: 3px;
+      padding: 5px 8px;
+      margin-bottom: 6px;
+      text-align: start;
+    }
+    .rt-engine-hint:empty { display: none; }
     .rt-log-box {
       font-family: var(--font-mono);
       font-size: 12px;
@@ -4931,7 +4943,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.84</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.85</span>
         </div>
       </div>
 
@@ -6601,7 +6613,7 @@
           </div>
           <div class="about-brand-sub">Modern Site Manager & Asynchronous File Transfer Engine</div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.84 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.85 Dev (Windows x64)</span>
             <span style="font-size: 12px; color: var(--text-dim);">Release Channel: Official</span>
           </div>
         </div>
@@ -6716,7 +6728,7 @@
         </div>
         <div class="about-code-box" id="aboutDiagnosticsText">
 Application: 90FTP Desktop Client
-Version: 0.0.0.84 (Release)
+Version: 0.0.0.85 (Release)
 OS: Windows NT 10.0 x64
 WebView2: Evergreen Host
 Renderer: DirectComposition Hardware Accelerated
@@ -7160,15 +7172,39 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
           <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 6px;">
             <div style="flex: 1;">
-              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px;">Transfer Engine Strategy:</span>
-              <select id="rtTransferMode" style="width: 100%; height: 27px; font-size: 12.5px;">
-                <option value="auto">Auto: Direct Server-to-Server with Stream Relay Fallback (Recommended)</option>
-                <option value="direct_scp">Direct SCP: Native SSH/SCP command between servers (Zero Local Bandwidth)</option>
-                <option value="direct_rsync">Direct Rsync: High-speed delta compression between servers</option>
-                <option value="stream_relay">Stream Relay Bridge: In-Memory Safe Stream via 90FTP Engine</option>
+              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px;" data-i18n="rt.transfer_strategy">Transfer Engine Strategy:</span>
+              <select id="rtTransferMode" onchange="updateRtModeOptions()" style="width: 100%; height: 27px; font-size: 12.5px;">
+                <option value="auto" data-i18n="rt.mode_auto">Auto: Direct SSH stream with Stream Relay fallback (Recommended)</option>
+                <option value="direct_scp" data-i18n="rt.mode_direct_scp">Direct SSH Stream: tar over SSH, live progress, zero local bandwidth</option>
+                <option value="direct_rsync" data-i18n="rt.mode_direct_rsync">Direct Rsync: delta transfer and compression between servers</option>
+                <option value="stream_relay" data-i18n="rt.mode_relay">Stream Relay Bridge: in-memory stream through the 90FTP engine</option>
               </select>
             </div>
           </div>
+
+          <!-- Per-engine options: each strategy shows only what it actually uses -->
+          <div id="rtEngineOptions" style="display: flex; gap: 10px; align-items: flex-start; margin-bottom: 4px;">
+            <div id="rtCompressionRow" style="flex: 1; display: none;">
+              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px;" data-i18n="rt.compression">Compression:</span>
+              <select id="rtCompression" style="width: 100%; height: 27px; font-size: 12.5px;">
+                <option value="none" data-i18n="rt.compression_none">None — one stream, no temporary file</option>
+                <option value="gzip" data-i18n="rt.compression_gzip">gzip — temporary archive, removed after transfer</option>
+                <option value="zstd" data-i18n="rt.compression_zstd">zstd — fastest, requires zstd on both servers</option>
+              </select>
+            </div>
+            <div id="rtWorkersRow" style="flex: 1; display: none;">
+              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px;" data-i18n="rt.workers">Parallel connections:</span>
+              <select id="rtWorkers" style="width: 100%; height: 27px; font-size: 12.5px;">
+                <option value="0" data-i18n="rt.workers_auto">Automatic (recommended)</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="4">4</option>
+                <option value="8">8</option>
+                <option value="16">16</option>
+              </select>
+            </div>
+          </div>
+          <div id="rtEngineHint" class="rt-engine-hint"></div>
 
           <!-- Source Server Direct Transfer Prerequisite (sshpass) -->
           <div id="rtSshpassRow" style="margin-top: 4px; padding: 7px 10px; background: rgba(56, 189, 248, 0.05); border: 1px dashed rgba(56, 189, 248, 0.25); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
@@ -7188,7 +7224,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             </div>
           </div>
 
-          <div style="display: flex; gap: 16px; margin-top: 8px;">
+          <!-- One option per line: side by side, the second label ran out of
+               room in Arabic and its text was clipped by the group box. -->
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px;">
             <label class="options-checkbox-row" style="margin-bottom: 0;">
               <input type="checkbox" id="rtOptRecursive" checked>
               <span>Recursive directory transfer (preserve subdirectory structure)</span>

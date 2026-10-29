@@ -580,6 +580,8 @@ pub struct Plan<'a> {
     pub dest_base: &'a str,
     pub source_is_remote: bool,
     pub overwrite_skip: bool,
+    /// Parallel connections chosen in the dialog; 0 = engine default.
+    pub workers: usize,
 }
 
 fn target_path_for(dest_base: &str, item: &TransferItem) -> String {
@@ -627,17 +629,27 @@ fn create_directories(
     Ok(())
 }
 
-fn worker_count(file_count: usize) -> usize {
+/// How many parallel connections to open.
+///
+/// `requested` is the value chosen in the transfer dialog (0 means "let the
+/// engine decide"). The pool is capped at 16 because each worker holds a full
+/// SSH session with its own read/write windows, and beyond that the link — not
+/// the client — is the bottleneck. A transfer with fewer files than
+/// [`PARALLEL_MIN_FILES`] stays serial: the handshakes would cost more than the
+/// parallelism saves.
+fn worker_count(file_count: usize, requested: usize) -> usize {
     if file_count < PARALLEL_MIN_FILES {
         return 1;
     }
-    match std::env::var("90FTP_RELAY_WORKERS")
-        .ok()
-        .and_then(|v| v.trim().parse::<usize>().ok())
-    {
-        Some(n) => n.clamp(1, 16),
-        None => DEFAULT_WORKERS.min(file_count),
-    }
+    let wanted = if requested > 0 {
+        requested
+    } else {
+        std::env::var("90FTP_RELAY_WORKERS")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(DEFAULT_WORKERS)
+    };
+    wanted.clamp(1, 16).min(file_count)
 }
 
 /// Runs the transfer, serially or over a worker pool.
@@ -672,7 +684,7 @@ pub fn run(
         };
     }
 
-    let mut workers = worker_count(files.len());
+    let mut workers = worker_count(files.len(), plan.workers);
     // Extra connections are only possible when the caller handed us what it took
     // to open them.
     if plan.source_is_remote && source_spec.is_none() {
@@ -1092,9 +1104,9 @@ mod tests {
 
     #[test]
     fn the_worker_pool_stays_serial_for_small_jobs() {
-        assert_eq!(worker_count(0), 1);
-        assert_eq!(worker_count(PARALLEL_MIN_FILES - 1), 1);
-        assert!(worker_count(PARALLEL_MIN_FILES * 2) > 1);
+        assert_eq!(worker_count(0, 0), 1);
+        assert_eq!(worker_count(PARALLEL_MIN_FILES - 1, 0), 1);
+        assert!(worker_count(PARALLEL_MIN_FILES * 2, 0) > 1);
     }
 
     // ------------------------------------------------------- end to end
@@ -1141,6 +1153,7 @@ mod tests {
             dest_base: "/site",
             source_is_remote: false,
             overwrite_skip: false,
+            workers: 0,
         };
 
         let outcome = run(
@@ -1241,7 +1254,7 @@ mod tests {
         };
 
         assert!(
-            worker_count(FILE_COUNT) > 1,
+            worker_count(FILE_COUNT, 0) > 1,
             "this test only proves something when the pool is used"
         );
 
@@ -1251,6 +1264,7 @@ mod tests {
             dest_base: "/par",
             source_is_remote: false,
             overwrite_skip: false,
+            workers: 0,
         };
 
         let outcome = run(None, None, target, &spec, &plan, &None, &cancelled, total);
@@ -1344,6 +1358,7 @@ mod tests {
             dest_base: "/backup",
             source_is_remote: true,
             overwrite_skip: false,
+            workers: 0,
         };
 
         let outcome = run(

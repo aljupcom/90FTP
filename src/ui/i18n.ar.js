@@ -962,5 +962,20 @@ window.I18N_AR = {
   "proto.ftp_long": "FTP — بروتوكول نقل الملفات",
   "proto.ftps_long": "FTPS — FTP مع TLS/SSL",
   "proto.webdav": "WebDAV (HTTP)",
-  "proto.webdavs": "WebDAV (HTTPS)"
+  "proto.webdavs": "WebDAV (HTTPS)",
+  "rt.transfer_strategy": "استراتيجية محرك النقل:",
+  "rt.mode_auto": "تلقائي: بث SSH مباشر مع الرجوع إلى Stream Relay (موصى به)",
+  "rt.mode_direct_scp": "بث SSH مباشر: tar عبر SSH، تقدم لحظي، بلا استهلاك نطاق محلي",
+  "rt.mode_direct_rsync": "Rsync مباشر: نقل فرقي وضغط بين الخادمين",
+  "rt.mode_relay": "جسر Stream Relay: بث في الذاكرة عبر محرك 90FTP",
+  "rt.compression": "الضغط:",
+  "rt.compression_none": "بدون — بث واحد، بلا ملف مؤقت",
+  "rt.compression_gzip": "gzip — أرشيف مؤقت يُحذف بعد النقل",
+  "rt.compression_zstd": "zstd — الأسرع، ويتطلب zstd على الخادمين",
+  "rt.workers": "اتصالات متوازية:",
+  "rt.workers_auto": "تلقائي (موصى به)",
+  "rt.hint_auto": "يحاول أولًا البث المباشر بين الخادمين، وإن تعذّر يرجع تلقائيًا إلى جسر Stream Relay دون أي إعداد إضافي.",
+  "rt.hint_direct_scp": "يُمرَّر tar عبر SSH ويعدّ dd البايتات، لذا يعرض شريط التقدم تقدمًا حقيقيًا. الملفات لا تمر عبر هذا الجهاز. وعند تشغيل الضغط يُنشأ أرشيف مؤقت على المصدر ثم يُحذف وحده بعد النقل.",
+  "rt.hint_direct_rsync": "ينقل rsync الفروق فقط ويضغط أثناء النقل. الأنسب للمزامنة المتكررة، ويتطلب rsync على خادم المصدر.",
+  "rt.hint_relay": "تمر البيانات عبر هذا الجهاز. ارفع عدد الاتصالات المتوازية عند رفع مجلدات كبيرة مكوّنة من ملفات صغيرة كثيرة."
 };

@@ -962,5 +962,20 @@ window.I18N_EN = {
   "proto.ftp_long": "FTP - File Transfer Protocol",
   "proto.ftps_long": "FTPS - FTP with TLS/SSL",
   "proto.webdav": "WebDAV (HTTP)",
-  "proto.webdavs": "WebDAV (HTTPS)"
+  "proto.webdavs": "WebDAV (HTTPS)",
+  "rt.transfer_strategy": "Transfer Engine Strategy:",
+  "rt.mode_auto": "Auto: Direct SSH stream with Stream Relay fallback (Recommended)",
+  "rt.mode_direct_scp": "Direct SSH Stream: tar over SSH, live progress, zero local bandwidth",
+  "rt.mode_direct_rsync": "Direct Rsync: delta transfer and compression between servers",
+  "rt.mode_relay": "Stream Relay Bridge: in-memory stream through the 90FTP engine",
+  "rt.compression": "Compression:",
+  "rt.compression_none": "None — one stream, no temporary file",
+  "rt.compression_gzip": "gzip — temporary archive, removed after transfer",
+  "rt.compression_zstd": "zstd — fastest, requires zstd on both servers",
+  "rt.workers": "Parallel connections:",
+  "rt.workers_auto": "Automatic (recommended)",
+  "rt.hint_auto": "Tries a direct server-to-server stream first and falls back to the Stream Relay bridge on its own if that is not possible.",
+  "rt.hint_direct_scp": "tar is piped over SSH and dd counts the bytes, so the progress bar reports real progress. The files never pass through this computer. With compression on, a temporary archive is built on the source and only that archive is deleted afterwards.",
+  "rt.hint_direct_rsync": "rsync sends only the differences and compresses in flight. Best for repeated syncs; it needs rsync on the source server.",
+  "rt.hint_relay": "The data passes through this computer. Raise the parallel connections when uploading large folders made of many small files."
 };
