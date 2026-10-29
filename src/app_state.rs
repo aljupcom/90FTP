@@ -4227,6 +4227,7 @@ impl AppState {
                 let cancelled = self.remote_transfer_cancelled.clone();
                 let exec_script = self.exec_script.clone();
 
+                let mut source_spec: Option<crate::relay_engine::ConnectionSpec> = None;
                 let source_client = if task.source_is_remote {
                     let conn_info = self.current_connection.lock().unwrap().clone();
                     if let Some(info) = conn_info {
@@ -4238,6 +4239,19 @@ impl AppState {
                         let auth_type = info["auth_type"].as_str().unwrap_or("password");
                         let key_path = info["key_path"].as_str();
                         let passphrase = info["passphrase"].as_str();
+
+                        // Kept so the relay's worker pool can open its own
+                        // sessions instead of serialising every file.
+                        source_spec = Some(crate::relay_engine::ConnectionSpec {
+                            protocol: protocol.to_string(),
+                            host: host.to_string(),
+                            port,
+                            user: user.to_string(),
+                            pass: pass.to_string(),
+                            auth_type: auth_type.to_string(),
+                            key_path: key_path.map(|s| s.to_string()),
+                            passphrase: passphrase.map(|s| s.to_string()),
+                        });
 
                         match RemoteClient::connect(protocol, host, port, user, pass, auth_type, key_path, passphrase, true) {
                             Ok(c) => Some(c),
@@ -4251,7 +4265,7 @@ impl AppState {
                 };
 
                 std::thread::spawn(move || {
-                    crate::remote_transfer::execute_transfer_thread(source_client, task, cancelled, exec_script);
+                    crate::remote_transfer::execute_transfer_thread(source_client, source_spec, task, cancelled, exec_script);
                 });
 
                 IpcResponse::ok(id, action, json!({ "started": true }))

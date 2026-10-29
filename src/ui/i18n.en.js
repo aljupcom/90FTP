@@ -951,5 +951,16 @@ window.I18N_EN = {
   "transfers.empty": "No active or queued file transfers",
   "transfers.source_target": "Source → Target",
   "transfers.col_path": "File / Path",
-  "proto.ftpsi": "FTPS (Implicit, port 990)"
+  "proto.sftp": "SFTP (SSH)",
+  "proto.ftp": "FTP (Plain)",
+  "proto.ftps": "FTPS (SSL)",
+  "proto.ftpsi": "FTPS (Implicit, port 990)",
+  "proto.scp": "SCP (Secure Copy)",
+  "proto.ftp_short": "FTP",
+  "proto.ftps_explicit": "FTPS (Explicit TLS)",
+  "proto.sftp_long": "SFTP - SSH File Transfer",
+  "proto.ftp_long": "FTP - File Transfer Protocol",
+  "proto.ftps_long": "FTPS - FTP with TLS/SSL",
+  "proto.webdav": "WebDAV (HTTP)",
+  "proto.webdavs": "WebDAV (HTTPS)"
 };

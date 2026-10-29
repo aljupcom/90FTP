@@ -589,6 +589,15 @@
       filter: grayscale(0.5);
       pointer-events: none;
     }
+    /* A control that the current protocol makes irrelevant has to look
+       irrelevant: the Auth Type selector is disabled on WebDAV, and leaving it
+       at full contrast made it look like a choice that simply did nothing. */
+    select:disabled,
+    input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      filter: grayscale(0.35);
+    }
     .btn.is-busy {
       cursor: progress;
       opacity: 0.75;
@@ -4922,7 +4931,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.83</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.84</span>
         </div>
       </div>
 
@@ -5245,10 +5254,12 @@
         <div class="qc-item">
           <span class="qc-label">Protocol:</span>
           <select id="connProtocol" onchange="updateDefaultPort()" style="width: 120px;">
-            <option value="sftp">SFTP (SSH)</option>
-            <option value="ftp">FTP (Plain)</option>
-            <option value="ftps">FTPS (SSL)</option>
-            <option value="ftpsi">FTPS (Implicit, port 990)</option>
+            <option value="sftp" data-i18n="proto.sftp">SFTP (SSH)</option>
+            <option value="ftp" data-i18n="proto.ftp">FTP (Plain)</option>
+            <option value="ftps" data-i18n="proto.ftps">FTPS (SSL)</option>
+            <option value="ftpsi" data-i18n="proto.ftpsi">FTPS (Implicit, port 990)</option>
+            <option value="webdav" data-i18n="proto.webdav">WebDAV (HTTP)</option>
+            <option value="webdavs" data-i18n="proto.webdavs">WebDAV (HTTPS)</option>
           </select>
         </div>
 
@@ -6050,10 +6061,12 @@
                 <div class="desktop-field" style="flex: 1.3;">
                   <label>File Protocol:</label>
                   <select id="siteProtocol" onchange="onSiteProtocolChange()">
-                    <option value="sftp">SFTP - SSH File Transfer</option>
-                    <option value="ftp">FTP - File Transfer Protocol</option>
-                    <option value="ftps">FTPS - FTP with TLS/SSL</option>
-                    <option value="ftpsi">FTPS (Implicit, port 990)</option>
+                    <option value="sftp" data-i18n="proto.sftp_long">SFTP - SSH File Transfer</option>
+                    <option value="ftp" data-i18n="proto.ftp_long">FTP - File Transfer Protocol</option>
+                    <option value="ftps" data-i18n="proto.ftps_long">FTPS - FTP with TLS/SSL</option>
+                    <option value="ftpsi" data-i18n="proto.ftpsi">FTPS (Implicit, port 990)</option>
+                    <option value="webdav" data-i18n="proto.webdav">WebDAV (HTTP)</option>
+                    <option value="webdavs" data-i18n="proto.webdavs">WebDAV (HTTPS)</option>
                   </select>
                 </div>
                 <div class="desktop-field" style="flex: 0.7;">
@@ -6588,7 +6601,7 @@
           </div>
           <div class="about-brand-sub">Modern Site Manager & Asynchronous File Transfer Engine</div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.83 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.84 Dev (Windows x64)</span>
             <span style="font-size: 12px; color: var(--text-dim);">Release Channel: Official</span>
           </div>
         </div>
@@ -6703,7 +6716,7 @@
         </div>
         <div class="about-code-box" id="aboutDiagnosticsText">
 Application: 90FTP Desktop Client
-Version: 0.0.0.83 (Release)
+Version: 0.0.0.84 (Release)
 OS: Windows NT 10.0 x64
 WebView2: Evergreen Host
 Renderer: DirectComposition Hardware Accelerated
@@ -7079,11 +7092,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <div style="width: 140px;">
               <span style="font-size: 12px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px;">Protocol:</span>
               <select id="rtProtocol" onchange="onRtProtocolChange(this.value)" style="width: 100%; height: 27px;">
-                <option value="sftp">SFTP (SSH)</option>
-                <option value="scp">SCP (Secure Copy)</option>
-                <option value="ftp">FTP</option>
-                <option value="ftps">FTPS (Explicit TLS)</option>
-                <option value="ftpsi">FTPS (Implicit, port 990)</option>
+                <option value="sftp" data-i18n="proto.sftp">SFTP (SSH)</option>
+                <option value="scp" data-i18n="proto.scp">SCP (Secure Copy)</option>
+                <option value="ftp" data-i18n="proto.ftp_short">FTP</option>
+                <option value="ftps" data-i18n="proto.ftps_explicit">FTPS (Explicit TLS)</option>
+                <option value="ftpsi" data-i18n="proto.ftpsi">FTPS (Implicit, port 990)</option>
+                <option value="webdav" data-i18n="proto.webdav">WebDAV (HTTP)</option>
+                <option value="webdavs" data-i18n="proto.webdavs">WebDAV (HTTPS)</option>
               </select>
             </div>
           </div>

@@ -3,11 +3,13 @@ use std::sync::atomic::AtomicBool;
 use crate::ftp_client::{self, FtpBackend};
 use crate::models::FileItem;
 use crate::sftp_client::SftpClient;
+use crate::webdav_client::WebdavClient;
 
 #[allow(dead_code)]
 pub enum RemoteClient {
     Ftp(Box<dyn FtpBackend>),
     Sftp(SftpClient),
+    Webdav(WebdavClient),
 }
 
 #[allow(dead_code)]
@@ -60,6 +62,22 @@ impl RemoteClient {
                 )?;
                 Ok(RemoteClient::Sftp(client))
             }
+            /* WebDAV rides on HTTP, so the address the user pastes is a URL, not
+               a bare host. `trust_host` doubles as "accept a self-signed
+               certificate", which is the norm for the NAS boxes this protocol is
+               usually pointed at. */
+            "webdav" | "dav" | "http" => {
+                let actual_port = if port == 0 { 80 } else { port };
+                let client =
+                    WebdavClient::connect(host, "webdav", actual_port, user, pass, trust_host)?;
+                Ok(RemoteClient::Webdav(client))
+            }
+            "webdavs" | "davs" | "https" | "webdav-https" => {
+                let actual_port = if port == 0 { 443 } else { port };
+                let client =
+                    WebdavClient::connect(host, "webdavs", actual_port, user, pass, trust_host)?;
+                Ok(RemoteClient::Webdav(client))
+            }
             other => Err(format!("Unsupported protocol: {}", other)),
         }
     }
@@ -68,6 +86,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.current_dir().to_string(),
             RemoteClient::Sftp(c) => c.current_dir.clone(),
+            RemoteClient::Webdav(c) => c.current_dir().to_string(),
         }
     }
 
@@ -76,6 +95,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.is_secure(),
             RemoteClient::Sftp(_) => true,
+            RemoteClient::Webdav(c) => c.is_secure(),
         }
     }
 
@@ -83,6 +103,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.list(path),
             RemoteClient::Sftp(c) => c.list(path),
+            RemoteClient::Webdav(c) => c.list(path),
         }
     }
 
@@ -90,6 +111,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.change_dir(path),
             RemoteClient::Sftp(c) => c.change_dir(path),
+            RemoteClient::Webdav(c) => c.change_dir(path),
         }
     }
 
@@ -97,6 +119,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.download_file(remote_file),
             RemoteClient::Sftp(c) => c.download_file(remote_file),
+            RemoteClient::Webdav(c) => c.download_file(remote_file),
         }
     }
 
@@ -104,6 +127,11 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.download_to_local_file(remote_file, local_path),
             RemoteClient::Sftp(c) => c.download_to_local_file(remote_file, local_path),
+            RemoteClient::Webdav(c) => c.download_to_local_file_ctl(
+                remote_file,
+                local_path,
+                &crate::transfer_control::TransferControl::unbounded(),
+            ),
         }
     }
 
@@ -117,6 +145,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.download_to_local_file_ctl(remote_file, local_path, control),
             RemoteClient::Sftp(c) => c.download_to_local_file_ctl(remote_file, local_path, control),
+            RemoteClient::Webdav(c) => c.download_to_local_file_ctl(remote_file, local_path, control),
         }
     }
 
@@ -124,6 +153,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.upload_file(remote_file, data),
             RemoteClient::Sftp(c) => c.upload_file(remote_file, data),
+            RemoteClient::Webdav(c) => c.upload_file(remote_file, data),
         }
     }
 
@@ -131,6 +161,11 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.upload_from_local_file(local_path, remote_file),
             RemoteClient::Sftp(c) => c.upload_from_local_file(local_path, remote_file),
+            RemoteClient::Webdav(c) => c.upload_from_local_file_ctl(
+                local_path,
+                remote_file,
+                &crate::transfer_control::TransferControl::unbounded(),
+            ),
         }
     }
 
@@ -144,6 +179,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.upload_from_local_file_ctl(local_path, remote_file, control),
             RemoteClient::Sftp(c) => c.upload_from_local_file_ctl(local_path, remote_file, control),
+            RemoteClient::Webdav(c) => c.upload_from_local_file_ctl(local_path, remote_file, control),
         }
     }
 
@@ -151,6 +187,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.stat(path),
             RemoteClient::Sftp(c) => c.stat(path),
+            RemoteClient::Webdav(c) => c.stat(path),
         }
     }
 
@@ -158,10 +195,17 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.make_dir(dir_name),
             RemoteClient::Sftp(c) => c.make_dir(dir_name),
+            RemoteClient::Webdav(c) => c.make_dir(dir_name),
         }
     }
 
     pub fn make_dir_all(&mut self, dir_path: &str) -> Result<(), String> {
+        // WebDAV resolves and creates segments itself, and MKCOL on an existing
+        // collection answers 405, so it can skip the existence guessing.
+        if let RemoteClient::Webdav(c) = self {
+            return c.make_dir_all(dir_path);
+        }
+
         let clean = dir_path.trim().replace('\\', "/");
         if clean.is_empty() || clean == "." || clean == "~" || clean == "/" {
             return Ok(());
@@ -183,6 +227,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.remove_file(file_name),
             RemoteClient::Sftp(c) => c.remove_file(file_name),
+            RemoteClient::Webdav(c) => c.remove_file(file_name),
         }
     }
 
@@ -190,6 +235,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.remove_dir(dir_name),
             RemoteClient::Sftp(c) => c.remove_dir(dir_name),
+            RemoteClient::Webdav(c) => c.remove_dir(dir_name),
         }
     }
 
@@ -197,6 +243,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.rename(old_path, new_path),
             RemoteClient::Sftp(c) => c.rename(old_path, new_path),
+            RemoteClient::Webdav(c) => c.rename(old_path, new_path),
         }
     }
 
@@ -208,6 +255,11 @@ impl RemoteClient {
                     .unwrap_or(0o644);
                 c.chmod(octal, path_str)
             }
+            RemoteClient::Webdav(c) => {
+                let octal = u32::from_str_radix(mode.trim_start_matches("0o"), 8)
+                    .unwrap_or(0o644);
+                c.chmod(octal, path_str)
+            }
         }
     }
 
@@ -215,6 +267,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(_) => Err("Terminal command execution is not supported on standard FTP/FTPS. Please connect with SSH/SFTP.".to_string()),
             RemoteClient::Sftp(c) => c.exec_command(cmd),
+            RemoteClient::Webdav(_) => Err("Terminal command execution is not supported on WebDAV. Please connect with SSH/SFTP.".to_string()),
         }
     }
 
@@ -222,6 +275,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(_) => Err("Terminal command execution is not supported on standard FTP/FTPS. Please connect with SSH/SFTP.".to_string()),
             RemoteClient::Sftp(c) => c.exec_command_clean(cmd),
+            RemoteClient::Webdav(_) => Err("Terminal command execution is not supported on WebDAV. Please connect with SSH/SFTP.".to_string()),
         }
     }
 
@@ -232,6 +286,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(_) => Err("Terminal command execution is not supported on standard FTP/FTPS. Please connect with SSH/SFTP.".to_string()),
             RemoteClient::Sftp(c) => c.exec_command_streaming(cmd, cols, rows, on_chunk),
+            RemoteClient::Webdav(_) => Err("Terminal command execution is not supported on WebDAV. Please connect with SSH/SFTP.".to_string()),
         }
     }
 
@@ -247,6 +302,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(_) => Err("Terminal command execution is not supported on standard FTP/FTPS. Please connect with SSH/SFTP.".to_string()),
             RemoteClient::Sftp(c) => c.exec_command_stream_pty(cmd, cancelled, on_chunk),
+            RemoteClient::Webdav(_) => Err("Terminal command execution is not supported on WebDAV. Please connect with SSH/SFTP.".to_string()),
         }
     }
 
@@ -266,6 +322,7 @@ impl RemoteClient {
         match self {
             RemoteClient::Ftp(c) => c.ping(),
             RemoteClient::Sftp(c) => c.ping(),
+            RemoteClient::Webdav(c) => c.ping(),
         }
     }
 }

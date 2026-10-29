@@ -6,6 +6,7 @@ mod ftp_client;
 mod local_fs;
 mod logger;
 mod models;
+mod relay_engine;
 mod remote;
 mod remote_transfer;
 mod sessions;
@@ -15,6 +16,7 @@ mod transfer_control;
 mod transfer_queue;
 mod ui_prefs;
 mod watcher;
+mod webdav_client;
 
 use std::sync::Arc;
 use tao::{

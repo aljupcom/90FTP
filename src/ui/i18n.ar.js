@@ -951,5 +951,16 @@ window.I18N_AR = {
   "transfers.empty": "لا عمليات نقل نشطة أو في الانتظار",
   "transfers.source_target": "المصدر ← الهدف",
   "transfers.col_path": "الملف / المسار",
-  "proto.ftpsi": "FTPS (ضمني، منفذ 990)"
+  "proto.sftp": "SFTP (SSH)",
+  "proto.ftp": "FTP (عادي)",
+  "proto.ftps": "FTPS (SSL)",
+  "proto.ftpsi": "FTPS (ضمني، منفذ 990)",
+  "proto.scp": "SCP (نسخ آمن)",
+  "proto.ftp_short": "FTP",
+  "proto.ftps_explicit": "FTPS (TLS صريح)",
+  "proto.sftp_long": "SFTP — نقل ملفات عبر SSH",
+  "proto.ftp_long": "FTP — بروتوكول نقل الملفات",
+  "proto.ftps_long": "FTPS — FTP مع TLS/SSL",
+  "proto.webdav": "WebDAV (HTTP)",
+  "proto.webdavs": "WebDAV (HTTPS)"
 };

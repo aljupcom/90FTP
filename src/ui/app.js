@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.83';
+    let APP_CURRENT_VERSION = '0.0.0.84';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -5066,7 +5066,8 @@ window.onerror = function(msg, url, line, col, error) {
 
     /* Single source of truth for "which port does this protocol imply". Implicit
        FTPS is the one that does not sit on 21, so a hardcoded ternary kept
-       sending it to the wrong port. */
+       sending it to the wrong port. WebDAV follows the HTTP defaults, and the
+       address the user pastes usually carries its own port anyway. */
     function defaultPortForProtocol(proto) {
       switch (proto) {
         case 'sftp':
@@ -5075,9 +5076,20 @@ window.onerror = function(msg, url, line, col, error) {
           return '22';
         case 'ftpsi':
           return '990';
+        case 'webdav':
+        case 'dav':
+          return '80';
+        case 'webdavs':
+        case 'davs':
+        case 'https':
+          return '443';
         default:
           return '21';
       }
+    }
+
+    function isWebdavProtocol(proto) {
+      return proto === 'webdav' || proto === 'webdavs' || proto === 'dav' || proto === 'davs' || proto === 'https';
     }
 
     function updateDefaultPort() {
@@ -12400,7 +12412,12 @@ window.onerror = function(msg, url, line, col, error) {
       closeAllMenus();
 
       if (isRemote === null) {
-        isRemote = (currentActivePane === 'remote');
+        /* `currentActivePane` was referenced here but never declared anywhere,
+           so every caller that omitted `isRemote` threw a ReferenceError and
+           the dialog simply did not open — the Transfer menu entry and the
+           Tools shortcut were dead. `lastActivePaneIsRemote` is the variable
+           the rest of the app actually maintains. */
+        isRemote = !!lastActivePaneIsRemote;
       }
       currentRtIsRemote = isRemote;
 
@@ -12460,10 +12477,7 @@ window.onerror = function(msg, url, line, col, error) {
 
       const sshpassRow = document.getElementById('rtSshpassRow');
       if (sshpassRow) {
-        sshpassRow.style.display = isRemote ? 'flex' : 'none';
-        if (isRemote) {
-          checkRemoteSshpass(true);
-        }
+        updateRtSshpassVisibility();
       }
 
       const modal = document.getElementById('remoteTransferModal');
@@ -12508,7 +12522,7 @@ window.onerror = function(msg, url, line, col, error) {
       const hostEl = document.getElementById('rtHost');
       if (hostEl) hostEl.value = site.host || '';
       const portEl = document.getElementById('rtPort');
-      if (portEl) portEl.value = site.port || (site.protocol === 'ftp' ? 21 : 22);
+      if (portEl) portEl.value = site.port || defaultPortForProtocol(site.protocol || 'sftp');
       const userEl = document.getElementById('rtUsername');
       if (userEl) userEl.value = site.username || '';
 
@@ -12536,18 +12550,60 @@ window.onerror = function(msg, url, line, col, error) {
     function onRtProtocolChange(proto) {
       const portEl = document.getElementById('rtPort');
       if (portEl) portEl.value = defaultPortForProtocol(proto);
+      // Switching to WebDAV has to drop the key-file choice, and switching away
+      // has to bring it back.
+      toggleRtAuthFields();
+      updateRtSshpassVisibility();
+    }
+
+    /* sshpass is only needed by the direct server-to-server path, which copies
+       with `scp` on the source server and therefore needs an SSH destination.
+       Showing the row for an FTP or WebDAV target asked the user to install a
+       tool the transfer would never call. */
+    function updateRtSshpassVisibility() {
+      const row = document.getElementById('rtSshpassRow');
+      if (!row) return;
+
+      const targetProto = document.getElementById('rtProtocol')?.value || 'sftp';
+      const needsSsh = targetProto === 'sftp' || targetProto === 'scp' || targetProto === 'ssh';
+      const relevant = !!currentRtIsRemote && needsSsh;
+      row.style.display = relevant ? 'flex' : 'none';
+      if (relevant) {
+        checkRemoteSshpass(true);
+      }
     }
 
     function toggleRtAuthFields() {
-      const auth = document.getElementById('rtAuthType')?.value || 'password';
+      const proto = document.getElementById('rtProtocol')?.value || 'sftp';
+      const authEl = document.getElementById('rtAuthType');
       const passRow = document.getElementById('rtPassRow');
       const keyRow = document.getElementById('rtKeyRow');
+
+      /* WebDAV authenticates with HTTP Basic only. Offering "SSH Private Key"
+         there would let the user pick a credential the backend can never use,
+         so the control is disabled rather than silently ignored. */
+      if (isWebdavProtocol(proto)) {
+        if (authEl) {
+          authEl.value = 'password';
+          authEl.disabled = true;
+        }
+        if (passRow) passRow.style.display = 'block';
+        if (keyRow) keyRow.style.display = 'none';
+        return;
+      }
+
+      const auth = authEl?.value || 'password';
+      if (authEl) authEl.disabled = false;
       if (passRow) passRow.style.display = (auth === 'password') ? 'block' : 'none';
       if (keyRow) keyRow.style.display = (auth === 'key') ? 'block' : 'none';
     }
 
     function buildRtTaskPayload() {
-      const authType = document.getElementById('rtAuthType')?.value || 'password';
+      const proto = document.getElementById('rtProtocol')?.value || 'sftp';
+      const rawAuthType = document.getElementById('rtAuthType')?.value || 'password';
+      // WebDAV only speaks HTTP Basic, so a stale "key" selection must not be
+      // sent: the backend would ignore it, and the log would claim otherwise.
+      const authType = isWebdavProtocol(proto) ? 'password' : rawAuthType;
       const pass = document.getElementById('rtPassword')?.value || '';
       const phrase = document.getElementById('rtPassphrase')?.value || '';
       // Register before anything can print it.
@@ -12557,9 +12613,9 @@ window.onerror = function(msg, url, line, col, error) {
         source_is_remote: currentRtIsRemote,
         sources: currentRtSources,
         transfer_mode: document.getElementById('rtTransferMode')?.value || 'auto',
-        target_protocol: document.getElementById('rtProtocol')?.value || 'sftp',
+        target_protocol: proto,
         target_host: (document.getElementById('rtHost')?.value || '').trim(),
-        target_port: parseInt(document.getElementById('rtPort')?.value || '22', 10) || 22,
+        target_port: parseInt(document.getElementById('rtPort')?.value || defaultPortForProtocol(proto), 10) || 22,
         target_user: (document.getElementById('rtUsername')?.value || '').trim(),
         target_pass: pass,
         target_auth_type: authType,

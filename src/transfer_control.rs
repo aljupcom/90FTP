@@ -86,6 +86,19 @@ impl TransferControl {
         self.limit_bps.store(bps, Ordering::Relaxed);
     }
 
+    /// Whether a speed cap is in force.
+    ///
+    /// A backend that has to choose between an unsteerable fast path and a
+    /// steerable slow one needs to know: buffering the whole file makes the
+    /// limit impossible to honour, so the choice cannot be made on size alone.
+    pub fn has_speed_limit(&self) -> bool {
+        self.limit_bps.load(Ordering::Relaxed) > 0
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel.load(Ordering::Relaxed)
+    }
+
     /// Called by the copy loop after writing each chunk.
     ///
     /// Returns [`CANCELLED`] once the user stops the transfer, so the loop can

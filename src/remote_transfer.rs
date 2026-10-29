@@ -678,96 +678,51 @@ fn sort_for_creation(items: &mut [TransferItem]) {
 
 pub fn execute_transfer_thread(
     mut source_client: Option<RemoteClient>,
+    /* The parameters behind `source_client`, so the relay can open extra
+       sessions for its worker pool. A connection is stateful and cannot be
+       shared across threads. */
+    source_spec: Option<crate::relay_engine::ConnectionSpec>,
     task: RemoteTransferTask,
     cancelled: Arc<AtomicBool>,
     exec_script: Option<ScriptCallback>,
 ) {
+    /* The five emitters live in `relay_engine` so the direct-SCP path and the
+       relay's worker threads build byte-identical messages. Every one of them
+       redacts before the text leaves Rust: the transfer log is visible on
+       screen and is the one place a leaked credential would be copied straight
+       into a screenshot or a support ticket. */
     let emit_log = |msg: &str, kind: &str| {
-        if let Some(ref cb) = exec_script {
-            // Redact before the text leaves Rust: the transfer log is visible on
-            // screen and is the one place a leaked credential would be copied
-            // straight into a screenshot or a support ticket.
-            let payload = json!({ "text": crate::logger::redact(msg), "kind": kind });
-            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
-            cb(format!(
-                "if(window.onRemoteTransferLog) window.onRemoteTransferLog({});",
-                json_str
-            ));
-        }
+        crate::relay_engine::send_log(&exec_script, msg, kind);
     };
 
     // Emits a line that *replaces* the previous status line instead of
     // appending. Used for anything that updates in place (indexing progress),
     // so the log does not fill with near-identical lines.
     let emit_status = |msg: &str, kind: &str| {
-        if let Some(ref cb) = exec_script {
-            let payload = json!({
-                "text": crate::logger::redact(msg),
-                "kind": kind,
-                "replace": true
-            });
-            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
-            cb(format!(
-                "if(window.onRemoteTransferLog) window.onRemoteTransferLog({});",
-                json_str
-            ));
-        }
+        crate::relay_engine::send_status(&exec_script, msg, kind);
     };
 
     let emit_progress = |file: &str, done_files: usize, total_files: usize, done_bytes: u64, total_bytes: u64, speed_str: &str, override_pct: Option<f64>| {
-        if let Some(ref cb) = exec_script {
-            let pct = if let Some(p) = override_pct {
-                p.max(0.0).min(100.0)
-            } else if total_bytes > 0 {
-                (done_bytes as f64 / total_bytes as f64 * 100.0).min(100.0)
-            } else if total_files > 0 {
-                (done_files as f64 / total_files as f64 * 100.0).min(100.0)
-            } else {
-                100.0
-            };
-            let payload = json!({
-                "percent": pct,
-                "current_file": file,
-                "done_files": done_files,
-                "total_files": total_files,
-                "done_bytes": done_bytes,
-                "total_bytes": total_bytes,
-                "speed": speed_str
-            });
-            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
-            cb(format!(
-                "if(window.onRemoteTransferProgress) window.onRemoteTransferProgress({});",
-                json_str
-            ));
-        }
+        let pct = if let Some(p) = override_pct {
+            p.max(0.0).min(100.0)
+        } else if total_bytes > 0 {
+            (done_bytes as f64 / total_bytes as f64 * 100.0).min(100.0)
+        } else if total_files > 0 {
+            (done_files as f64 / total_files as f64 * 100.0).min(100.0)
+        } else {
+            100.0
+        };
+        crate::relay_engine::send_progress(
+            &exec_script, pct, file, done_files, total_files, done_bytes, total_bytes, speed_str,
+        );
     };
 
     let emit_complete = |success: bool, msg: &str, count: usize, bytes: u64, secs: f64| {
-        if let Some(ref cb) = exec_script {
-            let payload = json!({
-                "success": success,
-                "message": msg,
-                "count": count,
-                "bytes": bytes,
-                "elapsed_secs": secs
-            });
-            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
-            cb(format!(
-                "if(window.onRemoteTransferComplete) window.onRemoteTransferComplete({});",
-                json_str
-            ));
-        }
+        crate::relay_engine::send_complete(&exec_script, success, msg, count, bytes, secs);
     };
 
     let emit_error = |err: &str| {
-        if let Some(ref cb) = exec_script {
-            let payload = json!({ "error": crate::logger::redact(err) });
-            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
-            cb(format!(
-                "if(window.onRemoteTransferError) window.onRemoteTransferError({});",
-                json_str
-            ));
-        }
+        crate::relay_engine::send_error(&exec_script, err);
     };
 
     emit_log(&format!("Starting remote transfer to {}@{}:{} ({})", task.target_user, task.target_host, task.target_port, task.target_protocol.to_uppercase()), "info");
@@ -1142,378 +1097,128 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
         }
     };
 
+    /* The "Recursive directory transfer" checkbox was sent by the UI but never
+       read, so unchecking it still copied the whole tree. A non-recursive
+       transfer means the selected entries themselves: files as they are, and
+       directories created empty. */
+    let items: Vec<TransferItem> = if task.recursive {
+        items
+    } else {
+        items
+            .into_iter()
+            .filter(|i| !i.relative_path.contains('/'))
+            .collect()
+    };
+
+    if items.is_empty() {
+        emit_error("Nothing to transfer: the selection produced no items.");
+        return;
+    }
+    if !task.recursive {
+        emit_log(
+            "Recursive transfer is off: only the selected entries themselves are copied.",
+            "info",
+        );
+    }
+
     let total_files = items.iter().filter(|i| !i.is_dir).count();
-    let total_bytes: u64 = items.iter().filter(|i| !i.is_dir).map(|i| i.size).sum();
+    let indexed_bytes: u64 = items.iter().filter(|i| !i.is_dir).map(|i| i.size).sum();
 
     emit_log(
         &format!(
             "Ready to transfer {} items ({} files, total size: {})",
             items.len(),
             total_files,
-            format_size(total_bytes)
+            format_size(indexed_bytes)
         ),
         "info",
     );
 
-    let start_time = Instant::now();
-    let mut done_files = 0;
-    let mut done_bytes: u64 = 0;
-    let mut failed_files = 0;
+    /* The destination parameters travel with the job because extra workers need
+       to open their own session: a connection is stateful and cannot be shared
+       between threads. */
+    let target_spec = crate::relay_engine::ConnectionSpec {
+        protocol: task.target_protocol.clone(),
+        host: task.target_host.clone(),
+        port: task.target_port,
+        user: task.target_user.clone(),
+        pass: task.target_pass.clone(),
+        auth_type: task.target_auth_type.clone(),
+        key_path: task.target_key_path.clone(),
+        passphrase: task.target_passphrase.clone(),
+    };
 
-    /* `make_dir_all` walks every path segment and issues one round trip per
-       segment. Calling it per file turned a 23k-file website into hundreds of
-       thousands of redundant MKDIRs — the single biggest cost in the relay.
-       Each directory is now created exactly once. */
-    let mut ensured_dirs: std::collections::HashSet<String> = std::collections::HashSet::new();
-    ensured_dirs.insert(dest_base.trim_end_matches('/').to_string());
+    let plan = crate::relay_engine::Plan {
+        items: &items,
+        dest_base: &dest_base,
+        source_is_remote: task.source_is_remote,
+        overwrite_skip: task.overwrite == "skip",
+    };
 
-    /* Every progress/status emit is a cross-process call into the WebView. One
-       per file is 18k round trips for a website — enough on its own to make the
-       whole transfer feel heavy. Both are throttled; the UI interpolates. */
-    let mut last_progress_emit: Option<Instant> = None;
-    let mut last_status_emit: Option<Instant> = None;
+    let outcome = crate::relay_engine::run(
+        source_client,
+        source_spec.as_ref(),
+        target_client,
+        &target_spec,
+        &plan,
+        &exec_script,
+        &cancelled,
+        indexed_bytes,
+    );
 
-    for item in &items {
-        if cancelled.load(Ordering::Relaxed) {
-            emit_log("Transfer cancelled by user.", "warning");
-            emit_complete(false, "Transfer cancelled by user", done_files, done_bytes, start_time.elapsed().as_secs_f64());
-            return;
-        }
+    let elapsed_total = outcome.elapsed_secs;
 
-        let target_item_path = if dest_base == "." || dest_base.is_empty() || dest_base == "~" {
-            item.relative_path.clone()
-        } else {
-            format!("{}/{}", dest_base.trim_end_matches('/'), item.relative_path)
-        };
-
-        if item.is_dir {
-            if !ensured_dirs.contains(&target_item_path) {
-                if let Err(e) = target_client.make_dir_all(&target_item_path) {
-                    emit_log(&format!("Directory create note ({}): {}", target_item_path, e), "info");
-                }
-                ensured_dirs.insert(target_item_path.clone());
-            }
-        } else {
-            // Check overwrite skip option
-            if task.overwrite == "skip" {
-                if let Ok(Some(_)) = target_client.stat(&target_item_path) {
-                    emit_log(&format!("↷ Skipped (already exists): {}", item.relative_path), "info");
-                    done_files += 1;
-                    done_bytes += item.size;
-                    continue;
-                }
-            }
-
-            // Ensure parent directory of target file exists
-            if let Some(idx) = target_item_path.rfind('/') {
-                let parent_dir = &target_item_path[..idx];
-                if !parent_dir.is_empty()
-                    && parent_dir != "."
-                    && parent_dir != "/"
-                    && parent_dir != "~"
-                    && !ensured_dirs.contains(parent_dir)
-                {
-                    let _ = target_client.make_dir_all(parent_dir);
-                    ensured_dirs.insert(parent_dir.to_string());
-                }
-            }
-
-            let base_done_bytes = done_bytes;
-            let file_size = item.size;
-            let emit_now = match last_progress_emit {
-                None => true,
-                Some(t) => t.elapsed().as_millis() >= 120,
-            };
-            if emit_now {
-                last_progress_emit = Some(Instant::now());
-                emit_progress(&item.relative_path, done_files, total_files, base_done_bytes, total_bytes, "Starting...", None);
-            }
-
-            let mut transfer_res: Result<(), String> = Err("Not started".to_string());
-            for attempt in 1..=3 {
-                if cancelled.load(Ordering::Relaxed) {
-                    transfer_res = Err("Transfer cancelled by user".to_string());
-                    break;
-                }
-
-                if attempt > 1 {
-                    emit_log(&format!("↻ Retrying transfer (attempt {}/3): {}", attempt, item.relative_path), "warning");
-                    if let Ok(reconn) = RemoteClient::connect(
-                        &task.target_protocol,
-                        &task.target_host,
-                        task.target_port,
-                        &task.target_user,
-                        &task.target_pass,
-                        &task.target_auth_type,
-                        task.target_key_path.as_deref(),
-                        task.target_passphrase.as_deref(),
-                        true,
-                    ) {
-                        target_client = reconn;
-                    }
-                }
-
-                transfer_res = if task.source_is_remote {
-                    if let Some(ref mut src) = source_client {
-                        let temp_file_path = std::env::temp_dir().join(format!("90ftp_relay_{}_{}.tmp", std::process::id(), done_files));
-                        let temp_str = temp_file_path.to_string_lossy().to_string();
-
-                        // Stage 1/2: Download from source server with live progress & cancellation
-                        let dl_start = Instant::now();
-                        let dl_last_tick = std::sync::Mutex::new(Instant::now());
-                        let dl_cancel_slot: Arc<std::sync::Mutex<Option<crate::transfer_control::ControlHandle>>> =
-                            Arc::new(std::sync::Mutex::new(None));
-                        let dl_cancel_slot_cb = dl_cancel_slot.clone();
-                        let cancelled_dl = cancelled.clone();
-                        let exec_dl = exec_script.clone();
-                        let rel_dl = item.relative_path.clone();
-
-                        let dl_ctl = crate::transfer_control::TransferControl::with_progress(
-                            file_size,
-                            Arc::new(move |done, _tot| {
-                                if cancelled_dl.load(Ordering::Relaxed) {
-                                    if let Ok(guard) = dl_cancel_slot_cb.lock() {
-                                        if let Some(ref h) = *guard {
-                                            h.cancel();
-                                        }
-                                    }
-                                    return;
-                                }
-                                if let Ok(mut tick) = dl_last_tick.try_lock() {
-                                    if tick.elapsed().as_millis() >= 200 || (file_size > 0 && done >= file_size) {
-                                        *tick = Instant::now();
-                                        if let Some(ref cb) = exec_dl {
-                                            let el = dl_start.elapsed().as_secs_f64();
-                                            let spd = if el > 0.05 { (done as f64 / (1024.0 * 1024.0)) / el } else { 0.0 };
-                                            let stage_bytes = base_done_bytes + (done / 2);
-                                            let pct = if total_bytes > 0 {
-                                                (stage_bytes as f64 / total_bytes as f64 * 100.0).min(99.5)
-                                            } else {
-                                                50.0
-                                            };
-                                            let payload = json!({
-                                                "percent": pct,
-                                                "current_file": format!("[Relay 1/2: Downloading] {}", rel_dl),
-                                                "done_files": done_files,
-                                                "total_files": total_files,
-                                                "done_bytes": stage_bytes,
-                                                "total_bytes": total_bytes,
-                                                "speed": format!("{:.2} MB/s", spd)
-                                            });
-                                            if let Ok(s) = serde_json::to_string(&payload) {
-                                                cb(format!("if(window.onRemoteTransferProgress) window.onRemoteTransferProgress({});", s));
-                                            }
-                                        }
-                                    }
-                                }
-                            }),
-                        );
-                        *dl_cancel_slot.lock().unwrap() = Some(dl_ctl.handle());
-
-                        match src.download_to_local_file_ctl(&item.source_full_path, &temp_str, &dl_ctl) {
-                            Ok(actual_dl_bytes) => {
-                                // Stage 2/2: Upload to target server with live progress & cancellation
-                                let eff_size = if file_size > 0 { file_size } else { actual_dl_bytes };
-                                let ul_start = Instant::now();
-                                let ul_last_tick = std::sync::Mutex::new(Instant::now());
-                                let ul_cancel_slot: Arc<std::sync::Mutex<Option<crate::transfer_control::ControlHandle>>> =
-                                    Arc::new(std::sync::Mutex::new(None));
-                                let ul_cancel_slot_cb = ul_cancel_slot.clone();
-                                let cancelled_ul = cancelled.clone();
-                                let exec_ul = exec_script.clone();
-                                let rel_ul = item.relative_path.clone();
-
-                                let ul_ctl = crate::transfer_control::TransferControl::with_progress(
-                                    eff_size,
-                                    Arc::new(move |done, _tot| {
-                                        if cancelled_ul.load(Ordering::Relaxed) {
-                                            if let Ok(guard) = ul_cancel_slot_cb.lock() {
-                                                if let Some(ref h) = *guard {
-                                                    h.cancel();
-                                                }
-                                            }
-                                            return;
-                                        }
-                                        if let Ok(mut tick) = ul_last_tick.try_lock() {
-                                            if tick.elapsed().as_millis() >= 200 || (eff_size > 0 && done >= eff_size) {
-                                                *tick = Instant::now();
-                                                if let Some(ref cb) = exec_ul {
-                                                    let el = ul_start.elapsed().as_secs_f64();
-                                                    let spd = if el > 0.05 { (done as f64 / (1024.0 * 1024.0)) / el } else { 0.0 };
-                                                    let stage_bytes = base_done_bytes + (eff_size / 2) + (done / 2);
-                                                    let pct = if total_bytes > 0 {
-                                                        (stage_bytes as f64 / total_bytes as f64 * 100.0).min(99.9)
-                                                    } else {
-                                                        90.0
-                                                    };
-                                                    let payload = json!({
-                                                        "percent": pct,
-                                                        "current_file": format!("[Relay 2/2: Uploading] {}", rel_ul),
-                                                        "done_files": done_files,
-                                                        "total_files": total_files,
-                                                        "done_bytes": stage_bytes,
-                                                        "total_bytes": total_bytes,
-                                                        "speed": format!("{:.2} MB/s", spd)
-                                                    });
-                                                    if let Ok(s) = serde_json::to_string(&payload) {
-                                                        cb(format!("if(window.onRemoteTransferProgress) window.onRemoteTransferProgress({});", s));
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }),
-                                );
-                                *ul_cancel_slot.lock().unwrap() = Some(ul_ctl.handle());
-
-                                let res = target_client.upload_from_local_file_ctl(&temp_str, &target_item_path, &ul_ctl).map(|_| ());
-                                let _ = std::fs::remove_file(&temp_file_path);
-                                res
-                            }
-                            Err(e) => {
-                                let _ = std::fs::remove_file(&temp_file_path);
-                                Err(format!("Download failed for {}: {}", item.source_full_path, e))
-                            }
-                        }
-                    } else {
-                        Err("Source client disconnected".to_string())
-                    }
-                } else {
-                    let ul_start = Instant::now();
-                    let ul_last_tick = std::sync::Mutex::new(Instant::now());
-                    let ul_cancel_slot: Arc<std::sync::Mutex<Option<crate::transfer_control::ControlHandle>>> =
-                        Arc::new(std::sync::Mutex::new(None));
-                    let ul_cancel_slot_cb = ul_cancel_slot.clone();
-                    let cancelled_ul = cancelled.clone();
-                    let exec_ul = exec_script.clone();
-                    let rel_ul = item.relative_path.clone();
-
-                    let ul_ctl = crate::transfer_control::TransferControl::with_progress(
-                        file_size,
-                        Arc::new(move |done, _tot| {
-                            if cancelled_ul.load(Ordering::Relaxed) {
-                                if let Ok(guard) = ul_cancel_slot_cb.lock() {
-                                    if let Some(ref h) = *guard {
-                                        h.cancel();
-                                    }
-                                }
-                                return;
-                            }
-                            if let Ok(mut tick) = ul_last_tick.try_lock() {
-                                if tick.elapsed().as_millis() >= 200 || (file_size > 0 && done >= file_size) {
-                                    *tick = Instant::now();
-                                    if let Some(ref cb) = exec_ul {
-                                        let el = ul_start.elapsed().as_secs_f64();
-                                        let spd = if el > 0.05 { (done as f64 / (1024.0 * 1024.0)) / el } else { 0.0 };
-                                        let cur_bytes = base_done_bytes + done;
-                                        let pct = if total_bytes > 0 {
-                                            (cur_bytes as f64 / total_bytes as f64 * 100.0).min(99.9)
-                                        } else {
-                                            90.0
-                                        };
-                                        let payload = json!({
-                                            "percent": pct,
-                                            "current_file": rel_ul.clone(),
-                                            "done_files": done_files,
-                                            "total_files": total_files,
-                                            "done_bytes": cur_bytes,
-                                            "total_bytes": total_bytes,
-                                            "speed": format!("{:.2} MB/s", spd)
-                                        });
-                                        if let Ok(s) = serde_json::to_string(&payload) {
-                                            cb(format!("if(window.onRemoteTransferProgress) window.onRemoteTransferProgress({});", s));
-                                        }
-                                    }
-                                }
-                            }
-                        }),
-                    );
-                    *ul_cancel_slot.lock().unwrap() = Some(ul_ctl.handle());
-                    target_client.upload_from_local_file_ctl(&item.source_full_path, &target_item_path, &ul_ctl).map(|_| ())
-                };
-
-                if transfer_res.is_ok() || cancelled.load(Ordering::Relaxed) {
-                    break;
-                }
-            }
-
-            if cancelled.load(Ordering::Relaxed) {
-                emit_log("Transfer cancelled by user.", "warning");
-                emit_complete(false, "Transfer cancelled by user", done_files, done_bytes, start_time.elapsed().as_secs_f64());
-                return;
-            }
-
-            match transfer_res {
-                Ok(_) => {
-                    done_files += 1;
-                    done_bytes += item.size;
-                    let elapsed = start_time.elapsed().as_secs_f64();
-                    let speed_mb = if elapsed > 0.05 {
-                        (done_bytes as f64 / (1024.0 * 1024.0)) / elapsed
-                    } else {
-                        0.0
-                    };
-                    emit_progress(&item.relative_path, done_files, total_files, done_bytes, total_bytes, &format!("{:.2} MB/s", speed_mb), None);
-
-                    /* One permanent log line per file means 23k DOM nodes and
-                       23k cross-process calls for a website: it stalls the UI and
-                       buries the useful information. The current file is shown on
-                       a single line that updates in place, and a permanent line is
-                       kept every 50 files. */
-                    if done_files % 50 == 0 || done_files == total_files {
-                        emit_log(
-                            &format!(
-                                "✓ {} of {} files transferred ({})",
-                                done_files,
-                                total_files,
-                                format_size(done_bytes)
-                            ),
-                            "success",
-                        );
-                    } else {
-                        let status_now = match last_status_emit {
-                            None => true,
-                            Some(t) => t.elapsed().as_millis() >= 250,
-                        };
-                        if status_now {
-                            last_status_emit = Some(Instant::now());
-                            emit_status(
-                                &format!("✓ {} of {} files — {}", done_files, total_files, item.relative_path),
-                                "success",
-                            );
-                        }
-                    }
-                }
-                Err(e) => {
-                    failed_files += 1;
-                    emit_log(&format!("✕ Failed to transfer {}: {}", item.relative_path, e), "error");
-                }
-            }
-        }
+    if outcome.cancelled {
+        emit_log("Transfer cancelled by user.", "warning");
+        emit_complete(
+            false,
+            "Transfer cancelled by user",
+            outcome.done_files,
+            outcome.done_bytes,
+            elapsed_total,
+        );
+        return;
     }
 
-    let elapsed_total = start_time.elapsed().as_secs_f64();
-    let is_all_success = failed_files == 0;
+    if !outcome.failures.is_empty() {
+        emit_log(
+            &format!(
+                "{} file(s) could not be transferred. First error: {}",
+                outcome.failures.len(),
+                outcome.failures[0]
+            ),
+            "error",
+        );
+    }
+
+    let is_all_success = outcome.failed_files == 0;
     let completion_msg = if is_all_success {
         format!(
             "Transfer session completed successfully! Transferred {}/{} files ({} in {:.1}s)",
-            done_files,
+            outcome.done_files,
             total_files,
-            format_size(done_bytes),
+            format_size(outcome.done_bytes),
             elapsed_total
         )
     } else {
         format!(
             "Transfer finished with {} failures: {}/{} files succeeded ({} in {:.1}s)",
-            failed_files,
-            done_files,
+            outcome.failed_files,
+            outcome.done_files,
             total_files,
-            format_size(done_bytes),
+            format_size(outcome.done_bytes),
             elapsed_total
         )
     };
 
     emit_log(&completion_msg, if is_all_success { "success" } else { "warning" });
-    emit_complete(is_all_success, &completion_msg, done_files, done_bytes, elapsed_total);
+    emit_complete(
+        is_all_success,
+        &completion_msg,
+        outcome.done_files,
+        outcome.done_bytes,
+        elapsed_total,
+    );
 }
 
 #[cfg(test)]
