@@ -241,10 +241,23 @@ fn walk_local_dir(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn collect_remote_items(
     client: &mut RemoteClient,
     sources: &[String],
     cancelled: &Arc<AtomicBool>,
+) -> Result<Vec<TransferItem>, String> {
+    collect_remote_items_with_progress(client, sources, cancelled, &|_| {})
+}
+
+/// Same as [`collect_remote_items`], but reports how many items have been
+/// enumerated so far. A deep tree on a slow link takes a long time and used to
+/// sit behind a single "Scanning..." line, which reads as a hung connection.
+pub fn collect_remote_items_with_progress(
+    client: &mut RemoteClient,
+    sources: &[String],
+    cancelled: &Arc<AtomicBool>,
+    progress: &dyn Fn(usize),
 ) -> Result<Vec<TransferItem>, String> {
     let mut items = Vec::new();
     for src in sources {
@@ -269,7 +282,7 @@ pub fn collect_remote_items(
                     size: 0,
                     source_full_path: clean_path.to_string(),
                 });
-                walk_remote_dir(client, clean_path, &name, &mut items, cancelled)?;
+                walk_remote_dir(client, clean_path, &name, &mut items, cancelled, progress)?;
             } else {
                 items.push(TransferItem {
                     relative_path: name,
@@ -297,6 +310,7 @@ fn walk_remote_dir(
     rel_prefix: &str,
     items: &mut Vec<TransferItem>,
     cancelled: &Arc<AtomicBool>,
+    progress: &dyn Fn(usize),
 ) -> Result<(), String> {
     if cancelled.load(Ordering::Relaxed) {
         return Err("Transfer cancelled by user".to_string());
@@ -319,7 +333,7 @@ fn walk_remote_dir(
                 size: 0,
                 source_full_path: full_path.clone(),
             });
-            walk_remote_dir(client, &full_path, &rel_path, items, cancelled)?;
+            walk_remote_dir(client, &full_path, &rel_path, items, cancelled, progress)?;
         } else {
             items.push(TransferItem {
                 relative_path: rel_path,
@@ -329,6 +343,7 @@ fn walk_remote_dir(
             });
         }
     }
+    progress(items.len());
     Ok(())
 }
 
@@ -616,7 +631,27 @@ pub fn execute_transfer_thread(
     // 1. Direct Server-to-Server Attempt (if source is remote SSH, target is SSH, and mode is direct or auto)
     if task.source_is_remote && (task.target_protocol == "scp" || task.target_protocol == "sftp" || task.target_protocol == "ssh") {
         if let Some(ref src) = source_client {
-            if task.transfer_mode == "direct_scp" || task.transfer_mode == "direct_rsync" || task.transfer_mode == "auto" {
+            /* `scp` runs on the *source* server, so it can only authenticate to
+               the destination with a password, or with a private key that is
+               already installed on that server. The key chosen in this dialog
+               lives on this PC — which is why key auth in auto mode always
+               ended in "Permission denied (publickey)" after a wasted round
+               trip. Skip the attempt when it cannot possibly work. */
+            let wants_direct = task.transfer_mode == "direct_scp"
+                || task.transfer_mode == "direct_rsync"
+                || task.transfer_mode == "auto";
+            let explicit_direct = task.transfer_mode == "direct_scp"
+                || task.transfer_mode == "direct_rsync";
+            let password_auth = !task.target_pass.is_empty() && task.target_auth_type != "key";
+
+            if wants_direct && !password_auth && !explicit_direct {
+                emit_log(
+                    "Direct transfer skipped: it needs a password, or a key already installed on the source server. Using the Stream Relay Bridge.",
+                    "info",
+                );
+            }
+
+            if wants_direct && (password_auth || explicit_direct) {
                 emit_log("Attempting direct Server-to-Server transfer via native remote command...", "info");
 
                 // If password authentication is required for direct SCP/rsync, check for sshpass first
@@ -762,18 +797,37 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
                                 return;
                             }
 
-                            let err_msg = if code != 0 {
-                                format!("Direct command exited with code {}: {}", code, out.trim())
+                            /* A key-auth refusal is the normal outcome when the
+                               source server holds no authorized key for the
+                               destination: the relay below handles the file
+                               anyway. Printing the raw `scp` error made this
+                               look like a broken connection. */
+                            let detail = out.trim();
+                            let auth_refused = detail.contains("Permission denied")
+                                || detail.contains("publickey")
+                                || detail.contains("Authentication failed");
+
+                            let err_msg = if auth_refused {
+                                "Direct transfer was refused by the destination: the source server has no SSH key authorized there.".to_string()
+                            } else if code != 0 {
+                                format!("Direct command exited with code {}: {}", code, detail)
                             } else {
-                                format!("Direct command failed: {}", out.trim())
+                                format!("Direct command failed: {}", detail)
                             };
 
-                            emit_log(&err_msg, "warning");
+                            emit_log(&err_msg, if auth_refused { "info" } else { "warning" });
                             if task.transfer_mode != "auto" {
                                 emit_error(&err_msg);
                                 return;
                             }
-                            emit_log("Direct Server-to-Server execution failed. Falling back to Universal Stream Relay Bridge...", "info");
+                            emit_log(
+                                if auth_refused {
+                                    "Continuing with the Stream Relay Bridge, which uses the credentials entered here — nothing else to configure."
+                                } else {
+                                    "Direct Server-to-Server execution failed. Falling back to Universal Stream Relay Bridge..."
+                                },
+                                "info",
+                            );
                         }
                         Err(e) => {
                             if cancelled.load(Ordering::Relaxed) {
@@ -831,9 +885,22 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
 
     emit_log("Scanning and enumerating source files and folders...", "info");
 
+    /* A deep tree can take minutes on a slow link, and one static log line
+       reads as a dead connection. Report the running count instead. */
+    let last_scan_report = std::cell::Cell::new(Instant::now());
+    let scan_progress = |found: usize| {
+        if last_scan_report.get().elapsed().as_millis() >= 900 {
+            last_scan_report.set(Instant::now());
+            emit_log(
+                &format!("Scanning source tree... {} item(s) found so far", found),
+                "info",
+            );
+        }
+    };
+
     let items = if task.source_is_remote {
         if let Some(ref mut src) = source_client {
-            match collect_remote_items(src, &task.sources, &cancelled) {
+            match collect_remote_items_with_progress(src, &task.sources, &cancelled, &scan_progress) {
                 Ok(it) => it,
                 Err(e) => {
                     emit_error(&format!("Failed to enumerate remote sources: {}", e));

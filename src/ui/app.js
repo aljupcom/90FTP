@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.80';
+    let APP_CURRENT_VERSION = '0.0.0.81';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -12755,9 +12755,9 @@ window.onerror = function(msg, url, line, col, error) {
         } else {
           dirs.forEach(d => {
             html += `
-              <div class="tool-native-row" style="padding: 6px 10px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px;" onclick="browseRemoteTransferTarget('${escapeJsString(d.path)}')">
-                <svg class="icon icon-sm" viewBox="0 0 24 24" style="color: #38bdf8;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                <span style="font-weight: 600; font-size: 12.5px; color: var(--text-main);">${escapeHtml(d.name)}</span>
+              <div class="rt-browse-row" title="${escapeHtml(d.path || d.name)}" onclick="browseRemoteTransferTarget('${escapeJsString(d.path)}')">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" style="color: #38bdf8; flex: none;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span class="rt-browse-name">${escapeHtml(d.name)}</span>
               </div>
             `;
           });

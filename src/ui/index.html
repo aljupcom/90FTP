@@ -2240,6 +2240,48 @@
       gap: 8px;
     }
 
+    /* Destination folder picker.
+       This list used to borrow `.about-code-box`, whose `white-space: pre-wrap`
+       turned every newline of the generated markup into a blank line — that is
+       what spread the rows across the panel. It also dropped the per-row
+       `.tool-native-row` border, so the entries read as one flat list. */
+    .rt-browse-list {
+      height: 240px;
+      overflow-y: auto;
+      padding: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      white-space: normal;
+    }
+    .rt-browse-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .rt-browse-row:hover {
+      background: var(--bg-card-hover);
+    }
+    .rt-browse-row .rt-browse-name {
+      font-weight: 600;
+      font-size: 12.5px;
+      color: var(--text-main);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    [data-theme="light"] .rt-browse-list {
+      background: #ffffff;
+      border-color: #dde3ea;
+    }
+    [data-theme="light"] .rt-browse-row:hover {
+      background: #f1f5f9;
+    }
+
     /* Native Tools Dialog Rows */
     .tool-native-row {
       display: flex;
@@ -4756,7 +4798,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.80</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.81</span>
         </div>
       </div>
 
@@ -6422,7 +6464,7 @@
           </div>
           <div class="about-brand-sub">Modern Site Manager & Asynchronous File Transfer Engine</div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.80 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.81 Dev (Windows x64)</span>
             <span style="font-size: 12px; color: var(--text-dim);">Release Channel: Official</span>
           </div>
         </div>
@@ -6537,7 +6579,7 @@
         </div>
         <div class="about-code-box" id="aboutDiagnosticsText">
 Application: 90FTP Desktop Client
-Version: 0.0.0.80 (Release)
+Version: 0.0.0.81 (Release)
 OS: Windows NT 10.0 x64
 WebView2: Evergreen Host
 Renderer: DirectComposition Hardware Accelerated
@@ -7098,7 +7140,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           <input type="text" id="rtBrowsePathInput" style="flex: 1; height: 26px; font-family: var(--font-mono); font-size: 12px;" readonly>
           <button type="button" class="btn btn-secondary" onclick="navigateRtBrowseUp()" style="height: 26px; padding: 0 8px;" title="Go Up (Parent Directory)">▲ Up</button>
         </div>
-        <div id="rtBrowseListContainer" class="about-code-box" style="height: 240px; overflow-y: auto; padding: 4px; background: var(--bg-card);">
+        <div id="rtBrowseListContainer" class="rt-browse-list">
           <div style="padding: 10px; text-align: center; color: var(--text-muted);">Loading destination folders...</div>
         </div>
       </div>
