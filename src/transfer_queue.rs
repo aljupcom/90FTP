@@ -15,14 +15,16 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::remote::RemoteClient;
 use crate::transfer_control::{CANCELLED, ControlHandle, TransferControl};
 
-/// Opens a fresh connection for one task. The queue never shares a session
-/// between two transfers, because FTP control channels are strictly
-/// request/response and interleaving two of them deadlocks.
+/// Opens a fresh connection for one task. A worker keeps the session it opened
+/// and reuses it for the next task, so a 200-file folder upload pays one SSH
+/// handshake instead of 200. Sessions are never shared *between* workers:
+/// FTP control channels are strictly request/response and interleaving two of
+/// them deadlocks.
 pub type ConnectFn = Arc<dyn Fn() -> Result<RemoteClient, String> + Send + Sync>;
 
 /// Pushes a script into the WebView. The queue runs on background threads and
@@ -35,6 +37,11 @@ const PROGRESS_EMIT_MS: u64 = 150;
 
 /// How long a worker with nothing to do waits before looking again.
 const IDLE_POLL: Duration = Duration::from_millis(80);
+
+/// How long an idle worker keeps its session open. Long enough to bridge the
+/// gaps while the UI checks collisions between files of the same folder, short
+/// enough that a finished queue does not leave sessions on the server.
+const SESSION_IDLE_TTL: Duration = Duration::from_secs(45);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -163,6 +170,10 @@ pub struct Queue {
     /// Set to true when the queue is being dropped so workers exit their loop
     /// instead of polling forever. Without this, every test leaks threads.
     shutdown: Arc<AtomicBool>,
+    /// Bumped whenever the active server profile changes. A cached worker
+    /// session whose epoch is stale belongs to the previous server and must be
+    /// dropped before the next task, or a transfer would land on the wrong host.
+    session_epoch: Arc<AtomicU64>,
     connect: ConnectFn,
     emit: Option<EmitFn>,
 }
@@ -177,9 +188,16 @@ impl Queue {
             worker_count: Arc::new(AtomicU64::new(0)),
             last_emit_ms: Arc::new(AtomicU64::new(0)),
             shutdown: Arc::new(AtomicBool::new(false)),
+            session_epoch: Arc::new(AtomicU64::new(0)),
             connect,
             emit,
         }
+    }
+
+    /// Tells every worker that the server profile changed, so the session it
+    /// cached is no longer valid. Called on connect, disconnect and tab switch.
+    pub fn invalidate_sessions(&self) {
+        self.session_epoch.fetch_add(1, Ordering::SeqCst);
     }
 
     /// Signals every worker to exit its loop. New tasks can still be enqueued
@@ -415,14 +433,29 @@ impl Queue {
     }
 
     fn worker_loop(&self) {
+        /* The session this worker opened, plus the epoch it belongs to. Kept
+           across tasks: an SSH handshake or FTP login costs a few hundred
+           milliseconds, which for a folder of small files was most of the run
+           time. It is dropped when the profile changes, when a transfer fails,
+           or after a long idle period so no server slot is held forever. */
+        let mut session: Option<(RemoteClient, u64)> = None;
+        let mut last_used = Instant::now();
         loop {
             if self.shutdown.load(Ordering::Relaxed) {
                 self.worker_count.fetch_sub(1, Ordering::SeqCst);
                 return;
             }
             match self.claim() {
-                Some(task) => self.run_task(task),
-                None => std::thread::sleep(IDLE_POLL),
+                Some(task) => {
+                    self.run_task(task, &mut session);
+                    last_used = Instant::now();
+                }
+                None => {
+                    if session.is_some() && last_used.elapsed() >= SESSION_IDLE_TTL {
+                        session = None;
+                    }
+                    std::thread::sleep(IDLE_POLL);
+                }
             }
         }
     }
@@ -441,7 +474,7 @@ impl Queue {
         Some(task)
     }
 
-    fn run_task(&self, mut task: Task) {
+    fn run_task(&self, mut task: Task, session: &mut Option<(RemoteClient, u64)>) {
         // Register the control *before* connecting. Opening a session can take a
         // second, and a task cancelled during that window must still be findable
         // by `cancel`; otherwise the transfer would start anyway after the user
@@ -465,17 +498,27 @@ impl Queue {
             return;
         }
 
-        let mut client = match (self.connect)() {
-            Ok(client) => client,
-            Err(e) => {
-                self.handles.lock().unwrap().remove(&task.id);
-                self.fail_or_retry(
-                    &mut task,
-                    format!("Could not open a transfer session: {}", e),
-                );
-                return;
+        // A session opened against a previous profile must never carry a file to
+        // the old server, so it is thrown away as soon as the epoch moves.
+        let epoch = self.session_epoch.load(Ordering::SeqCst);
+        if matches!(session.as_ref(), Some((_, cached)) if *cached != epoch) {
+            *session = None;
+        }
+        if session.is_none() {
+            match (self.connect)() {
+                Ok(client) => *session = Some((client, epoch)),
+                Err(e) => {
+                    self.handles.lock().unwrap().remove(&task.id);
+                    self.fail_or_retry(
+                        &mut task,
+                        format!("Could not open a transfer session: {}", e),
+                    );
+                    return;
+                }
             }
-        };
+        }
+
+        let client = &mut session.as_mut().expect("session was just opened").0;
 
         let result = match task.kind {
             Kind::Upload => client
@@ -493,7 +536,13 @@ impl Queue {
             // A cancellation is not a failure: it must never be retried, or the
             // file would restart by itself after the user stopped it.
             Err(e) if e == CANCELLED => self.settle(task.id, State::Cancelled, None),
-            Err(e) => self.fail_or_retry(&mut task, e),
+            Err(e) => {
+                /* The channel may be what broke. The retry — and every task
+                   after it on this worker — opens a fresh session rather than
+                   reusing one that just failed. */
+                *session = None;
+                self.fail_or_retry(&mut task, e)
+            }
         }
     }
 

@@ -37,6 +37,13 @@ impl RemoteClient {
                 let client = ftp_client::connect_secure(host, actual_port, user, pass)?;
                 Ok(RemoteClient::Ftp(client))
             }
+            "ftpsi" | "ftps-implicit" | "ftps_implicit" | "ftps-implicit-990" => {
+                // Implicit FTPS: TLS starts on the very first byte, so the
+                // default port is 990 and the server must expect it.
+                let actual_port = if port == 0 { 990 } else { port };
+                let client = ftp_client::connect_secure_implicit(host, actual_port, user, pass)?;
+                Ok(RemoteClient::Ftp(client))
+            }
             "sftp" | "ssh" | "scp" => {
                 let actual_port = if port == 0 { 22 } else { port };
                 let client = SftpClient::connect(

@@ -124,6 +124,36 @@ pub fn connect_secure(
     Ok(Box::new(FtpClient::from_stream(stream, host, user, true)))
 }
 
+/// Implicit FTPS (usually port 990): TLS is negotiated the moment the socket
+/// opens, before the control channel speaks any FTP at all — so there is no
+/// `AUTH TLS` step and the server must be configured for it. Same certificate
+/// validation as explicit FTPS, and no cleartext fallback either way.
+pub fn connect_secure_implicit(
+    host: &str,
+    port: u16,
+    user: &str,
+    pass: &str,
+) -> Result<Box<dyn FtpBackend>, String> {
+    let addr = format!("{}:{}", host, port);
+
+    let connector = native_tls::TlsConnector::builder()
+        .build()
+        .map_err(|e| format!("Implicit FTPS TLS engine initialisation failed: {}", e))?;
+
+    let mut stream = NativeTlsFtpStream::connect_secure_implicit(
+        addr.as_str(),
+        NativeTlsConnector::from(connector),
+        host,
+    )
+    .map_err(|e| format!("Implicit FTPS handshake failed for {}: {}", addr, e))?;
+
+    stream
+        .login(user, pass)
+        .map_err(|e| format!("Implicit FTPS Login failed for user {}: {}", user, e))?;
+
+    Ok(Box::new(FtpClient::from_stream(stream, host, user, true)))
+}
+
 impl<T: TlsStream + Send + 'static> FtpBackend for FtpClient<T> {
     fn current_dir(&self) -> &str {
         &self.current_dir

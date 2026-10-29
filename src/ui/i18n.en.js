@@ -947,5 +947,6 @@ window.I18N_EN = {
   "top.terminal_ssh": "Open Remote Terminal (SSH at current path)",
   "transfers.empty": "No active or queued file transfers",
   "transfers.source_target": "Source → Target",
-  "transfers.col_path": "File / Path"
+  "transfers.col_path": "File / Path",
+  "proto.ftpsi": "FTPS (Implicit, port 990)"
 };

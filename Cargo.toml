@@ -1,6 +1,6 @@
 [package]
 name = "ninety_ftp"
-version = "0.0.79"
+version = "0.0.80"
 edition = "2024"
 
 [dependencies]
@@ -17,7 +17,7 @@ serde_json = "1.0.154"
 sha2 = "0.11.1"
 ssh-key = { version = "0.6.7", features = ["ed25519", "rsa", "encryption"] }
 ssh2 = "0.9.6"
-suppaftp = { version = "12.2.1", features = ["native-tls"] }
+suppaftp = { version = "12.2.1", features = ["native-tls", "deprecated"] }
 native-tls = "0.2.18"
 tao = "0.37.1"
 tokio = { version = "1.54.0", features = ["full"] }

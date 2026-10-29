@@ -1342,6 +1342,8 @@ impl AppState {
                     let mut conn_lock = self.current_connection.lock().unwrap();
                     *conn_lock = None;
                 }
+                // Any session a transfer worker cached belongs to the old server.
+                self.transfer_queue.invalidate_sessions();
 
                 match RemoteClient::connect(protocol, host, port, user, pass, auth_type, key_path, passphrase, trust_host) {
                     Ok(mut client) => {
@@ -1449,6 +1451,7 @@ impl AppState {
                     // Each tab has its own profile, so the transfer session must
                     // not survive a tab switch.
                     *self.transfer_client.lock().unwrap() = None;
+                    self.transfer_queue.invalidate_sessions();
                     let mut sessions_lock = self.tab_sessions.lock().unwrap();
                     sessions_lock.insert(old_tab_id, (old_client, old_conn));
                     let (new_client, new_conn) = sessions_lock.remove(&new_tab_id).unwrap_or((None, None));
@@ -1482,6 +1485,7 @@ impl AppState {
                     if active_id == tab_id {
                         *self.remote.lock().unwrap() = None;
                         *self.current_connection.lock().unwrap() = None;
+                        self.transfer_queue.invalidate_sessions();
                     } else {
                         self.tab_sessions.lock().unwrap().remove(tab_id);
                     }

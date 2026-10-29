@@ -947,5 +947,6 @@ window.I18N_AR = {
   "top.terminal_ssh": "فتح طرفية بعيدة (SSH في المسار الحالي)",
   "transfers.empty": "لا عمليات نقل نشطة أو في الانتظار",
   "transfers.source_target": "المصدر ← الهدف",
-  "transfers.col_path": "الملف / المسار"
+  "transfers.col_path": "الملف / المسار",
+  "proto.ftpsi": "FTPS (ضمني، منفذ 990)"
 };

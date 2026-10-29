@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.79';
+    let APP_CURRENT_VERSION = '0.0.0.80';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -2152,6 +2152,116 @@ window.onerror = function(msg, url, line, col, error) {
       updateRemoteAddressBarUI();
     }
 
+    /* --- Drag to reorder tab strips -----------------------------------------
+       The strips are re-rendered as HTML strings on every state change, so the
+       drag wiring lives on the container (which survives those re-renders) and
+       reads the tab identity from `data-tab-id` instead of holding node refs.
+       `applyOrder` receives the ids in their new left-to-right DOM order. */
+    function enableTabDrag(container, applyOrder) {
+      if (!container || container.dataset.tabDragReady === '1') return;
+      container.dataset.tabDragReady = '1';
+
+      let dragEl = null;
+
+      const clearMarks = () => {
+        container.querySelectorAll('.drop-start, .drop-end').forEach(el => {
+          el.classList.remove('drop-start', 'drop-end');
+        });
+      };
+
+      /* Which side of `tab` would the pointer drop on? In RTL the first tab
+         sits on the right, so "past the midpoint" means the opposite side. */
+      const dropsAfter = (tab, ev) => {
+        const rtl = getComputedStyle(container).direction === 'rtl';
+        const rect = tab.getBoundingClientRect();
+        return rtl
+          ? ev.clientX < rect.left + rect.width / 2
+          : ev.clientX > rect.left + rect.width / 2;
+      };
+
+      container.addEventListener('dragstart', ev => {
+        const tab = ev.target.closest && ev.target.closest('[data-tab-id]');
+        if (!tab || !container.contains(tab)) return;
+        dragEl = tab;
+        tab.classList.add('dragging');
+        try {
+          ev.dataTransfer.effectAllowed = 'move';
+          ev.dataTransfer.setData('text/plain', tab.dataset.tabId);
+        } catch (_) {}
+      });
+
+      container.addEventListener('dragover', ev => {
+        if (!dragEl) return;
+        const tab = ev.target.closest && ev.target.closest('[data-tab-id]');
+        if (!tab || tab === dragEl) {
+          clearMarks();
+          return;
+        }
+        ev.preventDefault();
+        try { ev.dataTransfer.dropEffect = 'move'; } catch (_) {}
+        clearMarks();
+        tab.classList.add(dropsAfter(tab, ev) ? 'drop-end' : 'drop-start');
+      });
+
+      container.addEventListener('drop', ev => {
+        if (!dragEl) return;
+        ev.preventDefault();
+        const tab = ev.target.closest && ev.target.closest('[data-tab-id]');
+        clearMarks();
+        if (!tab || tab === dragEl) return;
+
+        const ids = [].map.call(
+          container.querySelectorAll('[data-tab-id]'),
+          node => node.dataset.tabId
+        );
+        const from = ids.indexOf(dragEl.dataset.tabId);
+        let to = ids.indexOf(tab.dataset.tabId);
+        if (from < 0 || to < 0) return;
+        if (dropsAfter(tab, ev)) to += 1;
+        if (from < to) to -= 1;
+        if (from === to) return;
+
+        ids.splice(to, 0, ids.splice(from, 1)[0]);
+        applyOrder(ids);
+      });
+
+      container.addEventListener('dragend', () => {
+        if (dragEl) dragEl.classList.remove('dragging');
+        dragEl = null;
+        clearMarks();
+      });
+    }
+
+    /* Reorders `items` in place to match `ids`. Returns false when the id list
+       does not describe the same set, so a stale drop cannot lose a tab. */
+    function reorderByIds(items, ids) {
+      if (ids.length !== items.length) return false;
+      const map = new Map(items.map(item => [item.id, item]));
+      const next = [];
+      for (const id of ids) {
+        const item = map.get(id);
+        if (!item) return false;
+        next.push(item);
+      }
+      items.splice(0, items.length, ...next);
+      return true;
+    }
+
+    function applyLocalTabOrder(ids) {
+      if (reorderByIds(localTabs, ids)) renderLocalTabsBar();
+    }
+
+    function applyRemoteTabOrder(ids) {
+      if (reorderByIds(remoteTabs, ids)) renderRemoteTabsBar();
+    }
+
+    function applyTerminalTabOrder(ids) {
+      if (reorderByIds(terminalSessions, ids)) {
+        renderTerminalTabs();
+        if (typeof renderPuttyTabs === 'function') renderPuttyTabs();
+      }
+    }
+
     function renderLocalTabsBar() {
       const container = document.getElementById('localTabsContainer');
       if (!container) return;
@@ -2161,7 +2271,7 @@ window.onerror = function(msg, url, line, col, error) {
         const title = getLocalTabDisplayTitle(tab.path) || tab.title || 'Desktop';
         const tip = tab.path || title;
         html += `
-          <div class="commander-tab local-tab ${isActive ? 'active' : ''}" onclick="switchLocalTab('${tab.id}')" title="${escapeHtml(tip)}">
+          <div class="commander-tab local-tab ${isActive ? 'active' : ''}" data-tab-id="${tab.id}" draggable="true" onclick="switchLocalTab('${tab.id}')" title="${escapeHtml(tip)}">
             <span class="commander-tab-dot"></span>
             <span class="commander-tab-title">${escapeHtml(title)}</span>
             <span class="commander-tab-close" onclick="closeLocalTab('${tab.id}', event)" title="Close Tab">×</span>
@@ -2170,6 +2280,7 @@ window.onerror = function(msg, url, line, col, error) {
       });
       html += `<button type="button" class="commander-new-tab-btn" onclick="createNewLocalTab()" title="Open New Local Tab">+</button>`;
       container.innerHTML = html;
+      enableTabDrag(container, applyLocalTabOrder);
     }
 
     function renderRemoteTabsBar() {
@@ -2185,7 +2296,7 @@ window.onerror = function(msg, url, line, col, error) {
           : title;
         const dotClass = tab.isConnected ? 'connected' : 'disconnected';
         html += `
-          <div class="commander-tab remote-tab ${isActive ? 'active' : ''}" onclick="switchRemoteTab('${tab.id}')" title="${escapeHtml(tip)}">
+          <div class="commander-tab remote-tab ${isActive ? 'active' : ''}" data-tab-id="${tab.id}" draggable="true" onclick="switchRemoteTab('${tab.id}')" title="${escapeHtml(tip)}">
             <span class="commander-tab-dot ${dotClass}"></span>
             <span class="commander-tab-title">${escapeHtml(title)}</span>
             <span class="commander-tab-close" onclick="closeRemoteTab('${tab.id}', event)" title="Close Remote Tab">×</span>
@@ -2194,6 +2305,7 @@ window.onerror = function(msg, url, line, col, error) {
       });
       html += `<button type="button" class="commander-new-tab-btn" onclick="createNewRemoteTab()" title="Open New Remote Tab (Connect Another Server or Folder)">+</button>`;
       container.innerHTML = html;
+      enableTabDrag(container, applyRemoteTabOrder);
     }
 
     async function switchLocalTab(tabId) {
@@ -2266,17 +2378,20 @@ window.onerror = function(msg, url, line, col, error) {
 
     async function closeLocalTab(tabId, e) {
       if (e) e.stopPropagation();
-      if (localTabs.length <= 1) {
-        const onlyTab = localTabs[0];
-        onlyTab.historyBack = [];
-        onlyTab.historyForward = [];
-        await navigateLocal(globalDesktopDir || 'C:\\', true);
-        return;
-      }
       const idx = localTabs.findIndex(t => t.id === tabId);
       if (idx === -1) return;
-      const wasActive = (tabId === activeLocalTabId);
+
+      /* Every tab closes, including the last one. A brand-new tab takes its
+         place, so the pane is never left without a tab and the user is no
+         longer stuck with a tab that ignores its own × button. */
       localTabs.splice(idx, 1);
+      if (localTabs.length === 0) {
+        activeLocalTabId = '';
+        await createNewLocalTab();
+        return;
+      }
+
+      const wasActive = (tabId === activeLocalTabId);
       if (wasActive) {
         const nextTab = localTabs[Math.max(0, idx - 1)] || localTabs[0];
         activeLocalTabId = nextTab.id;
@@ -2528,27 +2643,27 @@ window.onerror = function(msg, url, line, col, error) {
       if (e) e.stopPropagation();
       closeAllCommanderPopups();
 
+      const idx = remoteTabs.findIndex(t => t.id === tabId);
+      if (idx === -1) return;
+
+      const wasActive = (tabId === activeRemoteTabId);
+
+      /* The last tab closes like any other: its session is dropped and a fresh
+         empty tab replaces it. Previously the × did nothing on the final tab,
+         which read as an unclosable default tab. */
       if (remoteTabs.length <= 1) {
         if (isConnected) {
           await handleDisconnect(true);
-        } else {
-          const onlyTab = remoteTabs[0];
-          onlyTab.isConnected = false;
-          onlyTab.currentProfile = null;
-          onlyTab.lastProfile = null;
-          onlyTab.path = '';
-          onlyTab.files = [];
-          onlyTab.historyBack = [];
-          onlyTab.historyForward = [];
-          renderRemoteTabsBar();
-          renderRemoteTabLauncherCard();
         }
+        remoteTabs.splice(idx, 1);
+        activeRemoteTabId = '';
+        try {
+          await sendRust('close_remote_tab', { tab_id: tabId });
+        } catch (_) {}
+        await createNewRemoteTab();
         return;
       }
 
-      const idx = remoteTabs.findIndex(t => t.id === tabId);
-      if (idx === -1) return;
-      const wasActive = (tabId === activeRemoteTabId);
       remoteTabs.splice(idx, 1);
 
       try {
@@ -4913,16 +5028,32 @@ window.onerror = function(msg, url, line, col, error) {
       }
     }
 
+    /* Single source of truth for "which port does this protocol imply". Implicit
+       FTPS is the one that does not sit on 21, so a hardcoded ternary kept
+       sending it to the wrong port. */
+    function defaultPortForProtocol(proto) {
+      switch (proto) {
+        case 'sftp':
+        case 'scp':
+        case 'ssh':
+          return '22';
+        case 'ftpsi':
+          return '990';
+        default:
+          return '21';
+      }
+    }
+
     function updateDefaultPort() {
       const proto = document.getElementById('connProtocol').value;
       const portInput = document.getElementById('connPort');
-      portInput.value = proto === 'sftp' ? '22' : '21';
+      portInput.value = defaultPortForProtocol(proto);
     }
 
     function onSiteProtocolChange() {
       const proto = document.getElementById('siteProtocol').value;
       const portInput = document.getElementById('sitePort');
-      portInput.value = proto === 'sftp' ? '22' : '21';
+      portInput.value = defaultPortForProtocol(proto);
     }
 
     // Transfers & Drag-Drop Helpers
@@ -10014,7 +10145,9 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     function initTerminalSession(targetCwd) {
-      if (terminalSessions.length > 0) return;
+      /* Opening the terminal always starts a tab of its own. Reusing whatever
+         session was left behind meant the window could come up on a stale tab
+         that the user never asked for. */
       addNewTerminalTab(targetCwd, isConnected ? 'remote' : 'local');
     }
 
@@ -10080,12 +10213,13 @@ window.onerror = function(msg, url, line, col, error) {
       const container = document.getElementById('terminalTabsList');
       if (!container) return;
       container.innerHTML = terminalSessions.map(s => `
-        <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" onclick="switchTerminalSession('${s.id}')">
+        <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" data-tab-id="${s.id}" draggable="true" onclick="switchTerminalSession('${s.id}')">
           <span style="font-size: 9px; color: ${s.busy ? '#38bdf8' : (s.mode === 'remote' ? '#22c55e' : '#a855f7')};">●</span>
           <span>${escapeHtml(s.title)} (${escapeHtml(s.cwd.length > 15 ? '...' + s.cwd.slice(-12) : s.cwd)})</span>
-          ${terminalSessions.length > 1 ? `<span class="terminal-tab-close" onclick="closeTerminalSession('${s.id}', event)" title="Close tab">✕</span>` : ''}
+          <span class="terminal-tab-close" onclick="closeTerminalSession('${s.id}', event)" title="Close tab">✕</span>
         </div>
       `).join('');
+      enableTabDrag(container, applyTerminalTabOrder);
     }
 
     function switchTerminalSession(id) {
@@ -10794,12 +10928,13 @@ window.onerror = function(msg, url, line, col, error) {
       const container = document.getElementById('puttyTabsContainer');
       if (!container) return;
       container.innerHTML = terminalSessions.map(s => `
-        <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" onclick="switchTerminalSession('${s.id}')" style="padding: 1px 8px; font-size: 12px;">
+        <div class="terminal-tab-pill ${s.id === activeTerminalSessionId ? 'active' : ''}" data-tab-id="${s.id}" draggable="true" onclick="switchTerminalSession('${s.id}')" style="padding: 1px 8px; font-size: 12px;">
           <span style="font-size: 9px; color: ${s.busy ? '#38bdf8' : (s.mode === 'remote' ? '#22c55e' : '#a855f7')};">●</span>
           <span>${escapeHtml(s.title)}</span>
-          ${terminalSessions.length > 1 ? `<span class="terminal-tab-close" onclick="closeTerminalSession('${s.id}', event)" title="Close tab">✕</span>` : ''}
+          <span class="terminal-tab-close" onclick="closeTerminalSession('${s.id}', event)" title="Close tab">✕</span>
         </div>
       `).join('');
+      enableTabDrag(container, applyTerminalTabOrder);
     }
 
     function focusPuttyInput() {
@@ -12357,11 +12492,7 @@ window.onerror = function(msg, url, line, col, error) {
 
     function onRtProtocolChange(proto) {
       const portEl = document.getElementById('rtPort');
-      if (portEl) {
-        if (proto === 'ftp') portEl.value = 21;
-        else if (proto === 'ftps') portEl.value = 21;
-        else portEl.value = 22;
-      }
+      if (portEl) portEl.value = defaultPortForProtocol(proto);
     }
 
     function toggleRtAuthFields() {
