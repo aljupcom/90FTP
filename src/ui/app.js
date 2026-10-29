@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.82';
+    let APP_CURRENT_VERSION = '0.0.0.83';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -622,7 +622,7 @@ window.onerror = function(msg, url, line, col, error) {
     function copyRtLog() {
       const box = document.getElementById('rtLogBox');
       if (!box) return;
-      const text = Array.from(box.querySelectorAll('.rt-log-entry, div')).map(d => d.innerText).join('\n');
+      const text = Array.from(box.querySelectorAll('.rt-log-line')).map(d => d.innerText).join('\n');
       if (!text.trim()) {
         alert('Remote transfer log is currently empty.');
         return;
@@ -633,8 +633,8 @@ window.onerror = function(msg, url, line, col, error) {
     function copyRtErrorsOnly() {
       const box = document.getElementById('rtLogBox');
       if (!box) return;
-      const errorEntries = Array.from(box.querySelectorAll('.rt-log-entry, div'))
-        .filter(d => d.textContent.includes('✕') || d.textContent.toLowerCase().includes('failed') || d.textContent.toLowerCase().includes('error'))
+      const errorEntries = Array.from(box.querySelectorAll('.rt-log-line'))
+        .filter(d => d.dataset.kind === 'error' || d.textContent.includes('✕') || d.textContent.toLowerCase().includes('failed') || d.textContent.toLowerCase().includes('error'))
         .map(d => d.innerText);
       if (errorEntries.length === 0) {
         alert('No errors found in the current remote transfer session.');
@@ -645,7 +645,9 @@ window.onerror = function(msg, url, line, col, error) {
 
     function clearRtLog() {
       const box = document.getElementById('rtLogBox');
-      if (box) box.innerHTML = '<div style="color: var(--text-dim);">(Log cleared)</div>';
+      if (!box) return;
+      box.innerHTML = '<div class="rt-log-empty">(Log cleared)</div>';
+      rtLogState.replaceRow = null;
     }
 
     function handleRtLogContextMenu(e) {
@@ -12442,19 +12444,19 @@ window.onerror = function(msg, url, line, col, error) {
 
       populateRtSavedSitesDropdown();
 
-      // Reset verification & progress status
+      // Reset verification & progress status. A transfer that is still running
+      // keeps its busy button and its console; only a finished session resets.
       const statusEl = document.getElementById('rtTargetVerifyStatus');
       if (statusEl) statusEl.innerHTML = '';
       const progSec = document.getElementById('rtProgressSection');
-      if (progSec) progSec.style.display = 'none';
+      if (progSec && !isRtTransferActive) progSec.style.display = 'none';
       const cancelBtn = document.getElementById('btnRtCancel');
-      if (cancelBtn) cancelBtn.style.display = 'none';
-      const startBtn = document.getElementById('btnRtStart');
-      if (startBtn) startBtn.disabled = false;
+      if (cancelBtn) cancelBtn.style.display = isRtTransferActive ? 'inline-flex' : 'none';
+      setRtStartBusy(isRtTransferActive);
       const logBox = document.getElementById('rtLogBox');
-      if (logBox) logBox.innerHTML = '';
+      if (logBox && !isRtTransferActive) rtLogReset();
       const footerStatus = document.getElementById('rtFooterStatus');
-      if (footerStatus) footerStatus.textContent = 'Ready to dispatch selected items';
+      if (footerStatus && !isRtTransferActive) footerStatus.textContent = 'Ready to dispatch selected items';
 
       const sshpassRow = document.getElementById('rtSshpassRow');
       if (sshpassRow) {
@@ -12719,6 +12721,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function startRemoteTransfer() {
+      if (isRtTransferActive) return;
       if (currentRtSources.length === 0) {
         alert('Please select at least one source file or folder to transfer.');
         return;
@@ -12734,22 +12737,29 @@ window.onerror = function(msg, url, line, col, error) {
       if (!(await showAppConfirm(confirmMsg, { title: 'Start Server-to-Server Transfer', confirmText: 'Start Transfer', variant: 'confirm' }))) return;
 
       isRtTransferActive = true;
+      rtProgressStartedAt = Date.now();
       document.getElementById('rtProgressSection').style.display = 'block';
       document.getElementById('btnRtCancel').style.display = 'inline-flex';
-      document.getElementById('btnRtStart').disabled = true;
+      setRtStartBusy(true);
       document.getElementById('rtFooterStatus').textContent = 'Transfer running...';
-      document.getElementById('rtProgressBar').style.width = '0%';
+      const barEl = document.getElementById('rtProgressBar');
+      if (barEl) { barEl.style.width = '0%'; barEl.classList.add('is-running'); }
+      const pctInside = document.getElementById('rtProgressPct');
+      if (pctInside) pctInside.textContent = '0%';
       document.getElementById('rtPercentText').textContent = '0%';
-      document.getElementById('rtCurrentFile').textContent = 'Initializing transfer session...';
-      document.getElementById('rtLogBox').innerHTML = '<div style="color: #38bdf8;">[INIT] Starting remote transfer engine...</div>';
+      document.getElementById('rtEtaText').textContent = t('rt.eta') + ' —';
+      document.getElementById('rtSpeedText').textContent = '—';
+      document.getElementById('rtCurrentFile').textContent = 'Indexing source tree...';
+      rtLogReset();
 
       try {
         await sendRust('remote_transfer_start', task);
         addLog(`Dispatched remote transfer to ${task.target_host}:${task.target_path}`, 'info');
       } catch (err) {
         isRtTransferActive = false;
-        document.getElementById('btnRtStart').disabled = false;
+        setRtStartBusy(false);
         document.getElementById('btnRtCancel').style.display = 'none';
+        if (barEl) barEl.classList.remove('is-running');
         document.getElementById('rtFooterStatus').textContent = 'Error starting transfer: ' + err.message;
         alert('Failed to start remote transfer: ' + err.message);
       }
@@ -12846,30 +12856,100 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     // Global listener hooks called from Rust backend via exec_script
-    window.onRemoteTransferLog = function(data) {
+
+    // The transfer log is a list of rows, not a text blob: a fixed-width
+    // timestamp column and a colour-coded left border make a 23k-file run
+    // readable at a glance. `replace` lets the backend update one line in place
+    // instead of appending near-identical status lines.
+    const rtLogState = { replaceRow: null };
+    const RT_LOG_MAX_ROWS = 600;
+
+    function rtLogAppend(text, kind, replace) {
       const box = document.getElementById('rtLogBox');
       if (!box) return;
-      const line = document.createElement('div');
-      line.style.padding = '1px 0';
-      if (data.kind === 'error') line.style.color = '#ef4444';
-      else if (data.kind === 'warning') line.style.color = '#f59e0b';
-      else if (data.kind === 'success') line.style.color = '#22c55e';
-      else line.style.color = '#94a3b8';
+      const safe = redactSensitive(text);
+      const timeStr = new Date().toLocaleTimeString();
+      const kindName = kind || 'info';
 
-      line.textContent = `[${new Date().toLocaleTimeString()}] ${redactSensitive(data.text)}`;
-      box.appendChild(line);
+      const placeholder = box.querySelector('.rt-log-empty');
+      if (placeholder) placeholder.remove();
+
+      if (replace && rtLogState.replaceRow && rtLogState.replaceRow.isConnected) {
+        const t = rtLogState.replaceRow.querySelector('.rt-log-text');
+        const tm = rtLogState.replaceRow.querySelector('.rt-log-time');
+        if (t) t.textContent = safe;
+        if (tm) tm.textContent = timeStr;
+        rtLogState.replaceRow.dataset.kind = kindName;
+        return;
+      }
+
+      const row = document.createElement('div');
+      row.className = 'rt-log-line';
+      row.dataset.kind = kindName;
+
+      const timeEl = document.createElement('span');
+      timeEl.className = 'rt-log-time';
+      timeEl.textContent = timeStr;
+
+      const textEl = document.createElement('span');
+      textEl.className = 'rt-log-text';
+      textEl.textContent = safe;
+
+      row.appendChild(timeEl);
+      row.appendChild(textEl);
+      box.appendChild(row);
+
+      rtLogState.replaceRow = replace ? row : null;
+
+      while (box.children.length > RT_LOG_MAX_ROWS) {
+        box.removeChild(box.firstChild);
+      }
       box.scrollTop = box.scrollHeight;
+    }
+
+    function rtLogReset() {
+      const box = document.getElementById('rtLogBox');
+      if (box) box.innerHTML = '';
+      rtLogState.replaceRow = null;
+    }
+
+    window.onRemoteTransferLog = function(data) {
+      if (!data) return;
+      rtLogAppend(data.text, data.kind, !!data.replace);
     };
 
+    let rtProgressStartedAt = 0;
+
+    function formatEta(seconds) {
+      const label = t('rt.eta');
+      if (!isFinite(seconds) || seconds <= 0) return `${label} —`;
+      const s = Math.round(seconds);
+      if (s < 60) return `${label} ${s}s`;
+      const m = Math.floor(s / 60);
+      const rest = s % 60;
+      if (m < 60) return `${label} ${m}m ${rest}s`;
+      const h = Math.floor(m / 60);
+      return `${label} ${h}h ${m % 60}m`;
+    }
+
     window.onRemoteTransferProgress = function(data) {
+      const pctValue = Math.max(0, Math.min(100, Number(data.percent) || 0));
       const bar = document.getElementById('rtProgressBar');
-      if (bar) bar.style.width = `${data.percent}%`;
+      if (bar) {
+        bar.style.width = `${pctValue}%`;
+        bar.classList.toggle('is-running', pctValue < 100);
+      }
+      const pctInside = document.getElementById('rtProgressPct');
+      if (pctInside) pctInside.textContent = `${Math.round(pctValue)}%`;
       const pct = document.getElementById('rtPercentText');
-      if (pct) pct.textContent = `${Math.round(data.percent)}%`;
+      if (pct) pct.textContent = `${Math.round(pctValue)}%`;
+
       const cur = document.getElementById('rtCurrentFile');
       if (cur) cur.textContent = data.current_file;
+
       const files = document.getElementById('rtFilesRatio');
-      if (files) files.textContent = `${data.done_files} / ${data.total_files} files`;
+      if (files) files.textContent = `${data.done_files} / ${data.total_files} ${t('rt.files_unit')}`;
+
       const bytes = document.getElementById('rtBytesRatio');
       if (bytes) {
         if (data.total_bytes > 0) {
@@ -12880,23 +12960,56 @@ window.onerror = function(msg, url, line, col, error) {
           bytes.textContent = '0 B';
         }
       }
+
       const spd = document.getElementById('rtSpeedText');
-      if (spd) spd.textContent = data.speed;
+      if (spd) spd.textContent = data.speed || '—';
+
+      if (!rtProgressStartedAt) rtProgressStartedAt = Date.now();
+      const etaEl = document.getElementById('rtEtaText');
+      if (etaEl) {
+        const elapsed = (Date.now() - rtProgressStartedAt) / 1000;
+        if (pctValue >= 100) {
+          etaEl.textContent = t('rt.eta') + ' ✓';
+        } else if (pctValue > 0.5 && elapsed > 1) {
+          etaEl.textContent = formatEta((elapsed / pctValue) * (100 - pctValue));
+        } else {
+          etaEl.textContent = t('rt.eta') + ' —';
+        }
+      }
     };
+
+    /* The Start button stays in place while a job runs so the dialog layout does
+       not jump, but it must read as busy — not as a fresh "Start Remote
+       Transfer" button the user could press again. */
+    function setRtStartBusy(busy) {
+      const btn = document.getElementById('btnRtStart');
+      if (!btn) return;
+      btn.disabled = !!busy;
+      btn.classList.toggle('is-busy', !!busy);
+      if (busy) {
+        btn.innerHTML = `<span class="rt-spinner"></span><span>${escapeHtml(t('txt.transferring'))}</span>`;
+      } else {
+        btn.innerHTML = `<svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>${escapeHtml(t('txt.start_remote_transfer'))}</span>`;
+      }
+    }
 
     window.onRemoteTransferComplete = function(data) {
       isRtTransferActive = false;
-      const startBtn = document.getElementById('btnRtStart');
-      if (startBtn) startBtn.disabled = false;
+      setRtStartBusy(false);
       const cancelBtn = document.getElementById('btnRtCancel');
       if (cancelBtn) cancelBtn.style.display = 'none';
       const footerStatus = document.getElementById('rtFooterStatus');
       if (footerStatus) footerStatus.textContent = data.success ? 'Transfer completed successfully' : 'Transfer ended';
+      const bar = document.getElementById('rtProgressBar');
+      if (bar) bar.classList.remove('is-running');
       if (data.success) {
-        const bar = document.getElementById('rtProgressBar');
         if (bar) bar.style.width = '100%';
+        const pctInside = document.getElementById('rtProgressPct');
+        if (pctInside) pctInside.textContent = '100%';
         const pct = document.getElementById('rtPercentText');
         if (pct) pct.textContent = '100%';
+        const etaEl = document.getElementById('rtEtaText');
+        if (etaEl) etaEl.textContent = t('rt.eta') + ' ✓';
         const cur = document.getElementById('rtCurrentFile');
         if (cur) cur.textContent = 'Transfer Completed!';
         addLog(`Remote transfer completed: ${data.count} items transferred in ${data.elapsed_secs}s`, 'success');
@@ -12905,10 +13018,11 @@ window.onerror = function(msg, url, line, col, error) {
 
     window.onRemoteTransferError = function(data) {
       isRtTransferActive = false;
-      const startBtn = document.getElementById('btnRtStart');
-      if (startBtn) startBtn.disabled = false;
+      setRtStartBusy(false);
       const cancelBtn = document.getElementById('btnRtCancel');
       if (cancelBtn) cancelBtn.style.display = 'none';
+      const bar = document.getElementById('rtProgressBar');
+      if (bar) bar.classList.remove('is-running');
       const footerStatus = document.getElementById('rtFooterStatus');
       if (footerStatus) footerStatus.textContent = 'Error: ' + data.error;
       addLog('Remote transfer error: ' + data.error, 'error');

@@ -525,6 +525,157 @@ sshpass -f \"$__p\" scp -P {port} -r {opts} {src} {dst}; __rc=$?; rm -f \"$__p\"
     }
 }
 
+/// Result of trying to index a remote tree in one shot.
+enum TreeScan {
+    Indexed(Vec<TransferItem>),
+    /// The server's `find` has no `-printf` (BSD/macOS, busybox).
+    Unsupported,
+    Failed(String),
+}
+
+/// Indexes a remote source tree with a **single** remote `find`.
+///
+/// The SFTP walk in [`collect_remote_items_with_progress`] needs one round trip
+/// per directory. On a real website that is tens of thousands of entries and
+/// several minutes of the progress bar sitting at 0%. `find -printf` returns
+/// type, size and path for the whole tree in one command, which turns that wait
+/// into roughly one second. Anything unexpected falls back to the walk.
+fn remote_tree_via_find(
+    client: &mut RemoteClient,
+    sources: &[String],
+    cancelled: &Arc<AtomicBool>,
+) -> TreeScan {
+    let mut dirs: Vec<(String, String)> = Vec::new();
+    let mut items: Vec<TransferItem> = Vec::new();
+
+    for src in sources {
+        if cancelled.load(Ordering::Relaxed) {
+            return TreeScan::Failed("cancelled".to_string());
+        }
+        let clean = src.trim().trim_end_matches('/');
+        let clean = if clean.is_empty() { "/" } else { clean };
+        let meta = match client.stat(clean) {
+            Ok(Some(m)) => m,
+            Ok(None) => {
+                return TreeScan::Failed(format!("'{}' no longer exists on the source server", clean))
+            }
+            Err(e) => return TreeScan::Failed(e),
+        };
+        let base = clean
+            .rsplit('/')
+            .next()
+            .filter(|s| !s.is_empty())
+            .unwrap_or("root")
+            .to_string();
+        if meta.is_dir {
+            dirs.push((clean.to_string(), base));
+        } else {
+            items.push(TransferItem {
+                relative_path: base,
+                is_dir: false,
+                size: meta.size,
+                source_full_path: clean.to_string(),
+            });
+        }
+    }
+
+    if dirs.is_empty() {
+        return TreeScan::Indexed(items);
+    }
+
+    let quoted = dirs
+        .iter()
+        .map(|(p, _)| format!("'{}'", p.replace('\'', "'\\''")))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let cmd = format!(
+        "LC_ALL=C find {} -mindepth 0 -printf '%y\\t%s\\t%p\\n' 2>/dev/null",
+        quoted
+    );
+
+    let (code, out) = match client.exec_command_clean(&cmd) {
+        Ok(v) => v,
+        Err(e) => return TreeScan::Failed(e),
+    };
+    if code != 0 {
+        return TreeScan::Unsupported;
+    }
+    if out.trim().is_empty() {
+        return TreeScan::Unsupported;
+    }
+
+    for line in out.lines() {
+        if cancelled.load(Ordering::Relaxed) {
+            return TreeScan::Failed("cancelled".to_string());
+        }
+        let mut parts = line.splitn(3, '\t');
+        let (ty, size_s, path) = match (parts.next(), parts.next(), parts.next()) {
+            (Some(a), Some(b), Some(c)) => (a, b, c),
+            _ => continue,
+        };
+        if let Some(item) = parse_find_line(ty, size_s, path, &dirs) {
+            items.push(item);
+        }
+    }
+
+    sort_for_creation(&mut items);
+
+    TreeScan::Indexed(items)
+}
+
+/// Turns one `%y\t%s\t%p` line of `find -printf` output into a transfer item,
+/// relative to whichever source directory it belongs to.
+fn parse_find_line(
+    ty: &str,
+    size_s: &str,
+    path: &str,
+    dirs: &[(String, String)],
+) -> Option<TransferItem> {
+    let is_dir = match ty {
+        "d" => true,
+        // Symlinks are followed by the transfer itself, exactly as the SFTP walk
+        // did, so they are carried as zero-byte file entries.
+        "f" | "l" => false,
+        _ => return None,
+    };
+    let size: u64 = if is_dir { 0 } else { size_s.parse().unwrap_or(0) };
+
+    for (clean, base) in dirs {
+        let rest = match path.strip_prefix(clean.as_str()) {
+            Some(r) if r.is_empty() || r.starts_with('/') => r,
+            _ => continue,
+        };
+        let rel = rest.trim_start_matches('/');
+        let relative_path = if rel.is_empty() {
+            base.clone()
+        } else {
+            format!("{}/{}", base, rel)
+        };
+        return Some(TransferItem {
+            relative_path,
+            is_dir,
+            size,
+            source_full_path: path.to_string(),
+        });
+    }
+    None
+}
+
+/// Orders items so a directory always precedes everything inside it.
+///
+/// Sorting a directory as if it ended in `/` makes it a strict prefix of its
+/// children, so the transfer never has to create the same directory twice and
+/// never meets a file before its parent.
+fn sort_for_creation(items: &mut [TransferItem]) {
+    items.sort_by_cached_key(|it| {
+        if it.is_dir {
+            format!("{}/", it.relative_path)
+        } else {
+            it.relative_path.clone()
+        }
+    });
+}
+
 pub fn execute_transfer_thread(
     mut source_client: Option<RemoteClient>,
     task: RemoteTransferTask,
@@ -537,6 +688,24 @@ pub fn execute_transfer_thread(
             // screen and is the one place a leaked credential would be copied
             // straight into a screenshot or a support ticket.
             let payload = json!({ "text": crate::logger::redact(msg), "kind": kind });
+            let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
+            cb(format!(
+                "if(window.onRemoteTransferLog) window.onRemoteTransferLog({});",
+                json_str
+            ));
+        }
+    };
+
+    // Emits a line that *replaces* the previous status line instead of
+    // appending. Used for anything that updates in place (indexing progress),
+    // so the log does not fill with near-identical lines.
+    let emit_status = |msg: &str, kind: &str| {
+        if let Some(ref cb) = exec_script {
+            let payload = json!({
+                "text": crate::logger::redact(msg),
+                "kind": kind,
+                "replace": true
+            });
             let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
             cb(format!(
                 "if(window.onRemoteTransferLog) window.onRemoteTransferLog({});",
@@ -648,11 +817,18 @@ pub fn execute_transfer_thread(
 
             let mut server_side_key = false;
             if wants_direct && !password_auth {
+                emit_log("Testing whether the source server can reach the destination directly…", "info");
                 let probe = format!(
-                    "ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -p {} {}@{} true",
+                    "ssh -o BatchMode=yes -o ConnectTimeout=6 -o StrictHostKeyChecking=accept-new -p {} {}@{} true",
                     task.target_port, task.target_user, task.target_host
                 );
                 server_side_key = matches!(src.exec_command_clean(&probe), Ok((0, _)));
+                if server_side_key {
+                    emit_log(
+                        "The source server already trusts the destination, so the files never pass through this computer.",
+                        "success",
+                    );
+                }
             }
 
             if wants_direct && !password_auth && !server_side_key {
@@ -898,16 +1074,18 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
         let _ = target_client.make_dir_all(&dest_base);
     }
 
-    emit_log("Scanning and enumerating source files and folders...", "info");
-
-    /* A deep tree can take minutes on a slow link, and one static log line
-       reads as a dead connection. Report the running count instead. */
+    /* Enumerating a real website over SFTP costs one round trip *per directory*.
+       A 23k-file tree therefore sits for minutes before the first byte moves —
+       which reads as "the transfer is stuck". GNU `find -printf` returns the
+       whole tree (type, size, path) in a single command; the SFTP walk stays as
+       the fallback for servers that do not have it. */
+    let scan_start = Instant::now();
     let last_scan_report = std::cell::Cell::new(Instant::now());
     let scan_progress = |found: usize| {
-        if last_scan_report.get().elapsed().as_millis() >= 900 {
+        if last_scan_report.get().elapsed().as_millis() >= 700 {
             last_scan_report.set(Instant::now());
-            emit_log(
-                &format!("Scanning source tree... {} item(s) found so far", found),
+            emit_status(
+                &format!("Indexing source tree — {} item(s) so far…", found),
                 "info",
             );
         }
@@ -915,7 +1093,35 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
 
     let items = if task.source_is_remote {
         if let Some(ref mut src) = source_client {
-            match collect_remote_items_with_progress(src, &task.sources, &cancelled, &scan_progress) {
+            emit_status("Indexing source tree…", "info");
+            let enumerated = match remote_tree_via_find(src, &task.sources, &cancelled) {
+                TreeScan::Indexed(list) => {
+                    emit_log(
+                        &format!(
+                            "Source indexed in {:.1}s in a single remote call ({} items).",
+                            scan_start.elapsed().as_secs_f64(),
+                            list.len()
+                        ),
+                        "success",
+                    );
+                    Ok(list)
+                }
+                TreeScan::Unsupported => {
+                    emit_log(
+                        "This server's find has no -printf support; using the SFTP directory walk instead.",
+                        "info",
+                    );
+                    collect_remote_items_with_progress(src, &task.sources, &cancelled, &scan_progress)
+                }
+                TreeScan::Failed(e) => {
+                    emit_log(
+                        &format!("Fast indexing was not possible ({}); using the SFTP directory walk.", e),
+                        "info",
+                    );
+                    collect_remote_items_with_progress(src, &task.sources, &cancelled, &scan_progress)
+                }
+            };
+            match enumerated {
                 Ok(it) => it,
                 Err(e) => {
                     emit_error(&format!("Failed to enumerate remote sources: {}", e));
@@ -954,6 +1160,19 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
     let mut done_bytes: u64 = 0;
     let mut failed_files = 0;
 
+    /* `make_dir_all` walks every path segment and issues one round trip per
+       segment. Calling it per file turned a 23k-file website into hundreds of
+       thousands of redundant MKDIRs — the single biggest cost in the relay.
+       Each directory is now created exactly once. */
+    let mut ensured_dirs: std::collections::HashSet<String> = std::collections::HashSet::new();
+    ensured_dirs.insert(dest_base.trim_end_matches('/').to_string());
+
+    /* Every progress/status emit is a cross-process call into the WebView. One
+       per file is 18k round trips for a website — enough on its own to make the
+       whole transfer feel heavy. Both are throttled; the UI interpolates. */
+    let mut last_progress_emit: Option<Instant> = None;
+    let mut last_status_emit: Option<Instant> = None;
+
     for item in &items {
         if cancelled.load(Ordering::Relaxed) {
             emit_log("Transfer cancelled by user.", "warning");
@@ -968,8 +1187,11 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
         };
 
         if item.is_dir {
-            if let Err(e) = target_client.make_dir_all(&target_item_path) {
-                emit_log(&format!("Directory create note ({}): {}", target_item_path, e), "info");
+            if !ensured_dirs.contains(&target_item_path) {
+                if let Err(e) = target_client.make_dir_all(&target_item_path) {
+                    emit_log(&format!("Directory create note ({}): {}", target_item_path, e), "info");
+                }
+                ensured_dirs.insert(target_item_path.clone());
             }
         } else {
             // Check overwrite skip option
@@ -985,14 +1207,27 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
             // Ensure parent directory of target file exists
             if let Some(idx) = target_item_path.rfind('/') {
                 let parent_dir = &target_item_path[..idx];
-                if !parent_dir.is_empty() && parent_dir != "." && parent_dir != "/" && parent_dir != "~" {
+                if !parent_dir.is_empty()
+                    && parent_dir != "."
+                    && parent_dir != "/"
+                    && parent_dir != "~"
+                    && !ensured_dirs.contains(parent_dir)
+                {
                     let _ = target_client.make_dir_all(parent_dir);
+                    ensured_dirs.insert(parent_dir.to_string());
                 }
             }
 
             let base_done_bytes = done_bytes;
             let file_size = item.size;
-            emit_progress(&item.relative_path, done_files, total_files, base_done_bytes, total_bytes, "Starting...", None);
+            let emit_now = match last_progress_emit {
+                None => true,
+                Some(t) => t.elapsed().as_millis() >= 120,
+            };
+            if emit_now {
+                last_progress_emit = Some(Instant::now());
+                emit_progress(&item.relative_path, done_files, total_files, base_done_bytes, total_bytes, "Starting...", None);
+            }
 
             let mut transfer_res: Result<(), String> = Err("Not started".to_string());
             for attempt in 1..=3 {
@@ -1218,7 +1453,35 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
                         0.0
                     };
                     emit_progress(&item.relative_path, done_files, total_files, done_bytes, total_bytes, &format!("{:.2} MB/s", speed_mb), None);
-                    emit_log(&format!("✓ Transferred: {} ({})", item.relative_path, format_size(item.size)), "success");
+
+                    /* One permanent log line per file means 23k DOM nodes and
+                       23k cross-process calls for a website: it stalls the UI and
+                       buries the useful information. The current file is shown on
+                       a single line that updates in place, and a permanent line is
+                       kept every 50 files. */
+                    if done_files % 50 == 0 || done_files == total_files {
+                        emit_log(
+                            &format!(
+                                "✓ {} of {} files transferred ({})",
+                                done_files,
+                                total_files,
+                                format_size(done_bytes)
+                            ),
+                            "success",
+                        );
+                    } else {
+                        let status_now = match last_status_emit {
+                            None => true,
+                            Some(t) => t.elapsed().as_millis() >= 250,
+                        };
+                        if status_now {
+                            last_status_emit = Some(Instant::now());
+                            emit_status(
+                                &format!("✓ {} of {} files — {}", done_files, total_files, item.relative_path),
+                                "success",
+                            );
+                        }
+                    }
                 }
                 Err(e) => {
                     failed_files += 1;
@@ -1264,6 +1527,68 @@ mod tests {
         assert_eq!(format_size(1024), "1.0 KB");
         assert_eq!(format_size(1024 * 1024), "1.00 MB");
         assert_eq!(format_size(1024 * 1024 * 1024), "1.00 GB");
+    }
+
+    #[test]
+    fn find_output_maps_paths_relative_to_their_source() {
+        let dirs = vec![("/home/site/public_html".to_string(), "public_html".to_string())];
+        let item = parse_find_line("f", "512", "/home/site/public_html/index.php", &dirs).unwrap();
+        assert_eq!(item.relative_path, "public_html/index.php");
+        assert_eq!(item.size, 512);
+        assert!(!item.is_dir);
+        assert_eq!(item.source_full_path, "/home/site/public_html/index.php");
+
+        // The root directory itself becomes the transfer root.
+        let root = parse_find_line("d", "4096", "/home/site/public_html", &dirs).unwrap();
+        assert_eq!(root.relative_path, "public_html");
+        assert!(root.is_dir);
+
+        // A path outside every source is ignored rather than mis-attributed.
+        assert!(parse_find_line("f", "1", "/etc/passwd", &dirs).is_none());
+        // A sibling whose name merely starts with the source name must not match.
+        assert!(parse_find_line("f", "1", "/home/site/public_html_backup/x", &dirs).is_none());
+        // Unknown types are skipped.
+        assert!(parse_find_line("s", "0", "/home/site/public_html/sock", &dirs).is_none());
+    }
+
+    #[test]
+    fn every_directory_precedes_its_children() {
+        let mut items = vec![
+            TransferItem { relative_path: "site/a.txt".into(), is_dir: false, size: 1, source_full_path: String::new() },
+            TransferItem { relative_path: "site/a/b.txt".into(), is_dir: false, size: 1, source_full_path: String::new() },
+            TransferItem { relative_path: "site/a".into(), is_dir: true, size: 0, source_full_path: String::new() },
+            TransferItem { relative_path: "site".into(), is_dir: true, size: 0, source_full_path: String::new() },
+            TransferItem { relative_path: "site/b/c/d.txt".into(), is_dir: false, size: 1, source_full_path: String::new() },
+            TransferItem { relative_path: "site/b/c".into(), is_dir: true, size: 0, source_full_path: String::new() },
+            TransferItem { relative_path: "site/b".into(), is_dir: true, size: 0, source_full_path: String::new() },
+        ];
+        sort_for_creation(&mut items);
+
+        let dirs: std::collections::HashSet<&str> = items
+            .iter()
+            .filter(|i| i.is_dir)
+            .map(|i| i.relative_path.as_str())
+            .collect();
+
+        // The invariant that matters: by the time an entry is reached, its
+        // parent directory has already been created.
+        for (idx, item) in items.iter().enumerate() {
+            if let Some(slash) = item.relative_path.rfind('/') {
+                let parent = &item.relative_path[..slash];
+                let parent_idx = items
+                    .iter()
+                    .position(|i| i.is_dir && i.relative_path == parent)
+                    .unwrap_or_else(|| panic!("parent '{}' missing for '{}'", parent, item.relative_path));
+                assert!(
+                    parent_idx < idx,
+                    "parent '{}' must come before '{}'",
+                    parent,
+                    item.relative_path
+                );
+                assert!(dirs.contains(parent));
+            }
+        }
+        assert_eq!(items[0].relative_path, "site");
     }
 
     #[test]

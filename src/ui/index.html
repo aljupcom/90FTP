@@ -579,6 +579,32 @@
       transition: all 0.1s;
       white-space: nowrap;
     }
+    /* A disabled button has to *look* disabled. The transfer dialog keeps its
+       Start button in place while a job runs, and without this it stayed a
+       bright primary button that appeared to still be clickable. */
+    .btn:disabled,
+    .btn[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+      filter: grayscale(0.5);
+      pointer-events: none;
+    }
+    .btn.is-busy {
+      cursor: progress;
+      opacity: 0.75;
+      filter: none;
+      pointer-events: none;
+    }
+    @keyframes rt-spin { to { transform: rotate(360deg); } }
+    .rt-spinner {
+      width: 12px;
+      height: 12px;
+      flex: none;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      animation: rt-spin 0.7s linear infinite;
+    }
     .btn-primary {
       background: var(--accent);
       border-color: var(--accent-hover);
@@ -3490,35 +3516,127 @@
       border: 1px solid rgba(239, 68, 68, 0.3);
     }
     .rt-progress-track {
+      position: relative;
       width: 100%;
-      height: 7px;
-      border-radius: 4px;
+      height: 16px;
+      border-radius: 5px;
       background: var(--bg-card);
       border: 1px solid var(--border-color);
       overflow: hidden;
-      margin: 6px 0;
+      margin: 8px 0 6px;
     }
     .rt-progress-bar {
+      position: relative;
       height: 100%;
       width: 0%;
+      border-radius: 4px;
       background: linear-gradient(90deg, #0284c7 0%, #38bdf8 100%);
-      transition: width 0.15s ease-out;
+      transition: width 0.2s ease-out;
+    }
+    /* Moving sheen so a stalled bar still reads as "working", and a completed
+       one stops animating. */
+    .rt-progress-bar.is-running::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+      animation: rt-sheen 1.4s linear infinite;
+    }
+    @keyframes rt-sheen {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(100%); }
+    }
+    .rt-progress-pct {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10.5px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #e2e8f0;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+      pointer-events: none;
+      letter-spacing: 0.2px;
+    }
+    .rt-progress-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      row-gap: 4px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .rt-progress-file {
+      flex: 1 1 320px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rt-progress-stats {
+      display: flex;
+      gap: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      flex: none;
     }
     .rt-log-box {
       font-family: var(--font-mono);
       font-size: 12px;
       line-height: 1.5;
-      background: #090d16;
+      background: #0b1120;
       border: 1px solid var(--border-color);
-      border-radius: 4px;
-      padding: 8px 10px;
-      height: 130px;
+      border-radius: 5px;
+      padding: 5px 0;
+      height: 168px;
       overflow-y: auto;
       color: #94a3b8;
       user-select: text !important;
       -webkit-user-select: text !important;
       cursor: text;
     }
+    .rt-log-line {
+      display: flex;
+      gap: 9px;
+      padding: 1px 10px 1px 8px;
+      border-left: 2px solid transparent;
+    }
+    .rt-log-line[data-kind="success"] { border-left-color: #22c55e; }
+    .rt-log-line[data-kind="warning"] { border-left-color: #f59e0b; }
+    .rt-log-line[data-kind="error"]   { border-left-color: #ef4444; }
+    .rt-log-time {
+      flex: none;
+      color: #475569;
+      font-variant-numeric: tabular-nums;
+    }
+    .rt-log-text {
+      min-width: 0;
+      color: #cbd5e1;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .rt-log-line[data-kind="success"] .rt-log-text { color: #4ade80; }
+    .rt-log-line[data-kind="warning"] .rt-log-text { color: #fbbf24; }
+    .rt-log-line[data-kind="error"]   .rt-log-text { color: #f87171; }
+    .rt-log-empty {
+      padding: 10px;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    /* The transfer log and the numeric stats are machine output — paths, byte
+       counts, English status lines. Running them through the RTL bidi algorithm
+       scrambles the order, exactly as it does for the file listings. */
+    .rt-log-box,
+    .rt-progress-stats,
+    #rtCurrentFile {
+      direction: ltr;
+    }
+    .rt-log-box { text-align: left; }
     .rt-log-entry {
       user-select: text !important;
       -webkit-user-select: text !important;
@@ -4557,6 +4675,12 @@
       border-color: #dde3ea !important;
       color: #334155 !important;
     }
+    [data-theme="light"] .rt-log-time { color: #94a3b8; }
+    [data-theme="light"] .rt-log-text { color: #334155; }
+    [data-theme="light"] .rt-log-line[data-kind="success"] .rt-log-text { color: #15803d; }
+    [data-theme="light"] .rt-log-line[data-kind="warning"] .rt-log-text { color: #b45309; }
+    [data-theme="light"] .rt-log-line[data-kind="error"] .rt-log-text { color: #b91c1c; }
+    [data-theme="light"] .rt-progress-pct { color: #0f172a; text-shadow: 0 1px 1px rgba(255, 255, 255, 0.9); }
     [data-theme="light"] .rt-source-chip {
       background: rgba(220, 38, 38, 0.08) !important;
       border-color: rgba(220, 38, 38, 0.25) !important;
@@ -4798,7 +4922,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.82</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.83</span>
         </div>
       </div>
 
@@ -6464,7 +6588,7 @@
           </div>
           <div class="about-brand-sub">Modern Site Manager & Asynchronous File Transfer Engine</div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.82 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.83 Dev (Windows x64)</span>
             <span style="font-size: 12px; color: var(--text-dim);">Release Channel: Official</span>
           </div>
         </div>
@@ -6579,7 +6703,7 @@
         </div>
         <div class="about-code-box" id="aboutDiagnosticsText">
 Application: 90FTP Desktop Client
-Version: 0.0.0.82 (Release)
+Version: 0.0.0.83 (Release)
 OS: Windows NT 10.0 x64
 WebView2: Evergreen Host
 Renderer: DirectComposition Hardware Accelerated
@@ -7067,18 +7191,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
           <div class="rt-progress-track">
             <div id="rtProgressBar" class="rt-progress-bar"></div>
+            <span id="rtProgressPct" class="rt-progress-pct">0%</span>
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">
-            <div>
+          <div class="rt-progress-meta">
+            <div class="rt-progress-file">
               <span>File: </span>
               <strong id="rtCurrentFile" style="color: var(--accent); font-family: var(--font-mono);">Initializing...</strong>
             </div>
-            <div style="display: flex; gap: 12px; font-weight: 600;">
+            <div class="rt-progress-stats">
               <span id="rtPercentText" style="color: var(--text-main);">0%</span>
-              <span id="rtFilesRatio">0 / 0</span>
+              <span id="rtFilesRatio">0 / 0 files</span>
               <span id="rtBytesRatio">0 B / 0 B</span>
-              <span id="rtSpeedText" style="color: #22c55e;">0 MB/s</span>
+              <span id="rtSpeedText" style="color: #22c55e;">—</span>
+              <span id="rtEtaText" style="color: var(--text-muted);">ETA —</span>
             </div>
           </div>
 
