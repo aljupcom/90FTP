@@ -547,38 +547,102 @@ fn get_user_cipher_key() -> Vec<u8> {
     key
 }
 
-pub fn encrypt_credential(plain: &str) -> String {
-    if plain.is_empty() {
-        return String::new();
-    }
-    if plain.starts_with("enc:v1:") {
-        return plain.to_string();
-    }
+/// Per-field credential encryption, on top of the whole-file vault.
+///
+/// The vault is already AES-256-GCM with a DPAPI-wrapped key, so this layer is
+/// defence in depth: it means a credential is never legible even if a single
+/// JSON blob is extracted from a decrypted buffer (a crash dump, a debug print,
+/// a support bundle). `enc:v2` is AES-256-GCM with a fresh nonce per value.
+/// `enc:v1` (the old XOR stream) is still readable so existing profiles keep
+/// working; the next save rewrites them as v2.
+const CRED_V1: &str = "enc:v1:";
+const CRED_V2: &str = "enc:v2:";
+
+fn legacy_xor_credential(plain: &str) -> String {
     let key = get_user_cipher_key();
     let bytes = plain.as_bytes();
     let mut enc = Vec::with_capacity(bytes.len());
     for (i, &b) in bytes.iter().enumerate() {
         enc.push(b ^ key[i % key.len()]);
     }
-    format!("enc:v1:{}", base64::engine::general_purpose::STANDARD.encode(enc))
+    format!("{}{}", CRED_V1, base64::engine::general_purpose::STANDARD.encode(enc))
+}
+
+fn encrypt_credential_with_key(plain: &str, key: &[u8; 32]) -> String {
+    if plain.is_empty() {
+        return String::new();
+    }
+    if plain.starts_with(CRED_V1) || plain.starts_with(CRED_V2) {
+        return plain.to_string();
+    }
+
+    let cipher = match Aes256Gcm::new_from_slice(key) {
+        Ok(c) => c,
+        Err(_) => return legacy_xor_credential(plain),
+    };
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
+
+    match cipher.encrypt(&nonce, plain.as_bytes()) {
+        Ok(ciphertext) => {
+            let mut buf = Vec::with_capacity(12 + ciphertext.len());
+            buf.extend_from_slice(&nonce_bytes);
+            buf.extend_from_slice(&ciphertext);
+            format!(
+                "{}{}",
+                CRED_V2,
+                base64::engine::general_purpose::STANDARD.encode(buf)
+            )
+        }
+        Err(_) => legacy_xor_credential(plain),
+    }
+}
+
+fn decrypt_credential_with_key(cipher: &str, key: &[u8; 32]) -> String {
+    if let Some(stripped) = cipher.strip_prefix(CRED_V2) {
+        let decoded = match base64::engine::general_purpose::STANDARD.decode(stripped) {
+            Ok(d) if d.len() > 12 => d,
+            _ => return String::new(),
+        };
+        let (nonce_bytes, ciphertext) = decoded.split_at(12);
+        if let Ok(aes) = Aes256Gcm::new_from_slice(key) {
+            if let Ok(nonce) = Nonce::try_from(nonce_bytes) {
+                if let Ok(plain) = aes.decrypt(&nonce, ciphertext) {
+                    if let Ok(s) = String::from_utf8(plain) {
+                        return s;
+                    }
+                }
+            }
+        }
+        // A v2 value that will not open means the vault key changed; surfacing
+        // base64 noise as a password would be worse than an empty field.
+        return String::new();
+    }
+
+    if let Some(stripped) = cipher.strip_prefix(CRED_V1) {
+        if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(stripped) {
+            let legacy_key = get_user_cipher_key();
+            let mut dec = Vec::with_capacity(decoded.len());
+            for (i, &b) in decoded.iter().enumerate() {
+                dec.push(b ^ legacy_key[i % legacy_key.len()]);
+            }
+            if let Ok(s) = String::from_utf8(dec) {
+                return s;
+            }
+        }
+        return cipher.to_string();
+    }
+
+    cipher.to_string()
+}
+
+pub fn encrypt_credential(plain: &str) -> String {
+    encrypt_credential_with_key(plain, &master_key())
 }
 
 pub fn decrypt_credential(cipher: &str) -> String {
-    if !cipher.starts_with("enc:v1:") {
-        return cipher.to_string();
-    }
-    let stripped = &cipher["enc:v1:".len()..];
-    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(stripped) {
-        let key = get_user_cipher_key();
-        let mut dec = Vec::with_capacity(decoded.len());
-        for (i, &b) in decoded.iter().enumerate() {
-            dec.push(b ^ key[i % key.len()]);
-        }
-        if let Ok(s) = String::from_utf8(dec) {
-            return s;
-        }
-    }
-    cipher.to_string()
+    decrypt_credential_with_key(cipher, &master_key())
 }
 
 pub fn load_sites() -> Vec<SiteProfile> {
@@ -785,8 +849,7 @@ mod tests {
     }
 
     #[test]
-    fn test_obfuscated_filenames() {
-        let legacy = legacy_env_key();
+    fn test_obfuscated_filenames() {        let legacy = legacy_env_key();
         let sites = vault_file_path_with_key(&legacy, "sites_profiles_v2");
         let history = vault_file_path_with_key(&legacy, "remote_history_v2");
         let hosts = vault_file_path_with_key(&legacy, "known_hosts_v2");
@@ -842,6 +905,49 @@ mod tests {
         assert_eq!(read_vault_encrypted_with_key(&path, &rotated).unwrap(), payload);
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_credential_roundtrip_is_aes_gcm() {
+        let key = fixed_key();
+        let secret = "S3cr3t-P@ssphrase!";
+        let sealed = encrypt_credential_with_key(secret, &key);
+
+        assert!(sealed.starts_with(CRED_V2), "new values must use the v2 format");
+        assert!(!sealed.contains(secret), "ciphertext must not contain the plaintext");
+        assert_eq!(decrypt_credential_with_key(&sealed, &key), secret);
+
+        // A different key must not produce the plaintext back.
+        let mut other = fixed_key();
+        other[7] ^= 0x11;
+        assert_eq!(decrypt_credential_with_key(&sealed, &other), "");
+    }
+
+    #[test]
+    fn test_credential_encryption_is_non_deterministic() {
+        let key = fixed_key();
+        let a = encrypt_credential_with_key("same-password", &key);
+        let b = encrypt_credential_with_key("same-password", &key);
+        assert_ne!(a, b, "a fresh nonce must make identical inputs differ");
+        assert_eq!(decrypt_credential_with_key(&a, &key), "same-password");
+        assert_eq!(decrypt_credential_with_key(&b, &key), "same-password");
+    }
+
+    #[test]
+    fn test_legacy_v1_credentials_still_decrypt() {
+        // Values written by older builds must keep working; the next save
+        // rewrites them as v2.
+        let legacy = legacy_xor_credential("old-password");
+        assert!(legacy.starts_with(CRED_V1));
+        assert_eq!(decrypt_credential_with_key(&legacy, &fixed_key()), "old-password");
+    }
+
+    #[test]
+    fn test_plaintext_credentials_pass_through_untouched() {
+        // Profiles saved before any per-field layer existed stored the password
+        // verbatim; that must still be readable rather than becoming a blob.
+        assert_eq!(decrypt_credential_with_key("plain-password", &fixed_key()), "plain-password");
+        assert_eq!(encrypt_credential_with_key("", &fixed_key()), "");
     }
 }
 

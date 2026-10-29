@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.81';
+    let APP_CURRENT_VERSION = '0.0.0.82';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -178,13 +178,44 @@ window.onerror = function(msg, url, line, col, error) {
       });
     }
 
+    // ---------------------------------------------------------------------
+    // Log redaction
+    //
+    // The Rust side masks credentials before they reach the file log and the
+    // remote-transfer log. This is the same guard for anything the UI prints
+    // itself, so a password can never appear in the activity log, a copied log
+    // excerpt, or a screenshot. Values are remembered as they are used rather
+    // than pattern-guessed, which is what makes the masking reliable.
+    // ---------------------------------------------------------------------
+    const knownSecrets = new Set();
+
+    function rememberSecret(value) {
+      const v = (value == null) ? '' : String(value);
+      if (v.trim().length >= 4) knownSecrets.add(v);
+    }
+
+    function redactSensitive(text) {
+      let s = (text == null) ? '' : String(text);
+      if (!s) return s;
+      knownSecrets.forEach(secret => {
+        if (secret && s.indexOf(secret) !== -1) s = s.split(secret).join('***');
+      });
+      s = s.replace(/\bsshpass\s+-p\s+('[^']*'|"[^"]*"|\S+)/gi, 'sshpass -p ***');
+      s = s.replace(/([a-z][a-z0-9+.\-]*:\/\/[^\/\s:@]+):([^\/\s@]+)@/gi, '$1:***@');
+      // `"?` covers the JSON form "password": "..." where the key's closing
+      // quote sits between the key and the separator.
+      s = s.replace(/\b(password|passwd|passphrase|secret|token|api[_-]?key)("?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1$2***');
+      return s;
+    }
+
     function addLog(msg, type = 'info') {
       const body = document.getElementById('logBody');
       if (!body) return;
+      const safeMsg = redactSensitive(msg);
       const timeStr = (appOptions && appOptions.logTimestamps === false) ? '' : '<span class="log-time">[' + new Date().toLocaleTimeString() + ']</span> ';
       const div = document.createElement('div');
       div.className = 'log-line';
-      div.innerHTML = timeStr + '<span class="log-msg ' + type + '">' + escapeHtml(msg) + '</span>';
+      div.innerHTML = timeStr + '<span class="log-msg ' + type + '">' + escapeHtml(safeMsg) + '</span>';
       body.appendChild(div);
 
       const maxLines = (appOptions && appOptions.maxLogLines) || 500;
@@ -4571,6 +4602,9 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     async function executeConnect(params) {
+      // Register the credentials before any log line can print them.
+      rememberSecret(params.password);
+      rememberSecret(params.passphrase);
       stopKeepAliveTimer();
       isConnected = false;
       currentConnectedProfile = null;
@@ -11402,9 +11436,10 @@ window.onerror = function(msg, url, line, col, error) {
           'Version: ' + APP_CURRENT_VERSION + ' (Windows x64 Release)\n' +
           'Architecture: x86_64-pc-windows-msvc (Tokio Multithreaded Engine)\n' +
           'User Agent: ' + (navigator.userAgent || 'Edge WebView2 Evergreen') + '\n' +
-          'Protocols: SFTP (russh 0.45 async SSH-2.0), FTPS / FTP (suppaftp + rustls)\n' +
-          'Security Vault: AES-256-GCM Hardware-Accelerated (Ring Cryptography)\n' +
-          'Configuration Path: %APPDATA%\\90FTP\\sites.json\n' +
+          'Protocols: SFTP (russh async SSH-2.0), FTPS / FTP (suppaftp + native-tls)\n' +
+          'Security Vault: AES-256-GCM, master key wrapped by Windows DPAPI\n' +
+          'Credential Storage: %APPDATA%\\90FTP\\v_*.dat (encrypted vault, no plaintext files)\n' +
+          'Log Redaction: credentials masked before any log sink\n' +
           'Repository: https://github.com/' + GITHUB_REPO_PATH;
       }
       const modal = document.getElementById('aboutModal');
@@ -12475,7 +12510,11 @@ window.onerror = function(msg, url, line, col, error) {
       const userEl = document.getElementById('rtUsername');
       if (userEl) userEl.value = site.username || '';
 
-      const authType = site.auth_type || (site.key_path ? 'key' : 'password');
+      // Normalise what older profiles stored. A profile whose type no longer
+      // matches the account must not hide the credential that does work — the
+      // backend tries every credential it holds, this only sets the order.
+      const rawAuth = String(site.auth_type || '').toLowerCase();
+      const authType = (rawAuth === 'key' || rawAuth === 'publickey' || rawAuth === 'ssh-key') ? 'key' : 'password';
       const authEl = document.getElementById('rtAuthType');
       if (authEl) authEl.value = authType;
       toggleRtAuthFields();
@@ -12486,6 +12525,8 @@ window.onerror = function(msg, url, line, col, error) {
       if (keyEl) keyEl.value = site.key_path || '';
       const phraseEl = document.getElementById('rtPassphrase');
       if (phraseEl) phraseEl.value = site.passphrase || '';
+      rememberSecret(site.password || '');
+      rememberSecret(site.passphrase || '');
       const pathEl = document.getElementById('rtTargetPath');
       if (pathEl && site.remote_dir) pathEl.value = site.remote_dir;
     }
@@ -12505,6 +12546,11 @@ window.onerror = function(msg, url, line, col, error) {
 
     function buildRtTaskPayload() {
       const authType = document.getElementById('rtAuthType')?.value || 'password';
+      const pass = document.getElementById('rtPassword')?.value || '';
+      const phrase = document.getElementById('rtPassphrase')?.value || '';
+      // Register before anything can print it.
+      rememberSecret(pass);
+      rememberSecret(phrase);
       return {
         source_is_remote: currentRtIsRemote,
         sources: currentRtSources,
@@ -12513,10 +12559,14 @@ window.onerror = function(msg, url, line, col, error) {
         target_host: (document.getElementById('rtHost')?.value || '').trim(),
         target_port: parseInt(document.getElementById('rtPort')?.value || '22', 10) || 22,
         target_user: (document.getElementById('rtUsername')?.value || '').trim(),
-        target_pass: document.getElementById('rtPassword')?.value || '',
+        target_pass: pass,
         target_auth_type: authType,
-        target_key_path: (authType === 'key') ? ((document.getElementById('rtKeyPath')?.value || '').trim() || null) : null,
-        target_passphrase: (authType === 'key') ? (document.getElementById('rtPassphrase')?.value || null) : null,
+        // The key and passphrase are sent whenever they exist, whatever the
+        // toggle says: dropping a credential because the auth-type selector is
+        // on the other tab is how a correct profile ends up rejected. The
+        // backend tries what it actually holds, starting with this hint.
+        target_key_path: ((document.getElementById('rtKeyPath')?.value || '').trim() || null),
+        target_passphrase: (phrase || null),
         target_path: (document.getElementById('rtTargetPath')?.value || '').trim() || '/',
         recursive: document.getElementById('rtOptRecursive')?.checked !== false,
         overwrite: document.getElementById('rtOptOverwrite')?.checked ? 'overwrite' : 'skip'
@@ -12806,7 +12856,7 @@ window.onerror = function(msg, url, line, col, error) {
       else if (data.kind === 'success') line.style.color = '#22c55e';
       else line.style.color = '#94a3b8';
 
-      line.textContent = `[${new Date().toLocaleTimeString()}] ${data.text}`;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${redactSensitive(data.text)}`;
       box.appendChild(line);
       box.scrollTop = box.scrollHeight;
     };

@@ -47,6 +47,98 @@ impl Handler for ClientHandler {
     }
 }
 
+/// One authentication method that can be attempted on a live SSH session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuthAttempt {
+    Password,
+    KeyboardInteractive,
+    PublicKey,
+}
+
+/// True when the profile's `auth_type` means "private key".
+///
+/// Profiles written by older builds, and profiles imported from other clients,
+/// spell this several ways; treating anything unrecognised as a password is
+/// what made a correctly configured key-only site fail with a password error.
+fn is_key_auth_type(auth_type: &str) -> bool {
+    matches!(
+        auth_type.trim().to_ascii_lowercase().as_str(),
+        "key"
+            | "publickey"
+            | "public_key"
+            | "ssh-key"
+            | "sshkey"
+            | "private_key"
+            | "privatekey"
+            | "certificate"
+            | "cert"
+    )
+}
+
+/// Orders the authentication methods to try.
+///
+/// The profile's declared type only decides what is attempted *first*. Every
+/// credential actually held is included, because a stale or mismatched
+/// `auth_type` used to lock out a perfectly valid password (and the reverse).
+fn plan_auth_attempts(auth_type: &str, has_password: bool, has_key: bool) -> Vec<AuthAttempt> {
+    let mut attempts = Vec::new();
+    if is_key_auth_type(auth_type) {
+        if has_key {
+            attempts.push(AuthAttempt::PublicKey);
+        }
+        if has_password {
+            attempts.push(AuthAttempt::Password);
+            attempts.push(AuthAttempt::KeyboardInteractive);
+        }
+    } else {
+        if has_password {
+            attempts.push(AuthAttempt::Password);
+            attempts.push(AuthAttempt::KeyboardInteractive);
+        }
+        if has_key {
+            attempts.push(AuthAttempt::PublicKey);
+        }
+    }
+    attempts
+}
+
+/// Completes a keyboard-interactive exchange by answering every prompt with the
+/// account password.
+///
+/// A lot of servers disable `password` and expose only keyboard-interactive
+/// (PAM). Treating that as "wrong password" is why some accounts with perfectly
+/// valid credentials could never connect.
+async fn keyboard_interactive_auth(
+    session: &mut Handle<ClientHandler>,
+    user: &str,
+    password: &str,
+) -> Result<bool, String> {
+    use russh::client::KeyboardInteractiveAuthResponse;
+
+    let mut state = session
+        .authenticate_keyboard_interactive_start(user, None::<String>)
+        .await
+        .map_err(|e| format!("keyboard-interactive start failed: {}", e))?;
+
+    // A server may send several rounds of prompts. The bound stops a broken or
+    // hostile server from looping forever.
+    for _ in 0..8 {
+        match state {
+            KeyboardInteractiveAuthResponse::Success => return Ok(true),
+            KeyboardInteractiveAuthResponse::Failure { .. } => return Ok(false),
+            KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => {
+                let answers: Vec<String> =
+                    prompts.iter().map(|_| password.to_string()).collect();
+                state = session
+                    .authenticate_keyboard_interactive_respond(answers)
+                    .await
+                    .map_err(|e| format!("keyboard-interactive response failed: {}", e))?;
+            }
+        }
+    }
+    Ok(false)
+}
+
 #[allow(dead_code)]
 pub struct SftpClient {
     rt: Arc<Runtime>,
@@ -109,44 +201,131 @@ impl SftpClient {
                 }
             };
 
-            // Authenticate
-            if auth_type_s == "key" {
-                if let Some(kp) = kp_s {
-                    if !kp.is_empty() {
-                        let key_p = Path::new(&kp);
-                        if !key_p.exists() {
-                            return Err(format!("Private key file does not exist: {}", kp));
-                        }
+            // Authenticate.
+            //
+            // The profile's auth_type decides what is tried *first*, it is not a
+            // filter. A stale profile (saved as "key" while the account is
+            // password-based, or the reverse) used to fail outright even though
+            // the credentials were correct. Every credential we actually hold is
+            // now tried, in the order the profile implies, and the error names
+            // exactly what was attempted.
+            let key_target: Option<String> = kp_s
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
 
+            let attempts = plan_auth_attempts(&auth_type_s, !pass_s.is_empty(), key_target.is_some());
+
+            if attempts.is_empty() {
+                return Err(format!(
+                    "No usable credentials for user '{}': this site has neither a password nor a private key. Open Site Manager and add one.",
+                    user_s
+                ));
+            }
+
+            let mut tried: Vec<&str> = Vec::new();
+            let mut last_reason = String::new();
+            let mut authenticated = false;
+
+            for attempt in &attempts {
+                match attempt {
+                    AuthAttempt::PublicKey => {
+                        let kp = key_target.as_deref().unwrap_or("");
+                        if !Path::new(kp).exists() {
+                            tried.push("private key");
+                            last_reason = format!("the key file '{}' does not exist", kp);
+                            continue;
+                        }
                         let pass_opt = pp_s.as_deref().filter(|s| !s.is_empty());
-                        let key = russh::keys::load_secret_key(&kp, pass_opt)
-                            .map_err(|e| {
-                                format!(
-                                    "Failed to load SSH private key: {}. Note: If your key has a passphrase, make sure to enter it in Site Manager.",
-                                    e
-                                )
-                            })?;
+                        let key = match russh::keys::load_secret_key(kp, pass_opt) {
+                            Ok(k) => k,
+                            Err(e) => {
+                                tried.push("private key");
+                                last_reason = format!("the key could not be read ({})", e);
+                                continue;
+                            }
+                        };
 
-                        let key_with_alg = PrivateKeyWithHashAlg::new(Arc::new(key), None);
-                        let auth_res = session.authenticate_publickey(&user_s, key_with_alg).await
-                            .map_err(|e| format!("SSH Key authentication error: {}", e))?;
+                        /* RSA keys need an explicit signature hash. russh maps
+                           `None` to the legacy `ssh-rsa` (SHA-1) algorithm, and
+                           every OpenSSH server since 8.8 refuses that outright
+                           — reported to the user as "Permission denied
+                           (publickey)" even though the key is authorised. Try
+                           rsa-sha2-512 first and keep SHA-1 for old servers. */
+                        let is_rsa = key.algorithm().is_rsa();
+                        let hash_algs: &[Option<russh::keys::HashAlg>] = if is_rsa {
+                            &[Some(russh::keys::HashAlg::Sha512), None]
+                        } else {
+                            &[None]
+                        };
 
-                        if !auth_res.success() {
-                            return Err(format!("SSH Key authentication failed for user {}: key was rejected by server", user_s));
+                        let mut key_accepted = false;
+                        for hash_alg in hash_algs {
+                            let key_with_alg =
+                                PrivateKeyWithHashAlg::new(Arc::new(key.clone()), *hash_alg);
+                            match session.authenticate_publickey(&user_s, key_with_alg).await {
+                                Ok(res) if res.success() => {
+                                    key_accepted = true;
+                                    break;
+                                }
+                                Ok(_) => {
+                                    last_reason = "the server rejected the key".to_string();
+                                }
+                                Err(e) => {
+                                    last_reason = e.to_string();
+                                }
+                            }
                         }
-                    } else {
-                        return Err("SSH Key path is empty".to_string());
-                    }
-                } else {
-                    return Err("SSH Key path not specified".to_string());
-                }
-            } else {
-                let auth_res = session.authenticate_password(&user_s, &pass_s).await
-                    .map_err(|e| format!("SSH Password authentication error: {}", e))?;
 
-                if !auth_res.success() {
-                    return Err(format!("SSH Password authentication failed for user {}", user_s));
+                        if key_accepted {
+                            authenticated = true;
+                        } else {
+                            tried.push("private key");
+                        }
+                    }
+                    AuthAttempt::Password => {
+                        match session.authenticate_password(&user_s, &pass_s).await {
+                            Ok(res) if res.success() => authenticated = true,
+                            Ok(_) => {
+                                tried.push("password");
+                                last_reason = "the server rejected the password".to_string();
+                            }
+                            Err(e) => {
+                                tried.push("password");
+                                last_reason = e.to_string();
+                            }
+                        }
+                    }
+                    AuthAttempt::KeyboardInteractive => {
+                        match keyboard_interactive_auth(&mut session, &user_s, &pass_s).await {
+                            Ok(true) => authenticated = true,
+                            Ok(false) => {
+                                tried.push("keyboard-interactive");
+                                last_reason =
+                                    "the server rejected the keyboard-interactive response".to_string();
+                            }
+                            Err(e) => {
+                                tried.push("keyboard-interactive");
+                                last_reason = e;
+                            }
+                        }
+                    }
                 }
+                if authenticated {
+                    break;
+                }
+            }
+
+            if !authenticated {
+                return Err(format!(
+                    "SSH authentication failed for user '{}' on {}:{} — {}. Tried: {}.",
+                    user_s,
+                    host_s,
+                    port,
+                    last_reason,
+                    tried.join(", ")
+                ));
             }
 
             let channel = session.channel_open_session().await
@@ -1011,4 +1190,52 @@ fn format_octal_permissions(mode: u32, is_dir: bool) -> String {
     s.push(if mode & 0o001 != 0 { 'x' } else { '-' });
 
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_profile_with_a_password_also_tries_the_password() {
+        // The regression: a profile saved as "key" whose key the server no
+        // longer accepts must still fall back to the saved password instead of
+        // failing with a bare "key was rejected".
+        assert_eq!(
+            plan_auth_attempts("key", true, true),
+            vec![AuthAttempt::PublicKey, AuthAttempt::Password, AuthAttempt::KeyboardInteractive]
+        );
+    }
+
+    #[test]
+    fn password_profile_with_a_key_also_tries_the_key() {
+        assert_eq!(
+            plan_auth_attempts("password", true, true),
+            vec![AuthAttempt::Password, AuthAttempt::KeyboardInteractive, AuthAttempt::PublicKey]
+        );
+    }
+
+    #[test]
+    fn key_only_profile_does_not_invent_a_password_attempt() {
+        assert_eq!(
+            plan_auth_attempts("key", false, true),
+            vec![AuthAttempt::PublicKey]
+        );
+    }
+
+    #[test]
+    fn empty_profile_plans_nothing() {
+        assert!(plan_auth_attempts("password", false, false).is_empty());
+        assert!(plan_auth_attempts("", false, false).is_empty());
+    }
+
+    #[test]
+    fn auth_type_spellings_are_recognised() {
+        for spelling in ["key", "KEY", " publickey ", "Public_Key", "ssh-key", "privatekey", "cert"] {
+            assert!(is_key_auth_type(spelling), "{} should mean key auth", spelling);
+        }
+        for spelling in ["password", "passwd", "", "keyboard-interactive"] {
+            assert!(!is_key_auth_type(spelling), "{} should mean password auth", spelling);
+        }
+    }
 }

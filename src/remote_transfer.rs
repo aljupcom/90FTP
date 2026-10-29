@@ -465,7 +465,7 @@ pub fn build_direct_transfer_command(task: &RemoteTransferTask) -> (String, Stri
     // in BatchMode, causing `scp`/`ssh` to fail immediately with
     // `Permission denied (publickey,password)`. Instead, disable pubkey probing
     // so `sshpass` receives the password prompt immediately.
-    let has_password = !task.target_pass.is_empty() && task.target_auth_type != "key";
+    let has_password = !task.target_pass.is_empty();
     let ssh_opts = if has_password {
         "-o StrictHostKeyChecking=accept-new -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive -o ConnectTimeout=20"
     } else {
@@ -533,7 +533,10 @@ pub fn execute_transfer_thread(
 ) {
     let emit_log = |msg: &str, kind: &str| {
         if let Some(ref cb) = exec_script {
-            let payload = json!({ "text": msg, "kind": kind });
+            // Redact before the text leaves Rust: the transfer log is visible on
+            // screen and is the one place a leaked credential would be copied
+            // straight into a screenshot or a support ticket.
+            let payload = json!({ "text": crate::logger::redact(msg), "kind": kind });
             let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
             cb(format!(
                 "if(window.onRemoteTransferLog) window.onRemoteTransferLog({});",
@@ -589,7 +592,7 @@ pub fn execute_transfer_thread(
 
     let emit_error = |err: &str| {
         if let Some(ref cb) = exec_script {
-            let payload = json!({ "error": err });
+            let payload = json!({ "error": crate::logger::redact(err) });
             let json_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
             cb(format!(
                 "if(window.onRemoteTransferError) window.onRemoteTransferError({});",
@@ -631,32 +634,40 @@ pub fn execute_transfer_thread(
     // 1. Direct Server-to-Server Attempt (if source is remote SSH, target is SSH, and mode is direct or auto)
     if task.source_is_remote && (task.target_protocol == "scp" || task.target_protocol == "sftp" || task.target_protocol == "ssh") {
         if let Some(ref src) = source_client {
-            /* `scp` runs on the *source* server, so it can only authenticate to
-               the destination with a password, or with a private key that is
-               already installed on that server. The key chosen in this dialog
-               lives on this PC — which is why key auth in auto mode always
-               ended in "Permission denied (publickey)" after a wasted round
-               trip. Skip the attempt when it cannot possibly work. */
+            /* `scp` runs on the *source* server, so the credential that matters
+               there is not the one saved in this dialog: a private key stored on
+               this PC is invisible to that command. That is exactly why key-only
+               sites always ended in "Permission denied (publickey)" after a
+               wasted round trip. What the source server *can* use is either the
+               password we hand to sshpass, or a key that already lives on that
+               server — so probe for the second instead of assuming it. */
             let wants_direct = task.transfer_mode == "direct_scp"
                 || task.transfer_mode == "direct_rsync"
                 || task.transfer_mode == "auto";
-            let explicit_direct = task.transfer_mode == "direct_scp"
-                || task.transfer_mode == "direct_rsync";
-            let password_auth = !task.target_pass.is_empty() && task.target_auth_type != "key";
+            let password_auth = !task.target_pass.is_empty();
 
-            if wants_direct && !password_auth && !explicit_direct {
+            let mut server_side_key = false;
+            if wants_direct && !password_auth {
+                let probe = format!(
+                    "ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -p {} {}@{} true",
+                    task.target_port, task.target_user, task.target_host
+                );
+                server_side_key = matches!(src.exec_command_clean(&probe), Ok((0, _)));
+            }
+
+            if wants_direct && !password_auth && !server_side_key {
                 emit_log(
-                    "Direct transfer skipped: it needs a password, or a key already installed on the source server. Using the Stream Relay Bridge.",
-                    "info",
+                    "Direct transfer cannot use the SSH key saved for this site: the key is stored on this computer, but the copy command runs on the source server. Continuing with the Stream Relay Bridge, which uses these credentials directly. Add a password to the site to enable direct mode.",
+                    "warning",
                 );
             }
 
-            if wants_direct && (password_auth || explicit_direct) {
+            if wants_direct && (password_auth || server_side_key) {
                 emit_log("Attempting direct Server-to-Server transfer via native remote command...", "info");
 
                 // If password authentication is required for direct SCP/rsync, check for sshpass first
                 let mut can_try_direct = true;
-                let has_password = !task.target_pass.is_empty() && task.target_auth_type != "key";
+                let has_password = !task.target_pass.is_empty();
                 if has_password {
                     let mut has_sshpass = match src.exec_command_clean("command -v sshpass || which sshpass") {
                         Ok((0, out)) => !out.trim().is_empty() && !out.contains("not found"),
@@ -816,7 +827,11 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
                             };
 
                             emit_log(&err_msg, if auth_refused { "info" } else { "warning" });
-                            if task.transfer_mode != "auto" {
+                            // A refused credential is not a transfer failure: the
+                            // relay below authenticates from this machine, which is
+                            // where the saved credentials actually live. Only a real
+                            // transfer error should stop an explicit direct run.
+                            if task.transfer_mode != "auto" && !auth_refused {
                                 emit_error(&err_msg);
                                 return;
                             }

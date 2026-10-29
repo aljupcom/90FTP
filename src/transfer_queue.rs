@@ -119,7 +119,9 @@ impl Task {
             "size": self.size,
             "bytes": self.bytes,
             "attempts": self.attempts,
-            "error": self.error,
+            // Failures are surfaced in the transfer list, which is part of the
+            // visible UI: mask anything credential-shaped before it leaves Rust.
+            "error": self.error.as_deref().map(crate::logger::redact),
         })
     }
 }

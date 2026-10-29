@@ -23,6 +23,15 @@ impl RemoteClient {
         passphrase: Option<&str>,
         trust_host: bool,
     ) -> Result<Self, String> {
+        // Every connection in the app funnels through here, so this is the one
+        // place that has to remember the live credentials for the log redactor.
+        // Registering them means a password echoed by a remote command or a
+        // server error can never reach the log in clear text.
+        crate::logger::register_secret(pass);
+        if let Some(pp) = passphrase {
+            crate::logger::register_secret(pp);
+        }
+
         match protocol.to_lowercase().as_str() {
             "ftp" => {
                 let actual_port = if port == 0 { 21 } else { port };
