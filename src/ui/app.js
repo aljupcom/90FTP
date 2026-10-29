@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.78';
+    let APP_CURRENT_VERSION = '0.0.0.79';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -5149,7 +5149,10 @@ window.onerror = function(msg, url, line, col, error) {
             // configured parallelism, so a folder of 200 files no longer uploads
             // strictly one at a time while the UI sits idle.
             const queued = await enqueueTransfer('upload', item.abs_path, itemDest, true);
-            if (queued) uploadedFiles++;
+            if (queued) {
+              uploadedFiles++;
+              rememberTransferPath(queued, folderName, itemDest, baseRemote);
+            }
           }
         }
 
@@ -5260,7 +5263,10 @@ window.onerror = function(msg, url, line, col, error) {
             }
 
             const queued = await enqueueTransfer('download', itemDest, item.remote_path, true);
-            if (queued) downloadedFiles++;
+            if (queued) {
+              downloadedFiles++;
+              rememberTransferPath(queued, folderName, itemDest, baseLocal);
+            }
           }
         }
 
@@ -8884,13 +8890,35 @@ window.onerror = function(msg, url, line, col, error) {
     let transferAutoClearTimer = null;
     let transferPaneRefreshTimer = null;
 
+    /* A folder transfer is queued one file at a time, so the Rust queue only
+       ever sees absolute paths and the row would read "app.js" with no hint of
+       which folder it belongs to. The folder-relative path is known here at
+       enqueue time and nowhere else, so it is remembered by task id. */
+    const transferDisplayPaths = new Map();
+
     window.onTransferEvent = function (snap) {
       applyTransferSnapshot(snap);
     };
 
+    function rememberTransferPath(taskId, rootName, fullDest, baseDir) {
+      if (!taskId) return;
+      let rel = String(fullDest || '');
+      if (baseDir && rel.startsWith(baseDir)) rel = rel.slice(baseDir.length);
+      rel = rel.replace(/^[\\/]+/, '').replace(/\\/g, '/');
+      if (!rel) return;
+      transferDisplayPaths.set(taskId, rootName ? rootName + '/' + rel : rel);
+    }
+
     function transferName(task) {
-      const source = task.kind === 'upload' ? task.local_path : task.remote_path;
-      return String(source || '').split(/[\\/]/).pop() || source || '(unnamed)';
+      const mapped = transferDisplayPaths.get(task.id);
+      if (mapped) return mapped;
+      const source = String((task.kind === 'upload' ? task.local_path : task.remote_path) || '');
+      const parts = source.split(/[\\/]/).filter(Boolean);
+      if (parts.length === 0) return '(unnamed)';
+      /* Fall back to "parent/file" so a row never loses its folder context —
+         this covers single-file transfers and re-queued tasks, whose folder
+         root was never recorded. */
+      return parts.length >= 2 ? parts.slice(-2).join('/') : parts[0];
     }
 
     function transferSource(task) {
@@ -8917,6 +8945,16 @@ window.onerror = function(msg, url, line, col, error) {
 
       transferTasks = Array.isArray(snap.tasks) ? snap.tasks : [];
       if (snap.settings) transferSettings = snap.settings;
+
+      /* Forget remembered paths once the queue drops the task, otherwise the
+         map grows for the whole session. */
+      if (transferDisplayPaths.size > 0) {
+        const live = new Set();
+        for (const task of transferTasks) live.add(task.id);
+        for (const id of transferDisplayPaths.keys()) {
+          if (!live.has(id)) transferDisplayPaths.delete(id);
+        }
+      }
 
       let sawCompletion = false;
       for (const task of transferTasks) {
@@ -9164,6 +9202,30 @@ window.onerror = function(msg, url, line, col, error) {
       return '<div style="display: flex; gap: 4px; justify-content: center;">' + parts.join('') + '</div>';
     }
 
+    /* Active work belongs at the top. The queue is FIFO, so after a folder
+       upload the hundreds of finished rows sit above the two that still run.
+       Ranking only reorders rows: the task's own index in `transferTasks` is
+       carried through, because the context menu looks the task up by index. */
+    const TRANSFER_STATE_RANK = {
+      running: 0,
+      paused: 1,
+      pending: 2,
+      failed: 3,
+      cancelled: 4,
+      completed: 5
+    };
+
+    function orderedTransferEntries() {
+      return transferTasks
+        .map((task, index) => ({ task: task, index: index }))
+        .sort((a, b) => {
+          const ra = TRANSFER_STATE_RANK[a.task.state];
+          const rb = TRANSFER_STATE_RANK[b.task.state];
+          const diff = (ra === undefined ? 9 : ra) - (rb === undefined ? 9 : rb);
+          return diff !== 0 ? diff : a.index - b.index;
+        });
+    }
+
     function renderTransfersTable() {
       const tbody = document.getElementById('transfersList');
       if (!tbody) return;
@@ -9172,7 +9234,9 @@ window.onerror = function(msg, url, line, col, error) {
         return;
       }
 
-      tbody.innerHTML = transferTasks.map((task, idx) => {
+      tbody.innerHTML = orderedTransferEntries().map((entry, rowIdx) => {
+        const task = entry.task;
+        const idx = entry.index;
         const isUpload = task.kind === 'upload';
         const typeBadge = isUpload
           ? '<span style="color: #38bdf8; font-weight: 700; font-size: 12px;">▲ UP</span>'
@@ -9212,9 +9276,9 @@ window.onerror = function(msg, url, line, col, error) {
           : (task.size ? percent + '%' : formatBytes(task.bytes || 0));
 
         return '<tr oncontextmenu="openContextMenu(event, \'transfer_item\', transferTasks[' + idx + '])" style="cursor: context-menu;">'
-          + '<td style="text-align: center; color: var(--text-dim); font-size: 12px;">' + (idx + 1) + '</td>'
+          + '<td style="text-align: center; color: var(--text-dim); font-size: 12px;">' + (rowIdx + 1) + '</td>'
           + '<td>' + typeBadge + '</td>'
-          + '<td style="font-weight: 600; color: var(--text-main); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(transferName(task)) + '">'
+          + '<td style="font-weight: 600; color: var(--text-main); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(transferSource(task)) + '">'
           + iconPrefix + escapeHtml(transferName(task))
           + '</td>'
           + '<td style="color: var(--text-dim); font-size: 12px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(transferSource(task)) + ' ➔ ' + escapeHtml(transferDestination(task)) + '">'

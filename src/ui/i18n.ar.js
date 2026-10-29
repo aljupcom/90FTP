@@ -946,5 +946,6 @@ window.I18N_AR = {
   "top.palette_hint": "Ctrl+K",
   "top.terminal_ssh": "فتح طرفية بعيدة (SSH في المسار الحالي)",
   "transfers.empty": "لا عمليات نقل نشطة أو في الانتظار",
-  "transfers.source_target": "المصدر ← الهدف"
+  "transfers.source_target": "المصدر ← الهدف",
+  "transfers.col_path": "الملف / المسار"
 };
