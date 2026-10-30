@@ -37,6 +37,8 @@ use crate::models::IpcRequest;
 pub enum IpcTarget {
     Main,
     Terminal,
+    /// The dedicated Site Transfer window.
+    Transfer,
     Broadcast,
 }
 
@@ -47,6 +49,8 @@ enum AppEvent {
     /// Reveal the main window. Sent by the page once its first frame is ready,
     /// or by the safety-net timer if that signal never arrives.
     ShowMainWindow,
+    /// Open (or focus) the standalone Site Transfer window.
+    OpenSiteTransfer(serde_json::Value),
 }
 
 fn main() {
@@ -93,7 +97,13 @@ fn main() {
             let _ = proxy_term.send_event(AppEvent::OpenNativeTerminal(params));
         })
     };
-    let app_state = Arc::new(AppState::new(Some(proxy_cb), Some(term_cb)));
+    let proxy_xfer = proxy.clone();
+    let transfer_cb = {
+        Arc::new(move |params: serde_json::Value| {
+            let _ = proxy_xfer.send_event(AppEvent::OpenSiteTransfer(params));
+        })
+    };
+    let app_state = Arc::new(AppState::new(Some(proxy_cb), Some(term_cb), Some(transfer_cb)));
 
     // The application script lives in `ui/app.js` and is injected here so the
     // page stays a single self-contained document: WebView2 loads it through
@@ -186,6 +196,7 @@ fn main() {
     });
 
     let mut terminal_instance: Option<(tao::window::Window, wry::WebView)> = None;
+    let mut transfer_instance: Option<(tao::window::Window, wry::WebView)> = None;
 
     event_loop.run(move |event, event_loop_target, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -208,6 +219,13 @@ fn main() {
                             }
                         }
                     }
+                    IpcTarget::Transfer => {
+                        if let Some((_, ref xfer_wv)) = transfer_instance {
+                            if let Err(e) = xfer_wv.evaluate_script(&script) {
+                                logger::log_error(&format!("Transfer WebView evaluate_script error: {:?}", e));
+                            }
+                        }
+                    }
                     IpcTarget::Broadcast => {
                         if let Err(e) = webview.evaluate_script(&script) {
                             logger::log_error(&format!("Main WebView evaluate_script error: {:?}", e));
@@ -215,6 +233,11 @@ fn main() {
                         if let Some((_, ref term_wv)) = terminal_instance {
                             if let Err(e) = term_wv.evaluate_script(&script) {
                                 logger::log_error(&format!("Terminal WebView evaluate_script error: {:?}", e));
+                            }
+                        }
+                        if let Some((_, ref xfer_wv)) = transfer_instance {
+                            if let Err(e) = xfer_wv.evaluate_script(&script) {
+                                logger::log_error(&format!("Transfer WebView evaluate_script error: {:?}", e));
                             }
                         }
                     }
@@ -300,6 +323,86 @@ fn main() {
                     }
                 }
             }
+            Event::UserEvent(AppEvent::OpenSiteTransfer(params)) => {
+                let title = "90FTP - Site Transfer";
+
+                if let Some((ref xfer_win, ref xfer_wv)) = transfer_instance {
+                    xfer_win.set_title(title);
+                    xfer_win.set_visible(true);
+                    xfer_win.set_focus();
+                    // Re-opening with a different selection refreshes the summary
+                    // instead of leaving the previous one on screen.
+                    let _ = xfer_wv.evaluate_script(&format!(
+                        "if(window.applyInit)window.applyInit({});",
+                        params
+                    ));
+                } else {
+                    let mut xfer_builder = WindowBuilder::new()
+                        .with_title(title)
+                        .with_inner_size(LogicalSize::new(1180.0, 800.0))
+                        .with_min_inner_size(LogicalSize::new(720.0, 480.0))
+                        .with_resizable(true);
+
+                    #[cfg(target_os = "windows")]
+                    {
+                        if let Ok(icon) = tao::window::Icon::from_resource(1, None)
+                            .or_else(|_| tao::window::Icon::from_path("assets/app_icon.ico", None))
+                        {
+                            xfer_builder = xfer_builder.with_window_icon(Some(icon));
+                        }
+                    }
+
+                    if let Ok(xfer_win) = xfer_builder.build(event_loop_target) {
+                        let app_state_xfer = app_state.clone();
+                        let proxy_xfer = proxy.clone();
+                        let xfer_ipc_handler = move |req: wry::http::Request<String>| {
+                            let body = req.body().clone();
+                            let app_state = app_state_xfer.clone();
+                            let proxy = proxy_xfer.clone();
+
+                            std::thread::spawn(move || {
+                                match serde_json::from_str::<IpcRequest>(&body) {
+                                    Ok(ipc_req) => {
+                                        let resp = app_state.handle_request(ipc_req);
+                                        if let Ok(resp_json) = serde_json::to_string(&resp) {
+                                            let script = format!(
+                                                "if(window.onRustResponse)window.onRustResponse({});",
+                                                resp_json
+                                            );
+                                            let _ = proxy.send_event(AppEvent::ExecScript(IpcTarget::Transfer, script));
+                                        }
+                                    }
+                                    Err(e) => {
+                                        logger::log_error(&format!(
+                                            "Failed to parse site-transfer IPC request: {:?}. Body: {}",
+                                            e, body
+                                        ));
+                                    }
+                                }
+                            });
+                        };
+
+                        let xfer_html = include_str!("ui/transfer.html")
+                            .replace("// __I18N_EN__", include_str!("ui/i18n.en.js"))
+                            .replace("// __I18N_AR__", include_str!("ui/i18n.ar.js"))
+                            .replace("// __I18N_JS__", include_str!("ui/i18n.js"))
+                            .replace("// __TRANSFER_JS__", include_str!("ui/transfer.js"));
+
+                        let init_script = format!("window.__INIT__ = {};", params);
+
+                        if let Ok(xfer_wv) = WebViewBuilder::new_with_web_context(&mut context)
+                            .with_devtools(cfg!(debug_assertions))
+                            .with_background_color((17, 17, 19, 255))
+                            .with_initialization_script(&init_script)
+                            .with_html(xfer_html)
+                            .with_ipc_handler(xfer_ipc_handler)
+                            .build(&xfer_win)
+                        {
+                            transfer_instance = Some((xfer_win, xfer_wv));
+                        }
+                    }
+                }
+            }
             Event::WindowEvent {
                 window_id,
                 event: WindowEvent::CloseRequested,
@@ -319,6 +422,10 @@ fn main() {
                 } else if let Some((ref term_win, _)) = terminal_instance {
                     if window_id == term_win.id() {
                         term_win.set_visible(false);
+                    }
+                } else if let Some((ref xfer_win, _)) = transfer_instance {
+                    if window_id == xfer_win.id() {
+                        xfer_win.set_visible(false);
                     }
                 }
             }

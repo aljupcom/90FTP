@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>90FTP - Site Transfer</title>
+<style>
+  :root {
+    --bg-app: #111113;
+    --bg-panel: #17181c;
+    --bg-card: #1b1d24;
+    --bg-input: #12141a;
+    --bg-log: #0b1120;
+    --border: #2a2d36;
+    --border-soft: #23262e;
+    --text: #e6e9ef;
+    --text-muted: #9aa3b2;
+    --text-dim: #6b7280;
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.12);
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+    --radius: 8px;
+  }
+  html[data-lang="ar"] { --font-ui: "Thmanyah", "Segoe UI", system-ui, sans-serif; }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg-app);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  body.lang-switching * { transition: none !important; }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    flex: none;
+  }
+  .topbar .logo {
+    width: 22px; height: 22px; border-radius: 5px;
+    background: linear-gradient(135deg, var(--accent), #0ea5e9);
+    display: grid; place-items: center;
+    color: #06131c; font-weight: 800; font-size: 11px;
+  }
+  .topbar h1 { font-size: 13.5px; font-weight: 600; margin: 0; letter-spacing: .2px; }
+  .topbar .sub { color: var(--text-dim); font-size: 11.5px; }
+  .topbar .spacer { flex: 1; }
+  .chip {
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(56,189,248,.3);
+    white-space: nowrap;
+  }
+  .chip.idle { background: rgba(148,163,184,.1); color: var(--text-muted); border-color: var(--border); }
+
+  .layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(430px, 1fr) minmax(330px, 420px);
+    gap: 9px;
+    padding: 9px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; overflow-y: auto; }
+  }
+  .col { display: flex; flex-direction: column; gap: 9px; min-height: 0; overflow-y: auto; padding-inline-end: 2px; }
+  .col.right { min-height: 0; }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 10px 11px;
+    min-width: 0;
+  }
+  .card.grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .card-head {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 11.5px; font-weight: 700; letter-spacing: .4px;
+    text-transform: uppercase; color: var(--text-dim);
+    margin-bottom: 7px;
+  }
+  .card-head .num {
+    width: 17px; height: 17px; border-radius: 4px;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-size: 10.5px;
+  }
+
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row + .row { margin-top: 7px; }
+  .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+  .field > label { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; height: 28px; padding: 0 8px;
+    background: var(--bg-input); color: var(--text);
+    border: 1px solid var(--border); border-radius: 5px;
+    font-family: inherit; font-size: 12.5px;
+    min-width: 0;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  select:disabled, input:disabled { opacity: .5; cursor: not-allowed; }
+  .mono { font-family: var(--font-mono); direction: ltr; text-align: left; }
+
+  .source-summary {
+    font-family: var(--font-mono); font-size: 12px; direction: ltr; text-align: left;
+    background: var(--bg-input); border: 1px solid var(--border-soft);
+    border-radius: 5px; padding: 6px 9px;
+    color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .hint { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; }
+
+  /* ---- engine picker ---- */
+  .engines { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .engine {
+    position: relative; display: flex; gap: 8px; align-items: flex-start;
+    padding: 7px 9px; border-radius: 6px; cursor: pointer;
+    background: var(--bg-input); border: 1px solid var(--border);
+    transition: border-color .12s, background .12s;
+  }
+  .engine:hover { border-color: #3a4050; }
+  .engine input { position: absolute; opacity: 0; pointer-events: none; }
+  .engine .dot {
+    width: 13px; height: 13px; border-radius: 50%; flex: none; margin-top: 2px;
+    border: 2px solid var(--border); background: transparent;
+  }
+  .engine .meta { min-width: 0; }
+  .engine .name { font-size: 12.5px; font-weight: 600; display: block; }
+  .engine .desc { font-size: 11px; color: var(--text-dim); display: block; margin-top: 1px; }
+  .engine.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .engine.selected .dot { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 2px var(--bg-card); }
+  .engine.disabled { opacity: .42; cursor: not-allowed; }
+
+  .engine-options {
+    margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--border);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .engine-options .field.hidden { display: none; }
+  .opt-note {
+    grid-column: 1 / -1; font-size: 11.5px; color: var(--text-muted);
+    background: rgba(56,189,248,.06); border-inline-start: 2px solid rgba(56,189,248,.45);
+    border-radius: 4px; padding: 5px 8px; text-align: start;
+  }
+  .check-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-muted); }
+  .check-row input { accent-color: var(--accent); width: 14px; height: 14px; }
+
+  /* ---- run panel ---- */
+  .progress-wrap { margin-bottom: 8px; }
+  .track {
+    position: relative; height: 20px; border-radius: 5px; overflow: hidden;
+    background: #0d1017; border: 1px solid var(--border);
+  }
+  .bar {
+    position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 0%;
+    background: linear-gradient(90deg, #0ea5e9, var(--accent));
+    transition: width .25s ease;
+  }
+  .bar::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+    animation: sweep 1.4s linear infinite;
+  }
+  .bar.idle::after { display: none; }
+  @keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+  .pct {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 700;
+    color: #eaf6ff; text-shadow: 0 1px 2px rgba(0,0,0,.55); direction: ltr;
+  }
+  .stats {
+    display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px;
+    font-family: var(--font-mono); font-size: 11.5px; direction: ltr; text-align: left;
+    color: var(--text-muted);
+  }
+  .current-file {
+    font-family: var(--font-mono); font-size: 11.5px; direction: ltr; text-align: left;
+    color: var(--accent); margin-top: 5px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .log {
+    flex: 1; min-height: 120px; overflow-y: auto;
+    background: var(--bg-log); border: 1px solid var(--border);
+    border-radius: 5px; padding: 5px 0;
+    font-family: var(--font-mono); font-size: 11.5px; line-height: 1.45;
+    direction: ltr; text-align: left;
+  }
+  .log-line {
+    display: flex; gap: 7px; padding: 1px 8px;
+    border-inline-start: 2px solid transparent;
+    word-break: break-word;
+  }
+  .log-line .ts { color: #475569; flex: none; }
+  .log-line .msg { white-space: pre-wrap; color: #94a3b8; }
+  .log-line[data-kind=success] { border-inline-start-color: var(--success); }
+  .log-line[data-kind=success] .msg { color: #86efac; }
+  .log-line[data-kind=warning] { border-inline-start-color: var(--warning); }
+  .log-line[data-kind=warning] .msg { color: #fcd34d; }
+  .log-line[data-kind=error] { border-inline-start-color: var(--danger); }
+  .log-line[data-kind=error] .msg { color: #fca5a5; }
+  .log-line[data-kind=info] { border-inline-start-color: #334155; }
+
+  .actions { display: flex; gap: 8px; margin-top: 9px; flex: none; }
+  .btn {
+    height: 30px; padding: 0 14px; border-radius: 5px; cursor: pointer;
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+    border: 1px solid var(--border); background: var(--bg-input); color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px; justify-content: center;
+  }
+  .btn:hover:not(:disabled) { border-color: #3a4050; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #06131c; }
+  .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn.danger { color: var(--danger); border-color: rgba(239,68,68,.4); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn .spin {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid rgba(6,19,28,.35); border-top-color: #06131c;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .status-line { font-size: 11.5px; color: var(--text-muted); min-height: 16px; margin-top: 7px; }
+  .status-line.ok { color: var(--success); }
+  .status-line.err { color: var(--danger); }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3d4453; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo">90</div>
+    <div>
+      <h1 data-i18n="st.title">Site Transfer</h1>
+      <div class="sub" data-i18n="st.subtitle">Server-to-server transfer tool</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="chip idle" id="engineChip">—</span>
+  </div>
+
+  <div class="layout">
+    <div class="col">
+      <!-- 1. Source -->
+      <section class="card">
+        <div class="card-head"><span class="num">1</span><span data-i18n="st.source">Source</span></div>
+        <div class="source-summary" id="sourceSummary">—</div>
+        <div class="hint" id="sourceHint" data-i18n="st.source_hint">Change the selection in the main window and reopen this tool.</div>
+      </section>
+
+      <!-- 2. Destination -->
+      <section class="card">
+        <div class="card-head"><span class="num">2</span><span data-i18n="st.destination">Destination server</span></div>
+        <div class="row">
+          <div class="field" style="flex: 0 0 118px;">
+            <label data-i18n="st.protocol">Protocol</label>
+            <select id="protocol" onchange="onProtocolChange()">
+              <option value="sftp" data-i18n="proto.sftp">SFTP (SSH)</option>
+              <option value="ftp" data-i18n="proto.ftp">FTP</option>
+              <option value="ftps" data-i18n="proto.ftps">FTPS (implicit)</option>
+              <option value="ftpsi" data-i18n="proto.ftpsi">FTPS (explicit)</option>
+              <option value="webdav" data-i18n="proto.webdav">WebDAV (HTTP)</option>
+              <option value="webdavs" data-i18n="proto.webdavs">WebDAV (HTTPS)</option>
+            </select>
+          </div>
+          <div class="field" style="flex: 2;">
+            <label data-i18n="st.saved_site">Saved site</label>
+            <select id="savedSite" onchange="onSavedSiteChange()"></select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field" style="flex: 2;">
+            <label data-i18n="st.host">Host</label>
+            <input type="text" id="host" class="mono" placeholder="example.com" autocomplete="off">
+          </div>
+          <div class="field" style="flex: 0 0 82px;">
+            <label data-i18n="st.port">Port</label>
+            <input type="number" id="port" class="mono" value="22" min="1" max="65535">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label data-i18n="st.user">Username</label>
+            <input type="text" id="username" class="mono" autocomplete="off">
+          </div>
+          <div class="field">
+            <label data-i18n="st.password">Password</label>
+            <input type="password" id="password" autocomplete="off">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label data-i18n="st.target_path">Destination path</label>
+            <input type="text" id="targetPath" class="mono" value="/">
+          </div>
+          <button class="btn" id="btnVerify" onclick="verifyTarget()" style="flex: none;">
+            <span data-i18n="st.verify">Verify</span>
+          </button>
+        </div>
+        <div class="status-line" id="verifyStatus"></div>
+      </section>
+
+      <!-- 3. Engine -->
+      <section class="card">
+        <div class="card-head"><span class="num">3</span><span data-i18n="st.engine">Transfer engine</span></div>
+        <div class="engines" id="engines">
+          <label class="engine selected" data-mode="auto">
+            <input type="radio" name="mode" value="auto" checked>
+            <span class="dot"></span>
+            <span class="meta">
+              <span class="name" data-i18n="st.mode_auto">Automatic</span>
+              <span class="desc" data-i18n="st.mode_auto_desc">Direct first, then the archive, then the relay</span>
+            </span>
+          </label>
+          <label class="engine" data-mode="direct_scp">
+            <input type="radio" name="mode" value="direct_scp">
+            <span class="dot"></span>
+            <span class="meta">
+              <span class="name" data-i18n="st.mode_stream">Direct SSH stream</span>
+              <span class="desc" data-i18n="st.mode_stream_desc">tar over SSH with live byte progress</span>
+            </span>
+          </label>
+          <label class="engine" data-mode="direct_rsync">
+            <input type="radio" name="mode" value="direct_rsync">
+            <span class="dot"></span>
+            <span class="meta">
+              <span class="name" data-i18n="st.mode_rsync">Direct Rsync</span>
+              <span class="desc" data-i18n="st.mode_rsync_desc">Sends only the differences</span>
+            </span>
+          </label>
+          <label class="engine" data-mode="stream_relay">
+            <input type="radio" name="mode" value="stream_relay">
+            <span class="dot"></span>
+            <span class="meta">
+              <span class="name" data-i18n="st.mode_relay">Stream Relay</span>
+              <span class="desc" data-i18n="st.mode_relay_desc">Through this computer, always works</span>
+            </span>
+          </label>
+        </div>
+
+        <div class="engine-options">
+          <div class="field" id="compressionField">
+            <label data-i18n="st.compression">Compression</label>
+            <select id="compression">
+              <option value="none" data-i18n="st.comp_none">None — single stream</option>
+              <option value="gzip" data-i18n="st.comp_gzip">gzip — temporary archive</option>
+              <option value="zstd" data-i18n="st.comp_zstd">zstd — fastest archive</option>
+            </select>
+          </div>
+          <div class="field hidden" id="workersField">
+            <label data-i18n="st.workers">Parallel connections</label>
+            <select id="workers">
+              <option value="0" data-i18n="st.workers_auto">Automatic</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+              <option value="16">16</option>
+            </select>
+          </div>
+          <div class="opt-note" id="engineNote"></div>
+          <div class="field" style="grid-column: 1 / -1; gap: 6px;">
+            <label class="check-row"><input type="checkbox" id="recursive" checked>
+              <span data-i18n="st.recursive">Include subdirectories</span></label>
+            <label class="check-row"><input type="checkbox" id="overwrite" checked>
+              <span data-i18n="st.overwrite">Overwrite existing files</span></label>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="col right">
+      <section class="card grow">
+        <div class="card-head"><span class="num">4</span><span data-i18n="st.run">Transfer</span></div>
+
+        <div class="progress-wrap">
+          <div class="track">
+            <div class="bar idle" id="bar"></div>
+            <div class="pct" id="pct">0%</div>
+          </div>
+          <div class="current-file" id="currentFile">—</div>
+          <div class="stats">
+            <span id="filesRatio">0 / 0</span>
+            <span id="bytesRatio">0 B / 0 B</span>
+            <span id="speed">—</span>
+            <span id="eta">ETA —</span>
+          </div>
+        </div>
+
+        <div class="log" id="log"></div>
+
+        <div class="actions">
+          <button class="btn primary" id="btnStart" onclick="startTransfer()" style="flex: 1;">
+            <span data-i18n="st.start">Start transfer</span>
+          </button>
+          <button class="btn danger" id="btnCancel" onclick="cancelTransfer()" style="display: none;">
+            <span data-i18n="st.cancel">Cancel</span>
+          </button>
+        </div>
+        <div class="status-line" id="footerStatus" data-i18n="st.ready">Ready</div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // The host injects __INIT__ before any page script runs. These defaults must
+    // never clobber it: the saved-site list lives inside __INIT__.sites, and an
+    // unconditional reset left the destination dropdown permanently empty.
+    window.__INIT__ = window.__INIT__ || { sources: [], is_remote: true, language: 'en' };
+    window.__SAVED_SITES__ = window.__SAVED_SITES__ ||
+      (Array.isArray(window.__INIT__.sites) ? window.__INIT__.sites : []);
+    window.__PROFILES__ = window.__PROFILES__ || { password: '', passphrase: '' };
+  </script>
+  <script>// __I18N_EN__</script>
+  <script>// __I18N_AR__</script>
+  <script>// __I18N_JS__</script>
+  <script>// __TRANSFER_JS__</script>
+</body>
+</html>

@@ -735,6 +735,11 @@ ssh: connect to host example.com port 22: Connection timed out\n\
     /// Runs `sh -n` over the generated script so a quoting mistake is caught
     /// here instead of on a customer's server. Skipped when no POSIX shell is
     /// available (a plain Windows CI box).
+    ///
+    /// The child is created with `CREATE_NO_WINDOW` and a null stdin. Without
+    /// those two, a test run from a GUI-subsystem binary opens a console window
+    /// that flashes and then fails with `ERROR_NO_DATA (0x800700E8)` — "the pipe
+    /// is being closed" — because there is no console to inherit handles from.
     fn assert_shell_parses(script: &str) {
         use std::io::Write;
         let dir = std::env::temp_dir().join(format!("90ftp-syntax-{}", std::process::id()));
@@ -747,7 +752,21 @@ ssh: connect to host example.com port 22: Connection timed out\n\
         let _ = file.write_all(script.as_bytes());
         drop(file);
 
-        let result = std::process::Command::new("sh").arg("-n").arg(&path).output();
+        let mut command = std::process::Command::new("sh");
+        command
+            .arg("-n")
+            .arg(&path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        let result = command.output();
         let _ = std::fs::remove_dir_all(&dir);
         match result {
             Ok(output) => {

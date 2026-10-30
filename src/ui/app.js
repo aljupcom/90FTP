@@ -52,7 +52,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.86';
+    let APP_CURRENT_VERSION = '0.0.0.87';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -12408,81 +12408,45 @@ window.onerror = function(msg, url, line, col, error) {
     let currentRtIsRemote = true;
     let isRtTransferActive = false;
 
+    /* The server-to-server transfer tool is its own native window now.
+       This function keeps its name because a dozen menu entries, context menus
+       and keyboard shortcuts call it, but all it does is hand the current
+       selection to that window — the modal it used to open is retired. */
     function openRemoteTransferModal(sourcePath = null, isRemote = null) {
       closeAllMenus();
 
       if (isRemote === null) {
-        /* `currentActivePane` was referenced here but never declared anywhere,
-           so every caller that omitted `isRemote` threw a ReferenceError and
-           the dialog simply did not open — the Transfer menu entry and the
-           Tools shortcut were dead. `lastActivePaneIsRemote` is the variable
-           the rest of the app actually maintains. */
         isRemote = !!lastActivePaneIsRemote;
       }
-      currentRtIsRemote = isRemote;
 
+      let sources;
       if (sourcePath) {
-        currentRtSources = [sourcePath];
+        sources = [sourcePath];
       } else {
         const sel = isRemote ? getSelectedRemoteItems() : getSelectedLocalItems();
         if (sel && sel.length > 0) {
-          currentRtSources = sel.map(item => item.path);
+          sources = sel.map(item => item.path);
         } else {
           const curDir = isRemote ? (currentRemotePath || '/') : (currentLocalPath || 'C:\\');
-          currentRtSources = curDir ? [curDir] : [];
+          sources = curDir ? [curDir] : [];
         }
       }
 
-      // Update Header info
-      const locBadge = document.getElementById('rtSourceLocationBadge');
-      if (locBadge) {
-        const hostName = currentConnectedProfile?.host || currentConnectedProfile?.name || 'Remote Host';
-        locBadge.textContent = isRemote ? `Remote Server (${hostName})` : 'Local PC';
-      }
-
-      const summaryEl = document.getElementById('rtSourceSummary');
-      if (summaryEl) {
-        if (currentRtSources.length === 0) {
-          summaryEl.textContent = 'No files or folders selected';
-        } else if (currentRtSources.length === 1) {
-          summaryEl.textContent = currentRtSources[0];
-          summaryEl.title = currentRtSources[0];
-        } else {
-          const names = currentRtSources.slice(0, 3).map(p => p.split(/[\\/]/).pop()).join(', ');
-          summaryEl.textContent = `${currentRtSources.length} items (${names}${currentRtSources.length > 3 ? '...' : ''})`;
-          summaryEl.title = currentRtSources.join('\n');
-        }
-      }
-
-      const countBadge = document.getElementById('rtItemsCountBadge');
-      if (countBadge) {
-        countBadge.textContent = `${currentRtSources.length} Item${currentRtSources.length === 1 ? '' : 's'}`;
-      }
-
-      populateRtSavedSitesDropdown();
-      updateRtModeOptions();
-
-      // Reset verification & progress status. A transfer that is still running
-      // keeps its busy button and its console; only a finished session resets.
-      const statusEl = document.getElementById('rtTargetVerifyStatus');
-      if (statusEl) statusEl.innerHTML = '';
-      const progSec = document.getElementById('rtProgressSection');
-      if (progSec && !isRtTransferActive) progSec.style.display = 'none';
-      const cancelBtn = document.getElementById('btnRtCancel');
-      if (cancelBtn) cancelBtn.style.display = isRtTransferActive ? 'inline-flex' : 'none';
-      setRtStartBusy(isRtTransferActive);
-      const logBox = document.getElementById('rtLogBox');
-      if (logBox && !isRtTransferActive) rtLogReset();
-      const footerStatus = document.getElementById('rtFooterStatus');
-      if (footerStatus && !isRtTransferActive) footerStatus.textContent = 'Ready to dispatch selected items';
-
-      const sshpassRow = document.getElementById('rtSshpassRow');
-      if (sshpassRow) {
-        updateRtSshpassVisibility();
-      }
-
-      const modal = document.getElementById('remoteTransferModal');
-      if (modal) modal.classList.add('active');
+      const profile = currentConnectedProfile || {};
+      sendRust('open_site_transfer', {
+        sources,
+        is_remote: !!isRemote,
+        sites: (savedSites || []).map(s => ({
+          id: s.id, name: s.name, protocol: s.protocol, host: s.host,
+          port: s.port, username: s.username, password: s.password,
+          remote_dir: s.remote_dir
+        })),
+        // Pre-filling the destination with the *source* host would send a site
+        // to itself, so only the user's own convention is carried over.
+        last_target: profile.host || ''
+      }).catch(err => {
+        showAppAlert('Could not open the Site Transfer window: ' + (err && err.message ? err.message : err));
+      });
     }
 
     async function closeRemoteTransferModal() {
