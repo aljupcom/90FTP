@@ -34,8 +34,6 @@ pub struct AppState {
     pub transfer_client: Arc<Mutex<Option<RemoteClient>>>,
     pub exec_script: Option<ScriptCallback>,
     pub open_terminal_window: Option<TerminalWindowCallback>,
-    /// Opens the dedicated Site Transfer window (its own native window).
-    pub open_transfer_window: Option<TerminalWindowCallback>,
     pub current_connection: Arc<Mutex<Option<serde_json::Value>>>,
     pub active_tab_id: Arc<Mutex<String>>,
     pub tab_sessions: Arc<Mutex<std::collections::HashMap<String, (Option<RemoteClient>, Option<serde_json::Value>)>>>,
@@ -54,7 +52,6 @@ impl AppState {
     pub fn new(
         exec_script: Option<ScriptCallback>,
         open_terminal_window: Option<TerminalWindowCallback>,
-        open_transfer_window: Option<TerminalWindowCallback>,
     ) -> Self {
         let current_connection: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
 
@@ -82,7 +79,6 @@ impl AppState {
             transfer_client: Arc::new(Mutex::new(None)),
             exec_script,
             open_terminal_window,
-            open_transfer_window,
             current_connection,
             active_tab_id: Arc::new(Mutex::new("rtab_1".to_string())),
             tab_sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -3038,28 +3034,6 @@ impl AppState {
                 }
 
                 IpcResponse::ok(id, action, params)
-            }
-
-            "open_site_transfer" => {
-                /* The site-transfer tool lives in its own native window: it is a
-                   job of its own, it needs room for the engine panel, and it must
-                   survive the main window being resized or navigated away. */
-                match self.open_transfer_window {
-                    Some(ref cb) => {
-                        let mut params = payload.clone();
-                        if !params.get("language").is_some() {
-                            if let Some(obj) = params.as_object_mut() {
-                                obj.insert(
-                                    "language".to_string(),
-                                    serde_json::json!(crate::ui_prefs::load().language),
-                                );
-                            }
-                        }
-                        cb(params);
-                        IpcResponse::ok(id, action, json!({ "opened": true }))
-                    }
-                    None => IpcResponse::err(id, action, "The transfer window is not available"),
-                }
             }
 
             "open_remote_terminal" => {
