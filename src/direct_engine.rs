@@ -229,6 +229,59 @@ pub fn build(task: &RemoteTransferTask, source_cwd: &str) -> ShipPlan {
     build_stream(task, source_cwd, compression)
 }
 
+/// A plan that only packs the tree on the source server.
+///
+/// Used when the two servers cannot talk to each other but the user asked for
+/// compression: the archive is built where the files already are, and this
+/// computer then carries that single file instead of tens of thousands of them.
+/// The archive is deliberately left behind (`KEEP`) so the caller can ship it.
+pub fn build_pack_only(
+    task: &RemoteTransferTask,
+    source_cwd: &str,
+    compression: Compression,
+) -> Option<ShipPlan> {
+    if compression == Compression::None {
+        return None;
+    }
+    let (create_flag, _) = match compression {
+        Compression::Gzip => ("-czf".to_string(), "-xzf".to_string()),
+        Compression::Zstd => ("--zstd -cf".to_string(), "--zstd -xf".to_string()),
+        Compression::None => return None,
+    };
+    let id = nonce();
+    let local_archive = format!("/tmp/.90ftp-{}.tar{}", id, compression.suffix());
+    let members = member_args(task, source_cwd);
+
+    let command = format!(
+        "__a={archive}\n\
+__keep=\n\
+trap '[ -n \"$__keep\" ] || rm -f \"$__a\"' EXIT INT TERM\n\
+echo \"{m}PHASE pack\"\n\
+( while [ -e \"$__a\" ]; do printf '{m}PACK %s\\n' \"$(wc -c < \"$__a\" 2>/dev/null || echo 0)\"; sleep 1; done ) & __w=$!\n\
+tar {create_flag} \"$__a\" {members}\n\
+__rc=$?\n\
+kill \"$__w\" 2>/dev/null; wait \"$__w\" 2>/dev/null\n\
+if [ $__rc -ne 0 ]; then echo \"{m}ERROR pack $__rc\"; exit $__rc; fi\n\
+__sz=$(wc -c < \"$__a\")\n\
+echo \"{m}ARCHIVE $__a $__sz\"\n\
+__keep=1\n\
+echo \"{m}KEEP $__a $__sz\"\n\
+exit 0",
+        archive = shell_quote(&local_archive),
+        m = MARKER,
+        create_flag = create_flag,
+        members = members,
+    );
+
+    Some(ShipPlan {
+        command,
+        display: format!("tar {} <temp-archive> {}  (pack only)", create_flag, members),
+        staging: true,
+        compression,
+        engine: "tar-pack",
+    })
+}
+
 fn build_rsync(task: &RemoteTransferTask, compression: Compression) -> ShipPlan {
     let sources = task
         .sources
@@ -353,7 +406,8 @@ fn build_stream(task: &RemoteTransferTask, source_cwd: &str, compression: Compre
 
     let body = format!(
         "__a={archive}\n\
-trap 'rm -f \"$__a\"; rm -f \"$__p\"' EXIT INT TERM\n\
+__keep=\n\
+trap '[ -n \"$__keep\" ] || rm -f \"$__a\"; rm -f \"$__p\"' EXIT INT TERM\n\
 echo \"{m}PHASE pack\"\n\
 ( while [ -e \"$__a\" ]; do printf '{m}PACK %s\\n' \"$(wc -c < \"$__a\" 2>/dev/null || echo 0)\"; sleep 1; done ) & __w=$!\n\
 tar {create_flag} \"$__a\" {members}\n\
@@ -361,10 +415,11 @@ __rc=$?\n\
 kill \"$__w\" 2>/dev/null; wait \"$__w\" 2>/dev/null\n\
 if [ $__rc -ne 0 ]; then echo \"{m}ERROR pack $__rc\"; exit $__rc; fi\n\
 __sz=$(wc -c < \"$__a\")\n\
+echo \"{m}ARCHIVE $__a $__sz\"\n\
 echo \"{m}PHASE ship $__sz\"\n\
 dd if=\"$__a\" bs=4M status=progress | {ship}\n\
 __rc=$?\n\
-if [ $__rc -ne 0 ]; then echo \"{m}ERROR ship $__rc\"; exit $__rc; fi\n\
+if [ $__rc -ne 0 ]; then __keep=1; echo \"{m}KEEP $__a $__sz\"; echo \"{m}ERROR ship $__rc\"; exit 92; fi\n\
 echo \"{m}PHASE extract\"\n\
 {transport}\n\
 __rc=$?\n\
@@ -413,8 +468,43 @@ fn ssh_invocation_display(task: &RemoteTransferTask, has_password: bool, remote_
     )
 }
 
-/// Extracts the byte count from a `dd status=progress` line.
+/// Reads `@90FTP:KEEP <path> <size>` out of the command output.
 ///
+/// The marker is printed only when the archive was built successfully and the
+/// shipping step failed, which is the one case where the archive is still worth
+/// reusing: the packing time is already spent and the file is complete.
+pub fn kept_archive(output: &str) -> Option<(String, u64)> {
+    let needle = format!("{}KEEP ", MARKER);
+    let mut found = None;
+    for line in output.split(['\n', '\r']) {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix(needle.as_str()) {
+            let mut parts = rest.split_whitespace();
+            if let Some(path) = parts.next() {
+                let size = parts
+                    .next()
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(0);
+                found = Some((path.to_string(), size));
+            }
+        }
+    }
+    found
+}
+
+/// The `tar` flags needed to unpack an archive the engine built earlier, read
+/// back from the file name so the two halves cannot drift apart.
+pub fn extract_flag_for(path: &str) -> &'static str {
+    if path.ends_with(".zst") {
+        "--zstd -xf"
+    } else if path.ends_with(".gz") {
+        "-xzf"
+    } else {
+        "-xf"
+    }
+}
+
+/// Extracts the byte count from a `dd status=progress` line.///
 /// The format is `123456789 bytes (123 MB, 118 MiB) copied, 12.3 s, 10.0 MB/s`
 /// and it is rewritten in place with `\r`, so a chunk may hold several updates.
 pub fn parse_dd_bytes(chunk: &str) -> Option<u64> {
@@ -593,8 +683,50 @@ mod tests {
     }
 
     #[test]
-    fn marker_buffer_reassembles_markers_split_across_chunks() {
-        let mut buffer = MarkerBuffer::default();
+    fn a_failed_ship_keeps_the_archive_and_reports_where_it_is() {
+        let plan = build(&task("direct_scp", "zstd"), "/var/www");
+        // The trap must not delete the archive when the keep flag is set.
+        assert!(plan.command.contains("__keep="));
+        assert!(plan.command.contains("KEEP $__a $__sz"));
+        assert!(plan.command.contains("exit 92"));
+    }
+
+    #[test]
+    fn reads_the_kept_archive_out_of_the_output() {
+        let output = "@90FTP:PHASE ship 4096\n\
+ssh: connect to host example.com port 22: Connection timed out\n\
+@90FTP:KEEP /tmp/.90ftp-abc.tar.zst 4096\n\
+@90FTP:ERROR ship 255\n";
+        assert_eq!(
+            kept_archive(output),
+            Some(("/tmp/.90ftp-abc.tar.zst".to_string(), 4096))
+        );
+        assert_eq!(kept_archive("nothing here"), None);
+    }
+
+    #[test]
+    fn extract_flags_follow_the_archive_suffix() {
+        assert_eq!(extract_flag_for("/tmp/a.tar.zst"), "--zstd -xf");
+        assert_eq!(extract_flag_for("/tmp/a.tar.gz"), "-xzf");
+        assert_eq!(extract_flag_for("/tmp/a.tar"), "-xf");
+    }
+
+    #[test]
+    fn pack_only_leaves_the_archive_and_never_tries_to_ship_it() {
+        let plan = build_pack_only(&task("direct_scp", "gzip"), "/var/www", Compression::Gzip)
+            .expect("a gzip plan");
+        assert!(plan.command.contains("tar -czf"));
+        assert!(plan.command.contains("KEEP $__a $__sz"));
+        // No transport at all: this plan stops after packing.
+        assert!(!plan.command.contains("dd if="));
+        assert!(!plan.command.contains("ssh "));
+        assert_shell_parses(&plan.command);
+
+        assert!(build_pack_only(&task("direct_scp", "none"), "/var/www", Compression::None).is_none());
+    }
+
+    #[test]
+    fn marker_buffer_reassembles_markers_split_across_chunks() {        let mut buffer = MarkerBuffer::default();
         assert!(buffer.feed("@90FTP:PHA").is_empty());
         let events = buffer.feed("SE ship 4096\n@90FTP:DONE 0\n");
         assert_eq!(events, vec!["PHASE ship 4096".to_string(), "DONE 0".to_string()]);

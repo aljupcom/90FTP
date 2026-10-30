@@ -974,7 +974,7 @@ window.I18N_EN = {
   "rt.compression_zstd": "zstd — fastest, requires zstd on both servers",
   "rt.workers": "Parallel connections:",
   "rt.workers_auto": "Automatic (recommended)",
-  "rt.hint_auto": "Tries a direct server-to-server stream first and falls back to the Stream Relay bridge on its own if that is not possible.",
+  "rt.hint_auto": "Tries a direct server-to-server stream first. If the two servers cannot reach each other, the tree is packed on the source and that single archive is carried through this computer, then the Stream Relay bridge takes over as a last resort.",
   "rt.hint_direct_scp": "tar is piped over SSH and dd counts the bytes, so the progress bar reports real progress. The files never pass through this computer. With compression on, a temporary archive is built on the source and only that archive is deleted afterwards.",
   "rt.hint_direct_rsync": "rsync sends only the differences and compresses in flight. Best for repeated syncs; it needs rsync on the source server.",
   "rt.hint_relay": "The data passes through this computer. Raise the parallel connections when uploading large folders made of many small files."

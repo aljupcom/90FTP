@@ -603,6 +603,266 @@ fn sort_for_creation(items: &mut [TransferItem]) {
     });
 }
 
+/// Ships an archive that the direct engine already built on the source server.
+///
+/// Used when packing succeeded and only the shipping failed. The archive is
+/// complete, so walking 34,000 individual files through SFTP — one round trip
+/// each — would move exactly the same bytes for a fraction of the throughput.
+/// Instead the archive is downloaded once, uploaded once, and unpacked by the
+/// destination's own shell, so nothing is unpacked on this computer.
+///
+/// Cleanup is strict: the local copy, the remote copy and the source archive are
+/// removed on success and on failure. The user's own files are never touched —
+/// the only thing deleted is the temporary archive the engine itself created.
+#[allow(clippy::too_many_arguments)]
+fn ship_staged_archive(
+    source: &mut RemoteClient,
+    archive_path: &str,
+    archive_size: u64,
+    target: &mut RemoteClient,
+    dest_base: &str,
+    cancelled: &Arc<AtomicBool>,
+    emit_log: &dyn Fn(&str, &str),
+    emit_progress: &(dyn Fn(&str, usize, usize, u64, u64, &str, Option<f64>) + Sync),
+) -> Result<(), String> {
+    use std::sync::atomic::AtomicU64;
+    use std::time::Duration;
+
+    let file_name = archive_path
+        .rsplit('/')
+        .next()
+        .filter(|n| !n.is_empty())
+        .unwrap_or("90ftp-archive.tar")
+        .to_string();
+    let remote_tmp = format!("/tmp/{}", file_name);
+    let local_path = std::env::temp_dir().join(&file_name).to_string_lossy().to_string();
+    let total = archive_size.max(1);
+    let started = Instant::now();
+    let done_total = AtomicU64::new(0);
+
+    emit_log(
+        &format!(
+            "Reusing the archive the source already built ({}): one download, one upload, then it is unpacked on the destination. Nothing is re-packed and the 34k per-file round trips are skipped.",
+            format_size(archive_size)
+        ),
+        "info",
+    );
+
+    let outcome = std::thread::scope(|scope| -> Result<(), String> {
+
+        // --- leg 1: download the archive from the source (0 - 50%) ---
+        let control = crate::transfer_control::TransferControl::new(total);
+        let handle = control.handle();
+        let stop = Arc::new(AtomicBool::new(false));
+        {
+            let stop = stop.clone();
+            let cancelled = cancelled.clone();
+            let emit = emit_progress;
+            let label = format!("Downloading archive {}", file_name);
+            let done_total = &done_total;
+            scope.spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    if cancelled.load(Ordering::Relaxed) {
+                        handle.cancel();
+                    }
+                    let done = handle.bytes_transferred();
+                    done_total.store(done, Ordering::Relaxed);
+                    let ratio = (done as f64 / total as f64).min(1.0);
+                    let secs = started.elapsed().as_secs_f64().max(0.001);
+                    let speed = format!("{}/s", format_size((done as f64 / secs) as u64));
+                    emit(&label, 0, 1, done, total, &speed, Some(50.0 * ratio));
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+            });
+        }
+        let download = source.download_to_local_file_ctl(archive_path, &local_path, &control);
+        stop.store(true, Ordering::Relaxed);
+        if cancelled.load(Ordering::Relaxed) {
+            let _ = std::fs::remove_file(&local_path);
+            return Err("Transfer cancelled".to_string());
+        }
+        if let Err(e) = download {
+            let _ = std::fs::remove_file(&local_path);
+            return Err(format!("could not download the archive from the source: {}", e));
+        }
+
+        // --- leg 2: upload it to the destination (50 - 95%) ---
+        let upload_total = std::fs::metadata(&local_path).map(|m| m.len()).unwrap_or(total);
+        let control = crate::transfer_control::TransferControl::new(upload_total);
+        let handle = control.handle();
+        let stop = Arc::new(AtomicBool::new(false));
+        {
+            let stop = stop.clone();
+            let cancelled = cancelled.clone();
+            let emit = emit_progress;
+            let label = format!("Uploading archive {}", file_name);
+            let done_total = &done_total;
+            scope.spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    if cancelled.load(Ordering::Relaxed) {
+                        handle.cancel();
+                    }
+                    let done = handle.bytes_transferred();
+                    done_total.store(done, Ordering::Relaxed);
+                    let ratio = (done as f64 / upload_total.max(1) as f64).min(1.0);
+                    let secs = started.elapsed().as_secs_f64().max(0.001);
+                    let speed = format!("{}/s", format_size((done as f64 / secs) as u64));
+                    emit(&label, 0, 1, done, upload_total, &speed, Some(50.0 + 45.0 * ratio));
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+            });
+        }
+        let upload = target.upload_from_local_file_ctl(&local_path, &remote_tmp, &control);
+        stop.store(true, Ordering::Relaxed);
+        if cancelled.load(Ordering::Relaxed) {
+            let _ = std::fs::remove_file(&local_path);
+            let _ = target.exec_command_clean(&format!("rm -f {}", crate::direct_engine::shell_quote(&remote_tmp)));
+            return Err("Transfer cancelled".to_string());
+        }
+        if let Err(e) = upload {
+            let _ = std::fs::remove_file(&local_path);
+            let _ = target.exec_command_clean(&format!("rm -f {}", crate::direct_engine::shell_quote(&remote_tmp)));
+            return Err(format!("could not upload the archive to the destination: {}", e));
+        }
+
+        // --- leg 3: unpack it where it belongs (95 - 100%) ---
+        emit_progress(
+            &format!("Unpacking {} on the destination", file_name),
+            0,
+            1,
+            upload_total,
+            upload_total,
+            "Unpacking…",
+            Some(96.0),
+        );
+        let cmd = format!(
+            "mkdir -p {dest} && tar {flag} {arch} -C {dest}; __r=$?; rm -f {arch}; exit $__r",
+            dest = crate::direct_engine::shell_quote(dest_base),
+            flag = crate::direct_engine::extract_flag_for(archive_path),
+            arch = crate::direct_engine::shell_quote(&remote_tmp),
+        );
+        let extract = target.exec_command_clean(&cmd);
+        let _ = std::fs::remove_file(&local_path);
+
+        match extract {
+            Ok((0, _)) => {}
+            Ok((code, out)) => {
+                return Err(format!(
+                    "the destination could not unpack the archive (exit {}): {}",
+                    code,
+                    out.trim().lines().last().unwrap_or("").trim()
+                ));
+            }
+            Err(e) => return Err(format!("could not run the unpack command on the destination: {}", e)),
+        }
+
+        // The source archive has served its purpose. Only that file is removed.
+        let _ = source.exec_command_clean(&format!(
+            "rm -f {}",
+            crate::direct_engine::shell_quote(archive_path)
+        ));
+        emit_log(
+            "The temporary archive was removed from both servers; the transferred files and your originals are untouched.",
+            "info",
+        );
+        Ok(())
+    });
+
+    outcome
+}
+
+/// Packs the selected tree into a temporary archive **on the source server**.
+///
+/// This is the answer to a blocked route: when the source cannot open an SSH
+/// connection to the destination, the direct engine is impossible, but the
+/// files still have to get there. Compressing them where they already are turns
+/// 34,000 small files into one, which is the only way that transfer finishes in
+/// minutes instead of hours — and the archive is left on disk (`KEEP`) for the
+/// caller to ship.
+#[allow(clippy::too_many_arguments)]
+fn pack_on_source(
+    src: &RemoteClient,
+    task: &RemoteTransferTask,
+    compression: &str,
+    total_bytes: u64,
+    cancelled: &Arc<AtomicBool>,
+    emit_log: &(dyn Fn(&str, &str) + Sync),
+    emit_progress: &(dyn Fn(&str, usize, usize, u64, u64, &str, Option<f64>) + Sync),
+) -> Option<(String, u64)> {
+    let parsed = crate::direct_engine::Compression::parse(compression);
+    let plan = crate::direct_engine::build_pack_only(task, &src.pwd(), parsed)?;
+
+    emit_log(&format!("Executing: {}", plan.display), "info");
+    emit_log(
+        &format!(
+            "Packing on the source server with {} — the archive is temporary and is removed once the files are in place.",
+            parsed.label()
+        ),
+        "info",
+    );
+
+    let started = Instant::now();
+    let mut last_tick = Instant::now();
+    let mut markers = crate::direct_engine::MarkerBuffer::default();
+    let mut packed = 0u64;
+    let mut label = format!("Packing ({})…", compression);
+
+    let exec = src.exec_command_stream_pty(&plan.command, Some(cancelled.clone()), |chunk: &str| {
+        for marker in markers.feed(chunk) {
+            let mut parts = marker.splitn(2, ' ');
+            let head = parts.next().unwrap_or("");
+            let tail = parts.next().unwrap_or("").trim();
+            match head {
+                "PHASE" => label = format!("Packing ({})…", compression),
+                "PACK" => {
+                    if let Ok(bytes) = tail.parse::<u64>() {
+                        packed = bytes;
+                    }
+                }
+                "ERROR" => emit_log(&format!("Packing failed: {}", tail), "error"),
+                _ => {}
+            }
+        }
+        if last_tick.elapsed().as_millis() < 300 {
+            return;
+        }
+        last_tick = Instant::now();
+        let ratio = if total_bytes == 0 {
+            0.0
+        } else {
+            (packed as f64 / total_bytes as f64).clamp(0.0, 1.0)
+        };
+        let secs = started.elapsed().as_secs_f64().max(0.001);
+        let speed = format!("{}/s", format_size((packed as f64 / secs) as u64));
+        emit_progress(&label, 0, 1, packed, total_bytes.max(packed), &speed, Some(ratio * 100.0));
+    });
+
+    match exec {
+        Ok((code, out)) => {
+            if cancelled.load(Ordering::Relaxed) {
+                return None;
+            }
+            let kept = crate::direct_engine::kept_archive(&out);
+            if code != 0 || kept.is_none() {
+                emit_log(
+                    &format!(
+                        "Packing on the source server did not finish (exit {}): {}",
+                        code,
+                        out.trim().lines().last().unwrap_or("").trim()
+                    ),
+                    "warning",
+                );
+                return None;
+            }
+            kept
+        }
+        Err(e) => {
+            emit_log(&format!("Could not pack on the source server: {}", e), "warning");
+            None
+        }
+    }
+}
+
 pub fn execute_transfer_thread(
     mut source_client: Option<RemoteClient>,
     /* The parameters behind `source_client`, so the relay can open extra
@@ -682,6 +942,12 @@ pub fn execute_transfer_thread(
         }
     };
 
+    /* Set when the direct engine packed the tree successfully but could not
+       ship the archive. The archive is still on the source server, complete, and
+       re-sending 30,000 files one by one instead of that single file is the
+       worst possible answer to a failed connection. */
+    let mut kept_archive: Option<(String, u64)> = None;
+
     // 1. Direct Server-to-Server Attempt (if source is remote SSH, target is SSH, and mode is direct or auto)
     if task.source_is_remote && (task.target_protocol == "scp" || task.target_protocol == "sftp" || task.target_protocol == "ssh") {
         if let Some(ref src) = source_client {
@@ -697,30 +963,128 @@ pub fn execute_transfer_thread(
                 || task.transfer_mode == "auto";
             let password_auth = !task.target_pass.is_empty();
 
+            /* The probe is worth running even when a password is available: it
+               is the only cheap way to learn whether the source server can
+               reach the destination *at all*. Skipping it meant a blocked
+               outbound port was discovered only after the whole tree had been
+               packed — 78 seconds of work thrown away on a connection that
+               could never open. With `BatchMode=yes` a reachable server answers
+               "Permission denied", which is a fine outcome here: it proves the
+               route exists. */
             let mut server_side_key = false;
-            if wants_direct && !password_auth {
+            let mut reachable = true;
+            if wants_direct {
                 emit_log("Testing whether the source server can reach the destination directly…", "info");
                 let probe = format!(
                     "ssh -o BatchMode=yes -o ConnectTimeout=6 -o StrictHostKeyChecking=accept-new -p {} {}@{} true",
                     task.target_port, task.target_user, task.target_host
                 );
-                server_side_key = matches!(src.exec_command_clean(&probe), Ok((0, _)));
-                if server_side_key {
-                    emit_log(
-                        "The source server already trusts the destination, so the files never pass through this computer.",
-                        "success",
-                    );
+                match src.exec_command_clean(&probe) {
+                    Ok((0, _)) => {
+                        server_side_key = true;
+                        emit_log(
+                            "The source server already trusts the destination, so the files never pass through this computer.",
+                            "success",
+                        );
+                    }
+                    Ok((_, out)) => {
+                        let lowered = out.to_lowercase();
+                        let blocked = lowered.contains("connection timed out")
+                            || lowered.contains("connection refused")
+                            || lowered.contains("no route to host")
+                            || lowered.contains("network is unreachable")
+                            || lowered.contains("could not resolve")
+                            || lowered.contains("temporary failure in name resolution");
+                        if blocked {
+                            reachable = false;
+                            emit_log(
+                                &format!(
+                                    "The source server cannot open an SSH connection to {}:{} ({}). Direct transfer is impossible from there — continuing with the Stream Relay Bridge.",
+                                    task.target_host,
+                                    task.target_port,
+                                    out.trim().lines().last().unwrap_or("no route").trim()
+                                ),
+                                "warning",
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        reachable = false;
+                        emit_log(
+                            &format!("Could not probe the route from the source server ({}). Using the Stream Relay Bridge.", e),
+                            "warning",
+                        );
+                    }
                 }
             }
 
-            if wants_direct && !password_auth && !server_side_key {
+            if wants_direct && !password_auth && !server_side_key && reachable {
                 emit_log(
                     "Direct transfer cannot use the SSH key saved for this site: the key is stored on this computer, but the copy command runs on the source server. Continuing with the Stream Relay Bridge, which uses these credentials directly. Add a password to the site to enable direct mode.",
                     "warning",
                 );
             }
 
-            if wants_direct && (password_auth || server_side_key) {
+            /* No route between the servers, but compression was requested and
+               the destination can unpack: build the archive where the files
+               already are and carry that single file through this computer.
+               Without this, a blocked route meant tens of thousands of tiny
+               round trips — the exact case where the transfer looks hung. */
+            if wants_direct && !reachable {
+                let requested = crate::direct_engine::Compression::parse(&task.compression);
+                let target_has_shell = matches!(pre_target_client, Some(RemoteClient::Sftp(_)));
+                if requested != crate::direct_engine::Compression::None && target_has_shell {
+                    let mut chosen = task.compression.clone();
+                    if requested == crate::direct_engine::Compression::Zstd {
+                        let has_zstd = matches!(
+                            src.exec_command_clean("command -v zstd >/dev/null 2>&1 && echo __ZSTD_OK__"),
+                            Ok((0, out)) if out.contains("__ZSTD_OK__")
+                        );
+                        if !has_zstd {
+                            emit_log(
+                                "zstd is not installed on the source server; packing with gzip instead.",
+                                "warning",
+                            );
+                            chosen = "gzip".to_string();
+                        }
+                    }
+
+                    let sources_joined = task
+                        .sources
+                        .iter()
+                        .map(|s| format!("'{}'", s.replace('\'', "'\\''")))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let mut total_bytes = 0u64;
+                    if let Ok((0, out)) = src.exec_command_clean(&format!(
+                        "stat -c %s {} 2>/dev/null || du -sb {} 2>/dev/null | cut -f1",
+                        sources_joined, sources_joined
+                    )) {
+                        total_bytes = out
+                            .lines()
+                            .next()
+                            .and_then(|l| l.trim().parse::<u64>().ok())
+                            .unwrap_or(0);
+                    }
+
+                    kept_archive = pack_on_source(
+                        src,
+                        &task,
+                        &chosen,
+                        total_bytes,
+                        &cancelled,
+                        &emit_log,
+                        &emit_progress,
+                    );
+                } else if requested != crate::direct_engine::Compression::None {
+                    emit_log(
+                        "Compression needs a destination that can unpack the archive; this protocol has no shell, so the files are transferred individually.",
+                        "info",
+                    );
+                }
+            }
+
+            if wants_direct && reachable && (password_auth || server_side_key) {
                 emit_log("Attempting direct Server-to-Server transfer via native remote command...", "info");
 
                 // If password authentication is required for direct SCP/rsync, check for sshpass first
@@ -1046,36 +1410,61 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
                             /* A key-auth refusal is the normal outcome when the
                                source server holds no authorized key for the
                                destination: the relay below handles the file
-                               anyway. Printing the raw `scp` error made this
-                               look like a broken connection. */
+                               anyway. Printing the raw error used to look like a
+                               broken connection — but hiding it entirely left
+                               nothing to diagnose, so it is always shown. */
                             let detail = out.trim();
-                            let auth_refused = detail.contains("Permission denied")
-                                || detail.contains("publickey")
-                                || detail.contains("Authentication failed");
 
-                            let err_msg = if auth_refused {
-                                "Direct transfer was refused by the destination: the source server has no SSH key authorized there.".to_string()
+                            /* The archive survived the failure. Remember where it
+                               is before deciding what to do next. */
+                            if let Some(found) = crate::direct_engine::kept_archive(&out) {
+                                kept_archive = Some(found);
+                            }
+
+                            let detail_lower = detail.to_lowercase();
+                            let auth_refused = detail_lower.contains("permission denied")
+                                || detail_lower.contains("publickey")
+                                || detail_lower.contains("authentication failed");
+                            let unreachable = detail_lower.contains("connection timed out")
+                                || detail_lower.contains("connection refused")
+                                || detail_lower.contains("no route to host")
+                                || detail_lower.contains("network is unreachable")
+                                || detail_lower.contains("could not resolve")
+                                || detail_lower.contains("host key verification failed");
+
+                            let err_msg = if unreachable {
+                                format!(
+                                    "The source server could not open an SSH connection to the destination: {}",
+                                    detail.lines().last().unwrap_or("no route").trim()
+                                )
+                            } else if auth_refused {
+                                if task.target_pass.is_empty() {
+                                    "Direct transfer was refused: the source server holds no SSH key authorized on the destination.".to_string()
+                                } else {
+                                    "Direct transfer was refused: the destination rejected the password when the source server presented it.".to_string()
+                                }
+                            } else if code == 92 {
+                                format!("Direct shipping failed, but the archive is intact: {}", detail.lines().last().unwrap_or("").trim())
                             } else if code != 0 {
-                                format!("Direct command exited with code {}: {}", code, detail)
+                                format!("Direct command exited with code {}: {}", code, detail.lines().last().unwrap_or("").trim())
                             } else {
-                                format!("Direct command failed: {}", detail)
+                                format!("Direct command failed: {}", detail.lines().last().unwrap_or("").trim())
                             };
 
-                            emit_log(&err_msg, if auth_refused { "info" } else { "warning" });
+                            if !detail.is_empty() {
+                                emit_log(&format!("Direct engine output:\n{}", detail), "info");
+                            }
+                            emit_log(&err_msg, if auth_refused || unreachable { "info" } else { "warning" });
                             // A refused credential is not a transfer failure: the
                             // relay below authenticates from this machine, which is
                             // where the saved credentials actually live. Only a real
                             // transfer error should stop an explicit direct run.
-                            if task.transfer_mode != "auto" && !auth_refused {
+                            if task.transfer_mode != "auto" && !auth_refused && !unreachable && kept_archive.is_none() {
                                 emit_error(&err_msg);
                                 return;
                             }
                             emit_log(
-                                if auth_refused {
-                                    "Continuing with the Stream Relay Bridge, which uses the credentials entered here — nothing else to configure."
-                                } else {
-                                    "Direct Server-to-Server execution failed. Falling back to Universal Stream Relay Bridge..."
-                                },
+                                "Continuing with the Stream Relay Bridge, which uses the credentials entered here — nothing else to configure.",
                                 "info",
                             );
                         }
@@ -1092,6 +1481,58 @@ elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install ss
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /* 1b. The archive the direct engine already built.
+       When packing succeeded and only the shipping failed, the expensive half of
+       the work is done and the result is one file sitting in the source's /tmp.
+       Walking 34,000 individual files through SFTP instead — one round trip
+       each — is both slower and more fragile than moving that single archive.
+       The extraction runs on the destination through its own SSH session, so
+       nothing has to be unpacked on this computer. */
+    if let Some((archive_path, archive_size)) = kept_archive.take() {
+        let target_has_shell = matches!(pre_target_client, Some(RemoteClient::Sftp(_)));
+        if !target_has_shell {
+            emit_log(
+                "The archive cannot be unpacked on the destination because this protocol has no shell; transferring the files individually instead.",
+                "warning",
+            );
+        } else if let (Some(src), Some(target)) = (source_client.as_mut(), pre_target_client.as_mut()) {
+            let archive_started = Instant::now();
+            match ship_staged_archive(
+                src,
+                &archive_path,
+                archive_size,
+                target,
+                &dest_base,
+                &cancelled,
+                &emit_log,
+                &emit_progress,
+            ) {
+                Ok(()) => {
+                    emit_progress(&archive_path, 1, 1, archive_size, archive_size, "Completed", Some(100.0));
+                    emit_complete(
+                        true,
+                        "Transfer completed by shipping the compressed archive the source had already built",
+                        1,
+                        archive_size,
+                        archive_started.elapsed().as_secs_f64(),
+                    );
+                    return;
+                }
+                Err(e) => {
+                    if cancelled.load(Ordering::Relaxed) {
+                        emit_log("Transfer cancelled by user.", "warning");
+                        emit_complete(false, "Transfer cancelled by user", 0, 0, archive_started.elapsed().as_secs_f64());
+                        return;
+                    }
+                    emit_log(
+                        &format!("Shipping the archive through this computer failed too ({}). Falling back to per-file transfer.", e),
+                        "warning",
+                    );
                 }
             }
         }
