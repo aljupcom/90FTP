@@ -38,6 +38,214 @@ window.onerror = function(msg, url, line, col, error) {
     let remoteFiles = [];
     let selectedLocalFile = null;
     let selectedRemoteFile = null;
+
+    // ============================================================================
+    // Pane Selection Model
+    // ----------------------------------------------------------------------------
+    // Selection used to exist only as `tr.selected` classes: every operation
+    // re-queried the DOM, and every re-render started by wiping those classes.
+    // A live refresh, a sort or a filter therefore erased the selection, and
+    // cross-pane transfers depended on whether a repaint happened in between.
+    // The model below is the single source of truth. It is keyed by path, so a
+    // re-sort or a refresh cannot lose it, and the DOM classes are painted from
+    // it instead of being read back.
+    // ============================================================================
+    const paneSelection = {
+      local: { dirKey: null, paths: new Set(), anchorIdx: -1, focusIdx: -1 },
+      remote: { dirKey: null, paths: new Set(), anchorIdx: -1, focusIdx: -1 }
+    };
+
+    function selState(isRemote) {
+      return isRemote ? paneSelection.remote : paneSelection.local;
+    }
+
+    function selList(isRemote) {
+      return isRemote ? (remoteFiles || []) : (localFiles || []);
+    }
+
+    function selDirKey(isRemote) {
+      return (isRemote ? currentRemotePath : currentLocalPath) || '';
+    }
+
+    function selRowSelector(isRemote) {
+      return isRemote ? '#remoteFileList tr[data-path]' : '#localFileList tr[data-path]';
+    }
+
+    // Called at the top of every render. A different directory means a new
+    // selection; the same directory keeps it across sorts, filters and refreshes.
+    function selSyncDirectory(isRemote) {
+      const st = selState(isRemote);
+      const key = selDirKey(isRemote);
+      if (st.dirKey !== key) {
+        st.dirKey = key;
+        st.paths.clear();
+        st.anchorIdx = -1;
+        st.focusIdx = -1;
+        // A new directory has no focus item; leaving the old one behind made
+        // "upload this one" act on a file from the previous folder.
+        if (isRemote) selectedRemoteFile = null;
+        else selectedLocalFile = null;
+      }
+    }
+
+    function selPaths(isRemote) {
+      return Array.from(selState(isRemote).paths);
+    }
+
+    // Resolve the selection against the current listing. Paths that no longer
+    // exist (deleted remotely, filtered away, renamed) are dropped silently.
+    function selItems(isRemote) {
+      const st = selState(isRemote);
+      if (st.paths.size === 0) return [];
+      const list = selList(isRemote);
+      const out = [];
+      for (const f of list) {
+        if (st.paths.has(f.path)) out.push(f);
+      }
+      return out;
+    }
+
+    function selHas(isRemote, path) {
+      return !!path && selState(isRemote).paths.has(path);
+    }
+
+    function selSyncFocusItem(isRemote) {
+      const st = selState(isRemote);
+      const list = selList(isRemote);
+      const item = st.focusIdx >= 0 ? (list[st.focusIdx] || null) : null;
+      if (isRemote) selectedRemoteFile = item;
+      else selectedLocalFile = item;
+    }
+
+    function selPaint(isRemote) {
+      const st = selState(isRemote);
+      const tbody = document.getElementById(isRemote ? 'remoteFileList' : 'localFileList');
+      if (!tbody) return;
+      tbody.querySelectorAll('tr[data-path]').forEach((row) => {
+        const on = st.paths.has(row.getAttribute('data-path'));
+        row.classList.toggle('selected', on);
+        row.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+    }
+
+    // Drop paths that vanished from the listing (deleted, renamed) so the badge
+    // and the transfer count never claim an item that no longer exists.
+    function selPrune(isRemote) {
+      const st = selState(isRemote);
+      if (st.paths.size === 0) return;
+      const list = selList(isRemote);
+      const alive = new Set(list.map((f) => f.path));
+      Array.from(st.paths).forEach((p) => {
+        if (!alive.has(p)) st.paths.delete(p);
+      });
+      if (st.focusIdx >= 0 && !list[st.focusIdx]) st.focusIdx = -1;
+    }
+
+    function selClear(isRemote) {
+      const st = selState(isRemote);
+      st.paths.clear();
+      st.anchorIdx = -1;
+      st.focusIdx = -1;
+      selSyncFocusItem(isRemote);
+      selPaint(isRemote);
+      updatePaneStatsBadge(isRemote);
+      updateCommanderStatusFooter();
+      updateTransferBarState();
+    }
+
+    function selSetSingle(isRemote, idx) {
+      const st = selState(isRemote);
+      const list = selList(isRemote);
+      const item = list[idx];
+      st.paths.clear();
+      if (item) st.paths.add(item.path);
+      st.anchorIdx = idx;
+      st.focusIdx = idx;
+      selSyncFocusItem(isRemote);
+      selPaint(isRemote);
+      updatePaneStatsBadge(isRemote);
+      updateCommanderStatusFooter();
+      updateTransferBarState();
+    }
+
+    function selToggle(isRemote, idx) {
+      const st = selState(isRemote);
+      const item = selList(isRemote)[idx];
+      if (!item) return;
+      if (st.paths.has(item.path)) {
+        st.paths.delete(item.path);
+        if (st.focusIdx === idx) st.focusIdx = st.paths.size > 0 ? st.anchorIdx : -1;
+      } else {
+        st.paths.add(item.path);
+        st.focusIdx = idx;
+      }
+      st.anchorIdx = idx;
+      selSyncFocusItem(isRemote);
+      selPaint(isRemote);
+      updatePaneStatsBadge(isRemote);
+      updateCommanderStatusFooter();
+      updateTransferBarState();
+    }
+
+    // Shift+click / Shift+Arrow: everything between the anchor and `idx`.
+    function selRangeTo(isRemote, idx) {
+      const st = selState(isRemote);
+      const list = selList(isRemote);
+      const anchor = st.anchorIdx >= 0 ? st.anchorIdx : idx;
+      const start = Math.min(anchor, idx);
+      const end = Math.max(anchor, idx);
+      st.paths.clear();
+      for (let i = start; i <= end; i++) {
+        if (list[i]) st.paths.add(list[i].path);
+      }
+      st.focusIdx = idx;
+      selSyncFocusItem(isRemote);
+      selPaint(isRemote);
+      updatePaneStatsBadge(isRemote);
+      updateCommanderStatusFooter();
+      updateTransferBarState();
+    }
+
+    function selSelectAllVisible(isRemote, filterType = 'all') {
+      const st = selState(isRemote);
+      const list = selList(isRemote);
+      const filterLower = ((isRemote ? remoteQuickFilterText : localQuickFilterText) || '').trim().toLowerCase();
+      const previous = new Set(st.paths);
+      st.paths.clear();
+      st.focusIdx = -1;
+      list.forEach((f, idx) => {
+        if (!showHiddenFilesState && (f.name || '').startsWith('.')) return;
+        if (filterLower && !(f.name || '').toLowerCase().includes(filterLower)) return;
+        if (filterType === 'files' && f.is_dir) return;
+        if (filterType === 'folders' && !f.is_dir) return;
+        // "Invert" keeps whatever was not selected before.
+        if (filterType === 'invert' && previous.has(f.path)) return;
+        st.paths.add(f.path);
+        if (st.focusIdx === -1) st.focusIdx = idx;
+      });
+      st.anchorIdx = st.focusIdx;
+      selSyncFocusItem(isRemote);
+      selPaint(isRemote);
+      updatePaneStatsBadge(isRemote);
+      updateCommanderStatusFooter();
+      updateTransferBarState();
+    }
+
+    function selSummary(isRemote) {
+      const items = selItems(isRemote);
+      let dirs = 0;
+      let files = 0;
+      let bytes = 0;
+      items.forEach((it) => {
+        if (it.is_dir) dirs++;
+        else {
+          files++;
+          bytes += Number(it.size) || 0;
+        }
+      });
+      return { items, dirs, files, bytes, total: items.length };
+    }
+
     let isConnected = false;
     let savedSites = [];
     let selectedQuickSite = null;
@@ -52,7 +260,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.88';
+    let APP_CURRENT_VERSION = '0.0.0.89';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -1515,26 +1723,15 @@ window.onerror = function(msg, url, line, col, error) {
       const visibleCount = filterVal
         ? allList.filter(f => (f.name || '').toLowerCase().includes(filterVal)).length
         : allList.length;
-      const selSelector = isRemote ? '#remoteFileList tr.selected:not(.parent-dir-row)' : '#localFileList tr.selected:not(.parent-dir-row)';
-      const selRows = document.querySelectorAll(selSelector);
-      const selCount = selRows.length;
+      // Read from the selection model, never from the DOM: the badge must stay
+      // correct even before the rows are repainted.
+      const sel = selSummary(isRemote);
+      const selCount = sel.total;
 
       if (selCount > 0) {
-        let selDirs = 0;
-        let selFiles = 0;
-        let selBytes = 0;
-        selRows.forEach(r => {
-          const idx = parseInt(r.getAttribute('data-idx'));
-          const item = allList[idx];
-          if (item) {
-            if (item.is_dir) {
-              selDirs++;
-            } else {
-              selFiles++;
-              selBytes += (Number(item.size) || 0);
-            }
-          }
-        });
+        const selDirs = sel.dirs;
+        const selFiles = sel.files;
+        const selBytes = sel.bytes;
 
         if (selDirs > 0 && selFiles > 0) {
           badge.innerHTML = `<span style="color:#fbbf24; font-weight:700;">📁 ${escapeHtml(tn('count.folders', selDirs))}</span> + <span style="color:#38bdf8; font-weight:700;">📄 ${escapeHtml(tn('count.files', selFiles))}</span> <span style="opacity:0.75; font-size: 11px;">(${selCount}/${allList.length})</span>`;
@@ -1563,30 +1760,16 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     function cyclePaneSelection(isRemote) {
-      const selSelector = isRemote ? '#remoteFileList tr.selected:not(.parent-dir-row)' : '#localFileList tr.selected:not(.parent-dir-row)';
-      const selRows = document.querySelectorAll(selSelector);
-      const allList = isRemote ? (remoteFiles || []) : (localFiles || []);
-      let hasDirs = false;
-      let hasFiles = false;
-      selRows.forEach(r => {
-        const idx = parseInt(r.getAttribute('data-idx'));
-        const item = allList[idx];
-        if (item && item.is_dir) hasDirs = true;
-        if (item && !item.is_dir) hasFiles = true;
-      });
-
-      if (selRows.length === 0) {
-        selectAllItemsInPane(isRemote, 'all');
-      } else if (hasDirs && hasFiles) {
-        selectAllItemsInPane(isRemote, 'files');
-      } else if (hasFiles && !hasDirs) {
-        selectAllItemsInPane(isRemote, 'folders');
+      setActivePaneFocus(isRemote);
+      const sel = selSummary(isRemote);
+      if (sel.total === 0) {
+        selSelectAllVisible(isRemote, 'all');
+      } else if (sel.dirs > 0 && sel.files > 0) {
+        selSelectAllVisible(isRemote, 'files');
+      } else if (sel.files > 0 && sel.dirs === 0) {
+        selSelectAllVisible(isRemote, 'folders');
       } else {
-        const rows = document.querySelectorAll(isRemote ? '#remoteFileList tr' : '#localFileList tr');
-        rows.forEach(r => r.classList.remove('selected'));
-        if (isRemote) selectedRemoteFile = null;
-        else selectedLocalFile = null;
-        updatePaneStatsBadge(isRemote);
+        selClear(isRemote);
       }
     }
 
@@ -1753,8 +1936,7 @@ window.onerror = function(msg, url, line, col, error) {
           if (oldestKey) localDirCache.delete(oldestKey);
         }
       }
-      selectedLocalFile = null;
-      lastLocalClickedIdx = -1;
+      selSyncDirectory(false);
       const activeTab = getActiveLocalTab();
       if (activeTab) {
         activeTab.files = [...localFiles];
@@ -1778,11 +1960,8 @@ window.onerror = function(msg, url, line, col, error) {
           localNavigateUp();
         };
         trUp.onclick = () => {
-          const rows = document.querySelectorAll('#localFileList tr');
-          rows.forEach(r => r.classList.remove('selected'));
+          selClear(false);
           trUp.classList.add('selected');
-          selectedLocalFile = null;
-          updatePaneStatsBadge(false);
         };
 
         const { svg, iconClass } = getFileIcon('..', true);
@@ -1810,6 +1989,7 @@ window.onerror = function(msg, url, line, col, error) {
         emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '30px'} 10px; font-style: italic;">${escapeHtml(t('pane.folder_empty'))}</td>`;
         frag.appendChild(emptyTr);
         tbody.appendChild(frag);
+        selPaint(false);
         updatePaneStatsBadge(false);
         updateFsWatcher();
         return;
@@ -1830,6 +2010,7 @@ window.onerror = function(msg, url, line, col, error) {
           tr.draggable = true;
           tr.setAttribute('data-idx', idx);
           tr.setAttribute('data-path', f.path || fileName);
+          tr.setAttribute('data-name', fileName);
           tr.setAttribute('data-is-dir', f.is_dir ? '1' : '0');
           tr.classList.add(f.is_dir ? 'row-folder' : 'row-file');
 
@@ -1840,8 +2021,8 @@ window.onerror = function(msg, url, line, col, error) {
           }
 
           tr.ondragstart = (e) => {
-            if (!tr.classList.contains('selected')) {
-              selectLocalRow(idx);
+            if (!selHas(false, f.path)) {
+              selSetSingle(false, idx);
             }
             const selectedBatch = getSelectedLocalItems();
             const batchItems = selectedBatch.length > 0 ? selectedBatch : [f];
@@ -1866,36 +2047,13 @@ window.onerror = function(msg, url, line, col, error) {
           }
 
           tr.onclick = (e) => {
-            if (e.shiftKey && lastLocalClickedIdx >= 0) {
-              const start = Math.min(lastLocalClickedIdx, idx);
-              const end = Math.max(lastLocalClickedIdx, idx);
-              const rows = document.querySelectorAll('#localFileList tr:not(.parent-dir-row)');
-              rows.forEach(r => {
-                const rIdx = parseInt(r.getAttribute('data-idx'));
-                if (!isNaN(rIdx)) {
-                  r.classList.toggle('selected', rIdx >= start && rIdx <= end);
-                }
-              });
-              selectedLocalFile = f;
-              updatePaneStatsBadge(false);
+            setActivePaneFocus(false);
+            if (e.shiftKey) {
+              selRangeTo(false, idx);
             } else if (e.ctrlKey || e.metaKey) {
-              const isNowSelected = tr.classList.toggle('selected');
-              if (isNowSelected) {
-                selectedLocalFile = f;
-              } else {
-                const remaining = document.querySelectorAll('#localFileList tr.selected:not(.parent-dir-row)');
-                if (remaining.length > 0) {
-                  const firstIdx = parseInt(remaining[remaining.length - 1].getAttribute('data-idx'));
-                  selectedLocalFile = !isNaN(firstIdx) ? (localFiles[firstIdx] || null) : null;
-                } else {
-                  selectedLocalFile = null;
-                }
-              }
-              lastLocalClickedIdx = idx;
-              updatePaneStatsBadge(false);
+              selToggle(false, idx);
             } else {
-              selectLocalRow(idx);
-              lastLocalClickedIdx = idx;
+              selSetSingle(false, idx);
             }
           };
           tr.ondblclick = () => openLocalItem(f, tr);
@@ -1911,8 +2069,11 @@ window.onerror = function(msg, url, line, col, error) {
           tr.oncontextmenu = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (!tr.classList.contains('selected')) {
-              selectLocalRow(idx);
+            setActivePaneFocus(false);
+            // Right-clicking inside an existing selection keeps it (that is how
+            // a batch is acted on); right-clicking outside it selects that row.
+            if (!selHas(false, f.path)) {
+              selSetSingle(false, idx);
             }
             openContextMenu(e, 'local', f, idx);
           };
@@ -1960,20 +2121,15 @@ window.onerror = function(msg, url, line, col, error) {
       }
 
       tbody.appendChild(frag);
+      selPrune(false);
+      selPaint(false);
       updatePaneStatsBadge(false);
+      updateTransferBarState();
       updateFsWatcher();
     }
 
     function selectLocalRow(idx) {
-      const rows = document.querySelectorAll('#localFileList tr:not(.parent-dir-row)');
-      rows.forEach((r) => {
-        const rIdx = parseInt(r.getAttribute('data-idx'));
-        r.classList.toggle('selected', rIdx === idx);
-      });
-      const upRow = document.querySelector('#localFileList tr.parent-dir-row');
-      if (upRow) upRow.classList.remove('selected');
-      selectedLocalFile = localFiles[idx];
-      updatePaneStatsBadge(false);
+      selSetSingle(false, idx);
     }
 
     async function openLocalItem(item, rowEl = null) {
@@ -3318,8 +3474,7 @@ window.onerror = function(msg, url, line, col, error) {
           if (oldestKey) remoteDirCache.delete(oldestKey);
         }
       }
-      selectedRemoteFile = null;
-      lastRemoteClickedIdx = -1;
+      selSyncDirectory(true);
       const activeTab = getActiveRemoteTab();
       if (activeTab) {
         activeTab.files = [...remoteFiles];
@@ -3351,11 +3506,8 @@ window.onerror = function(msg, url, line, col, error) {
           remoteNavigateUp();
         };
         trUp.onclick = () => {
-          const rows = document.querySelectorAll('#remoteFileList tr');
-          rows.forEach(r => r.classList.remove('selected'));
+          selClear(true);
           trUp.classList.add('selected');
-          selectedRemoteFile = null;
-          updatePaneStatsBadge(true);
         };
 
         const { svg, iconClass } = getFileIcon('..', true);
@@ -3409,6 +3561,7 @@ window.onerror = function(msg, url, line, col, error) {
         emptyTr.innerHTML = `<td colspan="4" style="text-align:center; color: var(--text-dim); padding: ${canGoUp ? '16px' : '25px'}; font-style: italic;">Empty Directory</td>`;
         frag.appendChild(emptyTr);
         tbody.appendChild(frag);
+        selPaint(true);
         updatePaneStatsBadge(true);
         updateFsWatcher();
         return;
@@ -3429,6 +3582,7 @@ window.onerror = function(msg, url, line, col, error) {
           tr.draggable = true;
           tr.setAttribute('data-idx', idx);
           tr.setAttribute('data-path', f.path || fileName);
+          tr.setAttribute('data-name', fileName);
           tr.setAttribute('data-is-dir', f.is_dir ? '1' : '0');
           tr.classList.add(f.is_dir ? 'row-folder' : 'row-file');
 
@@ -3439,8 +3593,8 @@ window.onerror = function(msg, url, line, col, error) {
           }
 
           tr.ondragstart = (e) => {
-            if (!tr.classList.contains('selected')) {
-              selectRemoteRow(idx);
+            if (!selHas(true, f.path)) {
+              selSetSingle(true, idx);
             }
             const selectedBatch = getSelectedRemoteItems();
             const batchItems = selectedBatch.length > 0 ? selectedBatch : [f];
@@ -3465,36 +3619,13 @@ window.onerror = function(msg, url, line, col, error) {
           }
 
           tr.onclick = (e) => {
-            if (e.shiftKey && lastRemoteClickedIdx >= 0) {
-              const start = Math.min(lastRemoteClickedIdx, idx);
-              const end = Math.max(lastRemoteClickedIdx, idx);
-              const rows = document.querySelectorAll('#remoteFileList tr:not(.parent-dir-row)');
-              rows.forEach(r => {
-                const rIdx = parseInt(r.getAttribute('data-idx'));
-                if (!isNaN(rIdx)) {
-                  r.classList.toggle('selected', rIdx >= start && rIdx <= end);
-                }
-              });
-              selectedRemoteFile = f;
-              updatePaneStatsBadge(true);
+            setActivePaneFocus(true);
+            if (e.shiftKey) {
+              selRangeTo(true, idx);
             } else if (e.ctrlKey || e.metaKey) {
-              const isNowSelected = tr.classList.toggle('selected');
-              if (isNowSelected) {
-                selectedRemoteFile = f;
-              } else {
-                const remaining = document.querySelectorAll('#remoteFileList tr.selected:not(.parent-dir-row)');
-                if (remaining.length > 0) {
-                  const firstIdx = parseInt(remaining[remaining.length - 1].getAttribute('data-idx'));
-                  selectedRemoteFile = !isNaN(firstIdx) ? (remoteFiles[firstIdx] || null) : null;
-                } else {
-                  selectedRemoteFile = null;
-                }
-              }
-              lastRemoteClickedIdx = idx;
-              updatePaneStatsBadge(true);
+              selToggle(true, idx);
             } else {
-              selectRemoteRow(idx);
-              lastRemoteClickedIdx = idx;
+              selSetSingle(true, idx);
             }
           };
           tr.ondblclick = () => openRemoteItem(f, tr);
@@ -3510,8 +3641,9 @@ window.onerror = function(msg, url, line, col, error) {
           tr.oncontextmenu = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (!tr.classList.contains('selected')) {
-              selectRemoteRow(idx);
+            setActivePaneFocus(true);
+            if (!selHas(true, f.path)) {
+              selSetSingle(true, idx);
             }
             openContextMenu(e, 'remote', f, idx);
           };
@@ -3559,20 +3691,15 @@ window.onerror = function(msg, url, line, col, error) {
       }
 
       tbody.appendChild(frag);
+      selPrune(true);
+      selPaint(true);
       updatePaneStatsBadge(true);
+      updateTransferBarState();
       updateFsWatcher();
     }
 
     function selectRemoteRow(idx) {
-      const rows = document.querySelectorAll('#remoteFileList tr:not(.parent-dir-row)');
-      rows.forEach((r) => {
-        const rIdx = parseInt(r.getAttribute('data-idx'));
-        r.classList.toggle('selected', rIdx === idx);
-      });
-      const upRow = document.querySelector('#remoteFileList tr.parent-dir-row');
-      if (upRow) upRow.classList.remove('selected');
-      selectedRemoteFile = remoteFiles[idx];
-      updatePaneStatsBadge(true);
+      selSetSingle(true, idx);
     }
 
     // ========================================================
@@ -3834,13 +3961,8 @@ window.onerror = function(msg, url, line, col, error) {
         fsWatcherSuspended = true;
         try {
           addLog(`Targeted Upload: Sending ${items.length} item(s) directly into remote '${targetDirPath}'...`, 'cmd');
-          for (const it of items) {
-            if (it.is_dir) {
-              await uploadFolderDirect(it.path, it.name);
-            } else {
-              await uploadFileDirect(it.path, it.name);
-            }
-          }
+          // Same batched path as the Send button: one preflight, one enqueue.
+          await pushSelectionToRemote(items, 'copy');
           showInteractiveActionToast(
             `<svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Uploaded ${items.length} item${items.length === 1 ? '' : 's'} into folder`,
             `Remote Target: ${targetDirPath}`,
@@ -3859,13 +3981,7 @@ window.onerror = function(msg, url, line, col, error) {
         fsWatcherSuspended = true;
         try {
           addLog(`Targeted Download: Saving ${items.length} item(s) directly into local '${targetDirPath}'...`, 'cmd');
-          for (const it of items) {
-            if (it.is_dir) {
-              await downloadFolderDirect(it.path, it.name);
-            } else {
-              await downloadFileDirect(it.path, it.name);
-            }
-          }
+          await pullSelectionToLocal(items, 'copy');
           showInteractiveActionToast(
             `<svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Downloaded ${items.length} item${items.length === 1 ? '' : 's'} into folder`,
             `Local Target: ${targetDirPath}`,
@@ -4196,40 +4312,7 @@ window.onerror = function(msg, url, line, col, error) {
 
     function selectAllItemsInPane(isRemote, filterType = 'all') {
       setActivePaneFocus(isRemote);
-      const selector = isRemote ? '#remoteFileList tr:not(.parent-dir-row)' : '#localFileList tr:not(.parent-dir-row)';
-      const rows = document.querySelectorAll(selector);
-      const filesList = isRemote ? (remoteFiles || []) : (localFiles || []);
-      let firstIdx = -1;
-      rows.forEach(r => {
-        if (r.hasAttribute('data-idx')) {
-          const idx = parseInt(r.getAttribute('data-idx'));
-          const item = filesList[idx];
-          let shouldSelect = true;
-          if (filterType === 'files') {
-            shouldSelect = item && !item.is_dir;
-          } else if (filterType === 'folders') {
-            shouldSelect = item && !!item.is_dir;
-          } else if (filterType === 'invert') {
-            shouldSelect = !r.classList.contains('selected');
-          }
-          r.classList.toggle('selected', !!shouldSelect);
-          if (shouldSelect && firstIdx === -1) {
-            firstIdx = idx;
-          }
-        }
-      });
-      if (firstIdx >= 0) {
-        if (isRemote) {
-          selectedRemoteFile = remoteFiles[firstIdx] || null;
-        } else {
-          selectedLocalFile = localFiles[firstIdx] || null;
-        }
-      } else {
-        if (isRemote) selectedRemoteFile = null;
-        else selectedLocalFile = null;
-      }
-      updatePaneStatsBadge(isRemote);
-      updateCommanderStatusFooter();
+      selSelectAllVisible(isRemote, filterType);
     }
 
     async function openRemoteItem(item, rowEl = null) {
@@ -5062,6 +5145,9 @@ window.onerror = function(msg, url, line, col, error) {
       if (typeof updateFsWatcher === 'function') {
         updateFsWatcher(true);
       }
+      if (typeof updateTransferBarState === 'function') {
+        updateTransferBarState();
+      }
     }
 
     /* Single source of truth for "which port does this protocol imply". Implicit
@@ -5111,6 +5197,7 @@ window.onerror = function(msg, url, line, col, error) {
 
     // Interactive File Collision Resolution System
     let pendingCollisionResolver = null;
+    let pendingBatchCollisionResolver = null;
     let transferCollisionScope = {
       applyAllAction: null,
       cancelled: false
@@ -5232,7 +5319,7 @@ window.onerror = function(msg, url, line, col, error) {
       return `${originalName} (1)`;
     }
 
-    async function uploadFolderDirect(localFolderPath, folderName) {
+    async function uploadFolderDirect(localFolderPath, folderName, outIds = null, policy = null) {
       if (!isConnected) {
         alert('Please connect to a server first');
         return;
@@ -5269,71 +5356,66 @@ window.onerror = function(msg, url, line, col, error) {
         if (appOptions && appOptions.autoSwitchTransfers !== false) {
           try { switchBottomTab('transfers'); } catch (_) {}
         }
-        let uploadedFiles = 0;
         let createdDirs = 0;
-        resetCollisionScope();
 
+        // 1. Directories first: a file cannot be queued into a folder that does
+        //    not exist yet, and creating them in one pass keeps the parent order.
         for (const item of items) {
-          if (transferCollisionScope.cancelled) {
-            addLog('Folder upload cancelled by user.', 'warning');
-            break;
+          if (!item.is_dir) continue;
+          const itemDest = baseRemote + '/' + item.rel_path;
+          try {
+            await sendRust('remote_create_dir', { path: itemDest });
+            createdDirs++;
+          } catch (dirErr) {
+            addLog(`Could not create remote folder ${itemDest}: ${dirErr.message || dirErr}`, 'error');
           }
-          let itemDest = baseRemote + '/' + item.rel_path;
-          if (item.is_dir) {
-            try {
-              await sendRust('remote_create_dir', { path: itemDest });
-              createdDirs++;
-            } catch (dirErr) {
-              addLog(`Could not create remote folder ${itemDest}: ${dirErr.message || dirErr}`, 'error');
+        }
+
+        // 2. One collision sweep for the whole tree instead of a stat and a
+        //    prompt per file. `policy` is supplied by the caller when the batch
+        //    already answered the question; a direct call asks once here.
+        let entries = items.filter((it) => !it.is_dir).map((it) => ({
+          src: it.abs_path,
+          dest: baseRemote + '/' + it.rel_path,
+          name: it.rel_path.split('/').pop(),
+          size: Number(it.size) || 0
+        }));
+
+        if (entries.length > 0) {
+          const conflicts = await preflightTransfers('upload', entries);
+          let folderPolicy = policy;
+          if (conflicts.length > 0 && !folderPolicy) {
+            folderPolicy = await askBatchCollision(conflicts, entries.length, 'upload');
+            if (!folderPolicy) {
+              addLog('Folder upload cancelled — nothing was queued.', 'info');
+              return;
             }
-          } else {
-            let fileName = item.rel_path.split('/').pop();
-
-            // Collision check on remote
-            let remoteExists = false;
-            let destMeta = null;
-            try {
-              const chk = await sendRust('remote_stat', { path: itemDest });
-              if (chk && chk.exists && chk.item) {
-                remoteExists = true;
-                destMeta = chk.item;
-              }
-            } catch (_) {}
-
-            if (remoteExists && destMeta) {
-              const srcMeta = { name: fileName, path: item.abs_path, size: item.size, modified: '-' };
-              const decision = await promptCollision(srcMeta, destMeta, 'upload');
-              if (decision.action === 'cancel') {
-                addLog('Folder upload cancelled by user.', 'warning');
-                break;
-              }
-              if (decision.action === 'skip') {
-                addLog(`[Skip] ${item.rel_path} skipped (already exists on remote)`, 'info');
-                continue;
-              }
-              if (decision.action === 'overwrite_newer') {
-                if (destMeta.size === item.size) {
-                  addLog(`[Skip] ${item.rel_path} skipped (identical size on remote)`, 'info');
-                  continue;
-                }
-              }
-              if (decision.action === 'rename') {
-                const alt = generateAlternativeFilename(fileName);
-                itemDest = itemDest.substring(0, itemDest.lastIndexOf('/') + 1) + alt;
-                fileName = alt;
-              }
-            }
-
-            // Queued rather than awaited: the queue runs them with the
-            // configured parallelism, so a folder of 200 files no longer uploads
-            // strictly one at a time while the UI sits idle.
-            const queued = await enqueueTransfer('upload', item.abs_path, itemDest, true);
-            if (queued) {
-              uploadedFiles++;
-              rememberTransferPath(queued, folderName, itemDest, baseRemote);
+          }
+          applyCollisionPolicy(folderPolicy);
+          if (conflicts.length > 0 && folderPolicy) {
+            const blocked = new Set(conflicts.map((c) => c.dest));
+            if (folderPolicy === 'skip') {
+              entries = entries.filter((e) => !blocked.has(e.dest));
+            } else if (folderPolicy === 'rename') {
+              const taken = new Set();
+              entries = entries.map((e) => {
+                if (!blocked.has(e.dest)) { taken.add(e.name.toLowerCase()); return e; }
+                const alt = uniqueRemoteName(baseRemote, generateAlternativeFilename(e.name), taken);
+                return { ...e, name: alt, dest: baseRemote + '/' + alt };
+              });
             }
           }
         }
+
+        // 3. One enqueue call for the whole folder.
+        const ids = await enqueueTransfersBatch('upload', entries);
+        let uploadedFiles = 0;
+        ids.forEach((id, i) => {
+          if (id === null || id === undefined) return;
+          uploadedFiles++;
+          rememberTransferPath(id, folderName, entries[i].dest, baseRemote);
+          if (outIds) outIds.push(id);
+        });
 
         refreshRemote();
         addLog(`Folder upload queued: '${folderName}' (${uploadedFiles} files, ${createdDirs} folders) — progress is in the File Transfers tab`, 'success');
@@ -5346,7 +5428,7 @@ window.onerror = function(msg, url, line, col, error) {
       }
     }
 
-    async function downloadFolderDirect(remoteFolderPath, folderName) {
+    async function downloadFolderDirect(remoteFolderPath, folderName, outIds = null, policy = null) {
       addLog(`Scanning remote folder '${folderName}' for download...`, 'cmd');
       try {
         const rules = typeof getActiveExclusionRules === 'function' ? getActiveExclusionRules() : [];
@@ -5378,76 +5460,63 @@ window.onerror = function(msg, url, line, col, error) {
         if (appOptions && appOptions.autoSwitchTransfers !== false) {
           try { switchBottomTab('transfers'); } catch (_) {}
         }
-        let downloadedFiles = 0;
         let createdDirs = 0;
-        resetCollisionScope();
 
+        // 1. Every directory first, so no file is queued into a missing folder.
         for (const item of items) {
-          if (transferCollisionScope.cancelled) {
-            addLog('Folder download cancelled by user.', 'warning');
-            break;
+          if (!item.is_dir) continue;
+          const itemDest = baseLocal + '\\' + item.rel_path.replace(/\//g, '\\');
+          try {
+            await sendRust('local_create_dir', { path: itemDest });
+            createdDirs++;
+          } catch (dirErr) {
+            addLog(`Could not create local folder ${itemDest}: ${dirErr.message || dirErr}`, 'error');
           }
-          const localRel = item.rel_path.replace(/\//g, '\\');
-          let itemDest = baseLocal + '\\' + localRel;
+        }
 
-          if (item.is_dir) {
-            try {
-              await sendRust('local_create_dir', { path: itemDest });
-              createdDirs++;
-            } catch (dirErr) {
-              addLog(`Could not create local folder ${itemDest}: ${dirErr.message || dirErr}`, 'error');
+        // 2. One collision sweep for the whole tree.
+        let entries = items.filter((it) => !it.is_dir).map((it) => ({
+          src: it.remote_path,
+          dest: baseLocal + '\\' + it.rel_path.replace(/\//g, '\\'),
+          name: it.rel_path.split('/').pop(),
+          size: Number(it.size) || 0
+        }));
+
+        if (entries.length > 0) {
+          const conflicts = await preflightTransfers('download', entries);
+          let folderPolicy = policy;
+          if (conflicts.length > 0 && !folderPolicy) {
+            folderPolicy = await askBatchCollision(conflicts, entries.length, 'download');
+            if (!folderPolicy) {
+              addLog('Folder download cancelled — nothing was queued.', 'info');
+              return;
             }
-          } else {
-            // Ensure parent directory exists locally
-            const parentDir = itemDest.substring(0, itemDest.lastIndexOf('\\'));
-            try {
-              await sendRust('local_create_dir', { path: parentDir });
-            } catch (_) {}
-
-            let fileName = item.rel_path.split('/').pop();
-
-            // Collision check locally
-            let localExists = false;
-            let destMeta = null;
-            try {
-              const chk = await sendRust('local_stat', { path: itemDest });
-              if (chk && chk.exists) {
-                localExists = true;
-                destMeta = chk;
-              }
-            } catch (_) {}
-
-            if (localExists && destMeta) {
-              const srcMeta = { name: fileName, path: item.remote_path, size: item.size, modified: '-' };
-              const decision = await promptCollision(srcMeta, destMeta, 'download');
-              if (decision.action === 'cancel') {
-                addLog('Folder download cancelled by user.', 'warning');
-                break;
-              }
-              if (decision.action === 'skip') {
-                addLog(`[Skip] ${item.rel_path} skipped (already exists locally)`, 'info');
-                continue;
-              }
-              if (decision.action === 'overwrite_newer') {
-                if (destMeta.size === item.size) {
-                  addLog(`[Skip] ${item.rel_path} skipped (identical size locally)`, 'info');
-                  continue;
-                }
-              }
-              if (decision.action === 'rename') {
-                const alt = generateAlternativeFilename(fileName);
-                itemDest = itemDest.substring(0, itemDest.lastIndexOf('\\') + 1) + alt;
-                fileName = alt;
-              }
-            }
-
-            const queued = await enqueueTransfer('download', itemDest, item.remote_path, true);
-            if (queued) {
-              downloadedFiles++;
-              rememberTransferPath(queued, folderName, itemDest, baseLocal);
+          }
+          applyCollisionPolicy(folderPolicy);
+          if (conflicts.length > 0 && folderPolicy) {
+            const blocked = new Set(conflicts.map((c) => c.dest));
+            if (folderPolicy === 'skip') {
+              entries = entries.filter((e) => !blocked.has(e.dest));
+            } else if (folderPolicy === 'rename') {
+              const taken = new Set();
+              entries = entries.map((e) => {
+                if (!blocked.has(e.dest)) { taken.add(e.name.toLowerCase()); return e; }
+                const alt = uniqueRemoteName(baseLocal, generateAlternativeFilename(e.name), taken);
+                return { ...e, name: alt, dest: baseLocal + '\\' + alt };
+              });
             }
           }
         }
+
+        // 3. One enqueue call for the whole folder.
+        const ids = await enqueueTransfersBatch('download', entries);
+        let downloadedFiles = 0;
+        ids.forEach((id, i) => {
+          if (id === null || id === undefined) return;
+          downloadedFiles++;
+          rememberTransferPath(id, folderName, entries[i].dest, baseLocal);
+          if (outIds) outIds.push(id);
+        });
 
         refreshLocal();
         addLog(`Folder download queued: '${folderName}' (${downloadedFiles} files, ${createdDirs} folders) — progress is in the File Transfers tab`, 'success');
@@ -6245,6 +6314,70 @@ window.onerror = function(msg, url, line, col, error) {
     function renderContextMenuItems(type, item) {
       const menu = document.getElementById('customContextMenu');
       if (!menu) return;
+
+      // One menu for every transfer verb, opened from the split Send button.
+      if (type === 'transfer_menu') {
+        const isRem = !!(item && item.isRemote);
+        const sel = selSummary(isRem);
+        const peerName = isRem ? (currentLocalPath || 'the local pane') : (currentRemotePath || 'the remote pane');
+        const mode = getTransferMode();
+
+        let html = `<div class="context-menu-header">${sel.total > 0 ? escapeHtml(t('send.header_count', { n: sel.total })) : escapeHtml(t('send.nothing_selected'))}</div>`;
+
+        if (sel.total === 0) {
+          html += `<div class="context-menu-item" style="opacity: 0.6; cursor: default;">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span>${escapeHtml(t('send.select_hint'))}</span>
+          </div>`;
+          menu.innerHTML = html;
+          return;
+        }
+
+        html += `
+          <div class="context-menu-item" onclick="closeContextMenu(); sendSelectionToPeer(${isRem}, 'copy')">
+            <svg class="icon" viewBox="0 0 24 24" style="color: var(--accent);"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span style="font-weight: 600;">${escapeHtml(t(isRem ? 'send.copy_to_local' : 'send.copy_to_remote'))}</span>
+            <span class="shortcut">Ctrl+Enter</span>
+          </div>
+          <div class="context-menu-item" onclick="closeContextMenu(); sendSelectionToPeer(${isRem}, 'move')">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #fbbf24;"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            <span style="font-weight: 600;">${escapeHtml(t(isRem ? 'send.move_to_local' : 'send.move_to_remote'))}</span>
+            <span class="shortcut">Ctrl+Shift+Enter</span>
+          </div>
+          <div class="context-menu-item" style="cursor: default; opacity: 0.7; font-size: 11.5px; gap: 6px;">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <span style="font-family: var(--font-mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(peerName)}</span>
+          </div>
+          <div class="context-menu-separator"></div>
+          <div class="context-menu-item" onclick="closeContextMenu(); openInteractiveMoveModal(${isRem}, '${mode}')">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            <span>Copy / Move To Folder...</span>
+            <span class="shortcut">F6</span>
+          </div>
+        `;
+
+        const atRoot = isRem ? isRemoteRoot(currentRemotePath) : isLocalRoot(currentLocalPath);
+        if (!atRoot) {
+          html += `
+            <div class="context-menu-item" onclick="closeContextMenu(); moveSelectedToParent(${isRem})">
+              <svg class="icon" viewBox="0 0 24 24" style="color: #f59e0b;"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
+              <span>Move to Parent Folder (..)</span>
+              <span class="shortcut">Alt+Up</span>
+            </div>
+          `;
+        }
+
+        html += `
+          <div class="context-menu-separator"></div>
+          <div class="context-menu-item" onclick="closeContextMenu(); openRemoteTransferModal('${escapeJsString((isRem ? getSelectedRemoteItems()[0]?.path : getSelectedLocalItems()[0]?.path) || '')}', ${isRem})">
+            <svg class="icon" viewBox="0 0 24 24" style="color: #38bdf8;"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            <span>Server-to-Server Dispatch...</span>
+          </div>
+        `;
+
+        menu.innerHTML = html;
+        return;
+      }
 
       if (type === 'log') {
         const selText = window.getSelection() ? window.getSelection().toString() : '';
@@ -7077,18 +7210,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     function getSelectedLocalItems() {
-      const selectedRows = document.querySelectorAll('#localFileList tr.selected:not(.parent-dir-row)');
-      const items = [];
-      selectedRows.forEach(r => {
-        const idx = parseInt(r.getAttribute('data-idx'));
-        if (!isNaN(idx) && localFiles[idx]) {
-          items.push(localFiles[idx]);
-        }
-      });
-      if (items.length === 0 && selectedLocalFile && localFiles.some(f => f.path === selectedLocalFile.path)) {
-        items.push(selectedLocalFile);
-      }
-      return items;
+      return selItems(false);
     }
 
     // Advanced Compression Settings Dialog state & handlers
@@ -7407,18 +7529,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 
     function getSelectedRemoteItems() {
-      const selectedRows = document.querySelectorAll('#remoteFileList tr.selected:not(.parent-dir-row)');
-      const items = [];
-      selectedRows.forEach(r => {
-        const idx = parseInt(r.getAttribute('data-idx'));
-        if (!isNaN(idx) && remoteFiles[idx]) {
-          items.push(remoteFiles[idx]);
-        }
-      });
-      if (items.length === 0 && selectedRemoteFile && remoteFiles.some(f => f.path === selectedRemoteFile.path)) {
-        items.push(selectedRemoteFile);
-      }
-      return items;
+      return selItems(true);
     }
 
     function isArchiveFilenameJs(name) {
@@ -9150,6 +9261,9 @@ window.onerror = function(msg, url, line, col, error) {
       renderTransfersTable();
       updateTransfersBadge();
       syncTransferSettingsControls();
+      // Let anything waiting on this batch (a Move's delete-source step) know
+      // which tasks reached a terminal state.
+      settleTransferWatchers();
 
       if (sawCompletion) {
         // The pane listings are stale now. Refreshing on every file would thrash
@@ -12061,46 +12175,475 @@ window.onerror = function(msg, url, line, col, error) {
       if (isConnected && currentRemotePath) navigateRemote(currentRemotePath);
     }
 
-    async function transferUpload() {
-      closeAllMenus();
-      closeContextMenu();
-      if (!isConnected) {
-        alert('Please connect to a server before uploading');
-        return;
+    // ============================================================================
+    // Unified Transfer Layer
+    // ----------------------------------------------------------------------------
+    // Every "send these items somewhere" entry point (the split Send button, its
+    // menu, the context menu, drag & drop, F5 / Shift+F5) funnels through
+    // sendSelectionToPeer(). One code path means Copy/Move always behave the
+    // same, and a multi-selection costs one preflight and one IPC call instead
+    // of a prompt and a round trip per file.
+    // ============================================================================
+    const TRANSFER_MODE_KEY = 'ninetyftp.transferMode';
+    let transferMode = 'copy';
+    const transferSettledWatchers = [];
+
+    try {
+      const savedMode = localStorage.getItem(TRANSFER_MODE_KEY);
+      if (savedMode === 'move' || savedMode === 'copy') transferMode = savedMode;
+    } catch (_) {}
+
+    function getTransferMode() {
+      return transferMode === 'move' ? 'move' : 'copy';
+    }
+
+    function setTransferMode(mode, silent) {
+      transferMode = mode === 'move' ? 'move' : 'copy';
+      try { localStorage.setItem(TRANSFER_MODE_KEY, transferMode); } catch (_) {}
+      if (!silent) {
+        addLog(`Transfer mode: ${transferMode === 'move' ? 'Move (source is deleted after a successful copy)' : 'Copy'}`, 'info');
+        updateTransferBarState();
       }
-      const items = getSelectedLocalItems();
-      if (items.length === 0) {
-        alert('Please select at least one local file or folder to upload');
-        return;
+    }
+
+    function joinRemoteChild(dir, name) {
+      const base = (dir || '/').replace(/\/+$/, '');
+      return (base === '' ? '' : base) + '/' + name;
+    }
+
+    function joinLocalChild(dir, name) {
+      const base = (dir || '').replace(/[\\/]+$/, '');
+      return base + '\\' + name;
+    }
+
+    // Reflect the current selection on the split Send buttons. Called from every
+    // selection mutation and every render.
+    function updateTransferBarState() {
+      const pairs = [
+        { split: 'localTransferSplit', btn: 'btnLocalSend', count: 'localSendCount', n: selSummary(false).total },
+        { split: 'remoteTransferSplit', btn: 'btnRemoteSend', count: 'remoteSendCount', n: selSummary(true).total }
+      ];
+      pairs.forEach((p) => {
+        const split = document.getElementById(p.split);
+        const btn = document.getElementById(p.btn);
+        const badge = document.getElementById(p.count);
+        if (badge) {
+          badge.textContent = p.n > 999 ? '999+' : String(p.n);
+          badge.classList.toggle('has-count', p.n > 0);
+        }
+        if (split) split.classList.toggle('is-idle', p.n === 0);
+        if (btn) {
+          btn.disabled = p.n === 0;
+          btn.style.opacity = p.n === 0 ? '0.5' : '1';
+        }
+      });
+    }
+
+    // One collision sweep for the whole batch, answered by the backend so a
+    // stale listing cannot let an overwrite slip through unnoticed.
+    async function preflightTransfers(kind, entries) {
+      if (!entries || entries.length === 0) return [];
+      try {
+        const res = await sendRust('transfer_preflight', {
+          kind,
+          items: entries.map((e) => ({ name: e.name, dest: e.dest, size: Number(e.size) || 0 }))
+        });
+        return Array.isArray(res.conflicts) ? res.conflicts : [];
+      } catch (err) {
+        addLog('Collision pre-check skipped: ' + (err.message || err), 'warning');
+        return [];
       }
-      for (const item of items) {
-        if (item.is_dir) {
-          await uploadFolderDirect(item.path, item.name);
-        } else {
-          await uploadFileDirect(item.path, item.name);
+    }
+
+    function resolveBatchCollision(action) {
+      const modal = document.getElementById('batchCollisionModal');
+      if (modal) modal.classList.remove('active');
+      if (pendingBatchCollisionResolver) {
+        const resolver = pendingBatchCollisionResolver;
+        pendingBatchCollisionResolver = null;
+        resolver(action || null);
+      }
+    }
+
+    // A single decision for N conflicting files. Returns 'overwrite' | 'skip' |
+    // 'rename' | null (cancelled).
+    function askBatchCollision(conflicts, total, direction) {
+      const modal = document.getElementById('batchCollisionModal');
+      if (!modal) {
+        return Promise.resolve(window.confirm(`${conflicts.length} file(s) already exist at the destination.\n\nOverwrite them?` ) ? 'overwrite' : null);
+      }
+      const title = document.getElementById('batchCollisionTitle');
+      const subtitle = document.getElementById('batchCollisionSubtitle');
+      const summary = document.getElementById('batchCollisionSummary');
+      const list = document.getElementById('batchCollisionList');
+
+      if (title) title.textContent = tn('send.title', conflicts.length);
+      if (subtitle) {
+        subtitle.textContent = t(direction === 'upload' ? 'send.subtitle_upload' : 'send.subtitle_download');
+      }
+      if (summary) {
+        summary.textContent = t('send.summary', { conflicts: conflicts.length, total });
+      }
+      if (list) {
+        const shown = conflicts.slice(0, 60);
+        list.innerHTML = shown.map((c) => {
+          const srcSize = Number(c.size) || 0;
+          const dstSize = Number(c.dest_size) || 0;
+          const delta = srcSize === dstSize
+            ? t('send.same_size')
+            : (srcSize > dstSize ? `+${formatBytes(srcSize - dstSize)}` : `-${formatBytes(dstSize - srcSize)}`);
+          return `<div class="bcl-row"><span class="bcl-name">${escapeHtml(c.name || c.dest || '')}</span><span class="bcl-meta">${escapeHtml(delta)}</span></div>`;
+        }).join('') + (conflicts.length > shown.length
+          ? `<div class="bcl-row"><span class="bcl-name">${escapeHtml(t('send.more', { n: conflicts.length - shown.length }))}</span><span class="bcl-meta"></span></div>`
+          : '');
+      }
+
+      modal.classList.add('active');
+      return new Promise((resolve) => {
+        pendingBatchCollisionResolver = resolve;
+      });
+    }
+
+    // Queue a whole batch in one IPC call. Returns an array aligned with
+    // `entries` (null where the backend refused that item).
+    async function enqueueTransfersBatch(kind, entries) {
+      if (!entries || entries.length === 0) return [];
+      try {
+        const res = await sendRust('transfer_enqueue_batch', {
+          kind,
+          items: entries.map((e) => ({
+            local_path: kind === 'upload' ? e.src : e.dest,
+            remote_path: kind === 'upload' ? e.dest : e.src,
+            size: Number(e.size) || 0
+          }))
+        });
+        if (res && res.queue) applyTransferSnapshot(res.queue);
+        if (Array.isArray(res.errors) && res.errors.length > 0) {
+          addLog(`Some items were not queued: ${res.errors.slice(0, 3).join(' | ')}`, 'warning');
+        }
+        const ids = Array.isArray(res.task_ids) ? res.task_ids : [];
+        if (appOptions && appOptions.autoSwitchTransfers !== false) {
+          try { switchBottomTab('transfers'); } catch (_) {}
+        }
+        return ids;
+      } catch (err) {
+        addLog('Could not queue the transfer batch: ' + (err.message || err), 'error');
+        showAppAlert('Could not queue the transfer:\n' + (err.message || err), 'Transfer Queue Error', 'error');
+        return [];
+      }
+    }
+
+    function isTerminalTransferState(state) {
+      return state === 'completed' || state === 'failed' || state === 'cancelled';
+    }
+
+    // Resolves once every listed task has reached a terminal state. Used by Move
+    // so the source is only deleted after its copy really finished.
+    function awaitTransfersSettled(ids) {
+      const wanted = new Set((ids || []).filter((id) => id !== null && id !== undefined));
+      return new Promise((resolve) => {
+        if (wanted.size === 0) { resolve(new Map()); return; }
+        const results = new Map();
+        for (const task of transferTasks) {
+          if (!wanted.has(task.id)) continue;
+          results.set(task.id, task.state);
+          if (isTerminalTransferState(task.state)) wanted.delete(task.id);
+        }
+        if (wanted.size === 0) { resolve(results); return; }
+        transferSettledWatchers.push({ wanted, results, resolve });
+      });
+    }
+
+    function settleTransferWatchers() {
+      if (transferSettledWatchers.length === 0) return;
+      for (let i = transferSettledWatchers.length - 1; i >= 0; i--) {
+        const w = transferSettledWatchers[i];
+        for (const task of transferTasks) {
+          if (!w.wanted.has(task.id)) continue;
+          w.results.set(task.id, task.state);
+          if (isTerminalTransferState(task.state)) w.wanted.delete(task.id);
+        }
+        if (w.wanted.size === 0) {
+          transferSettledWatchers.splice(i, 1);
+          try { w.resolve(w.results); } catch (_) {}
         }
       }
     }
 
-    async function transferDownload() {
-      closeAllMenus();
-      closeContextMenu();
+    // Apply a batch collision policy to the legacy per-file prompt so folder
+    // transfers inherit the same decision instead of asking again.
+    function applyCollisionPolicy(policy) {
+      resetCollisionScope();
+      if (policy === 'overwrite' || policy === 'skip' || policy === 'rename') {
+        transferCollisionScope.applyAllAction = policy;
+      }
+    }
+
+    function uniqueRemoteName(dir, baseName, takenNames) {
+      let candidate = baseName;
+      let guard = 0;
+      while (takenNames.has(candidate.toLowerCase()) && guard < 500) {
+        candidate = generateAlternativeFilename(candidate);
+        guard++;
+      }
+      takenNames.add(candidate.toLowerCase());
+      return candidate;
+    }
+
+    async function pushSelectionToRemote(items, mode = 'copy') {
       if (!isConnected) {
-        alert('Please connect to a server before downloading');
-        return;
-      }
-      const items = getSelectedRemoteItems();
-      if (items.length === 0) {
-        alert('Please select at least one remote file or folder to download');
-        return;
-      }
-      for (const item of items) {
-        if (item.is_dir) {
-          await downloadFolderDirect(item.path, item.name);
+        if (appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile) {
+          const ok = await ensureSilentConnected(currentRemotePath);
+          if (!ok) return;
         } else {
-          await downloadFileDirect(item.path, item.name);
+          showAppAlert(t('send.not_connected_upload'), t('send.not_connected'), 'warning');
+          return;
         }
       }
+      const destDir = currentRemotePath;
+      if (!destDir) {
+        showAppAlert(t('send.no_remote_folder'), t('send.not_connected'), 'warning');
+        return;
+      }
+
+      const files = items.filter((it) => !it.is_dir);
+      const dirs = items.filter((it) => it.is_dir);
+
+      let entries = files.map((it) => ({
+        src: it.path,
+        dest: joinRemoteChild(destDir, it.name),
+        name: it.name,
+        size: Number(it.size) || 0,
+        item: it
+      }));
+
+      let policy = null;
+      if (entries.length > 0) {
+        const conflicts = await preflightTransfers('upload', entries);
+        if (conflicts.length > 0) {
+          policy = await askBatchCollision(conflicts, entries.length, 'upload');
+          if (!policy) {
+            addLog(`Upload cancelled — ${conflicts.length} existing file(s) left untouched.`, 'info');
+            return;
+          }
+          const blocked = new Set(conflicts.map((c) => c.dest));
+          if (policy === 'skip') {
+            entries = entries.filter((e) => !blocked.has(e.dest));
+          } else if (policy === 'rename') {
+            const taken = new Set(remoteFiles.map((f) => (f.name || '').toLowerCase()));
+            entries = entries.map((e) => {
+              if (!blocked.has(e.dest)) { taken.add(e.name.toLowerCase()); return e; }
+              const alt = uniqueRemoteName(destDir, generateAlternativeFilename(e.name), taken);
+              return { ...e, name: alt, dest: joinRemoteChild(destDir, alt) };
+            });
+          }
+        }
+      }
+
+      applyCollisionPolicy(policy);
+
+      let queuedIds = [];
+      if (entries.length > 0) {
+        queuedIds = await enqueueTransfersBatch('upload', entries);
+        addLog(`Queued ${queuedIds.filter((x) => x !== null).length} file(s) for upload to '${destDir}'.`, 'success');
+      }
+
+      // Folders run through the recursive scanner; it returns the ids it queued
+      // so a Move can wait for them before deleting the source tree.
+      for (const dir of dirs) {
+        const ids = [];
+        await uploadFolderDirect(dir.path, dir.name, ids, policy);
+        queuedIds = queuedIds.concat(ids);
+      }
+
+      const liveIds = queuedIds.filter((id) => id !== null && id !== undefined);
+      if (mode === 'move' && liveIds.length > 0) {
+        await finishMoveAfterTransfer('upload', entries, dirs, liveIds);
+      }
+
+      updateTransferBarState();
+    }
+
+    async function pullSelectionToLocal(items, mode = 'copy') {
+      if (!isConnected) {
+        if (appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile) {
+          const ok = await ensureSilentConnected(currentRemotePath);
+          if (!ok) return;
+        } else {
+          showAppAlert(t('send.not_connected_download'), t('send.not_connected'), 'warning');
+          return;
+        }
+      }
+      const destDir = currentLocalPath;
+      if (!destDir) {
+        showAppAlert(t('send.no_local_folder'), t('send.not_connected'), 'warning');
+        return;
+      }
+
+      const files = items.filter((it) => !it.is_dir);
+      const dirs = items.filter((it) => it.is_dir);
+
+      let entries = files.map((it) => ({
+        src: it.path,
+        dest: joinLocalChild(destDir, it.name),
+        name: it.name,
+        size: Number(it.size) || 0,
+        item: it
+      }));
+
+      let policy = null;
+      if (entries.length > 0) {
+        const conflicts = await preflightTransfers('download', entries);
+        if (conflicts.length > 0) {
+          policy = await askBatchCollision(conflicts, entries.length, 'download');
+          if (!policy) {
+            addLog(`Download cancelled — ${conflicts.length} existing file(s) left untouched.`, 'info');
+            return;
+          }
+          const blocked = new Set(conflicts.map((c) => c.dest));
+          if (policy === 'skip') {
+            entries = entries.filter((e) => !blocked.has(e.dest));
+          } else if (policy === 'rename') {
+            const taken = new Set(localFiles.map((f) => (f.name || '').toLowerCase()));
+            entries = entries.map((e) => {
+              if (!blocked.has(e.dest)) { taken.add(e.name.toLowerCase()); return e; }
+              const alt = uniqueRemoteName(destDir, generateAlternativeFilename(e.name), taken);
+              return { ...e, name: alt, dest: joinLocalChild(destDir, alt) };
+            });
+          }
+        }
+      }
+
+      applyCollisionPolicy(policy);
+
+      let queuedIds = [];
+      if (entries.length > 0) {
+        queuedIds = await enqueueTransfersBatch('download', entries);
+        addLog(`Queued ${queuedIds.filter((x) => x !== null).length} file(s) for download to '${destDir}'.`, 'success');
+      }
+
+      for (const dir of dirs) {
+        const ids = [];
+        await downloadFolderDirect(dir.path, dir.name, ids, policy);
+        queuedIds = queuedIds.concat(ids);
+      }
+
+      const liveIds = queuedIds.filter((id) => id !== null && id !== undefined);
+      if (mode === 'move' && liveIds.length > 0) {
+        await finishMoveAfterTransfer('download', entries, dirs, liveIds);
+      }
+
+      updateTransferBarState();
+    }
+
+    // Delete the sources of a Move only after every copy reported success.
+    async function finishMoveAfterTransfer(kind, entries, dirs, ids) {
+      const confirmed = await showAppConfirm(
+        t('send.move_confirm', { count: ids.length }),
+        { title: t('send.move_confirm_title'), confirmText: t('send.move_confirm_btn'), variant: 'warning' }
+      );
+      if (!confirmed) {
+        addLog('Move downgraded to Copy — sources were kept.', 'info');
+        return;
+      }
+
+      const settled = await awaitTransfersSettled(ids);
+      const completed = new Set();
+      settled.forEach((state, id) => { if (state === 'completed') completed.add(id); });
+
+      const failures = ids.length - completed.size;
+      if (failures > 0) {
+        addLog(`${failures} file(s) did not finish — their sources were kept.`, 'warning');
+      }
+
+      const doomed = [];
+      // Entries are aligned with `ids` by construction (the backend returns one
+      // slot per item), so a skipped or refused item can never delete the wrong
+      // source file.
+      entries.forEach((entry, i) => {
+        const id = ids[i];
+        if (id === undefined || id === null) return;
+        if (!completed.has(id)) return;
+        const item = entry.item || { path: entry.src, name: entry.name, is_dir: false };
+        doomed.push({ path: item.path, name: item.name, is_dir: !!item.is_dir });
+      });
+
+      // A folder is only removed when every file inside it made it across.
+      const folderIds = ids.slice(entries.length);
+      if (dirs.length > 0 && folderIds.every((id) => id !== null && completed.has(id))) {
+        dirs.forEach((d) => doomed.push({ path: d.path, name: d.name, is_dir: true }));
+      }
+
+      if (doomed.length === 0) return;
+
+      try {
+        if (kind === 'upload') {
+          const res = await sendRust('local_delete_batch', { items: doomed });
+          addLog(`Move complete: removed ${res.deleted_count ?? doomed.length} local source item(s).`, 'success');
+          await refreshLocal();
+        } else {
+          const res = await sendRust('remote_delete_batch', {
+            items: doomed,
+            current_dir: currentRemotePath
+          });
+          addLog(`Move complete: removed ${res.deleted_count ?? doomed.length} remote source item(s).`, 'success');
+          if (res && res.files) renderRemoteFiles(res.files);
+          else await refreshRemote();
+        }
+      } catch (err) {
+        addLog('The copy succeeded but the source could not be removed: ' + (err.message || err), 'error');
+      }
+    }
+
+    // The single entry point every UI affordance calls.
+    async function sendSelectionToPeer(sourceIsRemote, modeOverride) {
+      closeAllMenus();
+      closeContextMenu();
+      const mode = modeOverride === 'move' || modeOverride === 'copy' ? modeOverride : getTransferMode();
+      const items = sourceIsRemote ? getSelectedRemoteItems() : getSelectedLocalItems();
+      if (items.length === 0) {
+        showAppAlert(
+          sourceIsRemote ? t('send.select_remote_first') : t('send.select_local_first'),
+          t('send.nothing_selected'),
+          'warning'
+        );
+        return;
+      }
+      try {
+        if (sourceIsRemote) await pullSelectionToLocal(items, mode);
+        else await pushSelectionToRemote(items, mode);
+      } catch (err) {
+        // The button is wired straight to this function, so an unexpected throw
+        // must surface as a dialog instead of an unhandled rejection.
+        addLog('Transfer failed: ' + (err.message || err), 'error');
+        showAppAlert('Transfer failed:\n' + (err.message || err), 'Transfer Error', 'error');
+      }
+    }
+
+    // The split button's caret: one menu for every transfer verb.
+    function openTransferMenu(e, isRemote) {
+      const ev = e || window.event;
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+      if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+      const fake = {
+        preventDefault: () => {},
+        clientX: ev ? ev.clientX : 0,
+        clientY: ev ? ev.clientY : 0
+      };
+      const rect = ev && ev.currentTarget ? ev.currentTarget.getBoundingClientRect() : null;
+      if (rect) {
+        fake.clientX = Math.round(rect.left);
+        fake.clientY = Math.round(rect.bottom + 4);
+      }
+      openContextMenu(fake, 'transfer_menu', { isRemote: !!isRemote }, null);
+    }
+
+    async function transferUpload() {
+      await sendSelectionToPeer(false, 'copy');
+    }
+
+    async function transferDownload() {
+      await sendSelectionToPeer(true, 'copy');
     }
 
     // ==========================================
@@ -14065,8 +14608,10 @@ window.onerror = function(msg, url, line, col, error) {
 
     function setActivePaneFocus(isRemote) {
       lastActivePaneIsRemote = !!isRemote;
-      const leftWrapper = document.querySelector('#leftPane .file-pane-wrapper');
-      const rightWrapper = document.querySelector('#rightPane .file-pane-wrapper');
+      // #leftPane / #rightPane *are* the .file-pane-wrapper elements, so the old
+      // descendant selector matched nothing and the focus ring never moved.
+      const leftWrapper = document.getElementById('leftPane');
+      const rightWrapper = document.getElementById('rightPane');
       if (leftWrapper) leftWrapper.classList.toggle('pane-focused', !lastActivePaneIsRemote);
       if (rightWrapper) rightWrapper.classList.toggle('pane-focused', lastActivePaneIsRemote);
     }
@@ -14094,8 +14639,7 @@ window.onerror = function(msg, url, line, col, error) {
         if (isRem) openRemoteFileInEditor(item.path);
         else openLocalFileInEditor(item.path);
       } else if (key === 'F5') {
-        if (isRem) transferDownload();
-        else transferUpload();
+        sendSelectionToPeer(isRem, 'copy');
       } else if (key === 'F6') {
         openInteractiveMoveModal(isRem, 'move');
       } else if (key === 'F7') {
@@ -14116,54 +14660,53 @@ window.onerror = function(msg, url, line, col, error) {
       }
     }
 
+    // Arrow / Home / End navigation. It used to look for `tr[data-name]`, which
+    // no row ever carried, so the selection never moved. It now walks the rows
+    // that actually exist, drives the selection model and keeps the anchor so
+    // Shift+Arrow extends the way it does in Explorer.
     function navigateFileRowByKeyboard(delta, toBoundary = null) {
       const isRem = lastActivePaneIsRemote;
+      setActivePaneFocus(isRem);
       const tbody = document.getElementById(isRem ? 'remoteFileList' : 'localFileList');
       if (!tbody) return;
-      const rows = Array.from(tbody.querySelectorAll('tr[data-name]'));
+      const rows = Array.from(tbody.querySelectorAll('tr[data-idx]'));
       if (rows.length === 0) return;
-      let curIdx = rows.findIndex(r => r.classList.contains('selected'));
-      let nextIdx = 0;
-      if (toBoundary === 'home') nextIdx = 0;
-      else if (toBoundary === 'end') nextIdx = rows.length - 1;
-      else if (curIdx === -1) nextIdx = delta > 0 ? 0 : rows.length - 1;
-      else nextIdx = Math.max(0, Math.min(rows.length - 1, curIdx + delta));
 
-      rows.forEach(r => r.classList.remove('selected'));
-      const targetRow = rows[nextIdx];
+      const st = selState(isRem);
+      let curRow = st.focusIdx >= 0
+        ? rows.findIndex(r => parseInt(r.getAttribute('data-idx'), 10) === st.focusIdx)
+        : -1;
+
+      let nextRow = 0;
+      if (toBoundary === 'home') nextRow = 0;
+      else if (toBoundary === 'end') nextRow = rows.length - 1;
+      else if (curRow === -1) nextRow = delta > 0 ? 0 : rows.length - 1;
+      else nextRow = Math.max(0, Math.min(rows.length - 1, curRow + delta));
+
+      const targetRow = rows[nextRow];
       if (!targetRow) return;
-      targetRow.classList.add('selected');
-      targetRow.scrollIntoView({ block: 'nearest' });
+      const idx = parseInt(targetRow.getAttribute('data-idx'), 10);
+      if (isNaN(idx)) return;
 
-      const name = targetRow.dataset.name;
-      const list = isRem ? remoteFiles : localFiles;
-      const item = list.find(f => f.name === name);
-      if (isRem) {
-        selectedRemoteFile = item || null;
-        lastSelectedRemoteIndex = nextIdx;
+      if (window.__navShiftExtend) {
+        selRangeTo(isRem, idx);
       } else {
-        selectedLocalFile = item || null;
-        lastSelectedLocalIndex = nextIdx;
+        selSetSingle(isRem, idx);
       }
-      updatePaneStatsBadge(isRem);
+      targetRow.scrollIntoView({ block: 'nearest' });
     }
 
     function activateSelectedRowByEnter() {
       const isRem = lastActivePaneIsRemote;
-      const tbody = document.getElementById(isRem ? 'remoteFileList' : 'localFileList');
-      if (!tbody) return;
-      const selRow = tbody.querySelector('tr.selected');
-      if (!selRow) return;
-      const name = selRow.dataset.name;
-      if (!name) {
-        // Parent ".." row
+      const st = selState(isRem);
+      const list = isRem ? remoteFiles : localFiles;
+      const item = st.focusIdx >= 0 ? (list[st.focusIdx] || null) : null;
+      if (!item) {
+        // Nothing focused: Enter on the ".." row goes up.
         if (isRem) remoteNavigateUp();
         else localNavigateUp();
         return;
       }
-      const list = isRem ? remoteFiles : localFiles;
-      const item = list.find(f => f.name === name);
-      if (!item) return;
       if (item.is_dir) {
         if (isRem) navigateRemote(item.path);
         else navigateLocal(item.path);
@@ -14249,17 +14792,29 @@ window.onerror = function(msg, url, line, col, error) {
       if (!anyModalOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End')) {
         if (!e.altKey && !e.ctrlKey && !e.metaKey) {
           e.preventDefault();
-          if (e.key === 'ArrowDown') navigateFileRowByKeyboard(1);
-          else if (e.key === 'ArrowUp') navigateFileRowByKeyboard(-1);
-          else if (e.key === 'Home') navigateFileRowByKeyboard(0, 'home');
-          else if (e.key === 'End') navigateFileRowByKeyboard(0, 'end');
+          // Shift extends the selection from the anchor, exactly like Explorer.
+          window.__navShiftExtend = !!e.shiftKey;
+          try {
+            if (e.key === 'ArrowDown') navigateFileRowByKeyboard(1);
+            else if (e.key === 'ArrowUp') navigateFileRowByKeyboard(-1);
+            else if (e.key === 'Home') navigateFileRowByKeyboard(0, 'home');
+            else if (e.key === 'End') navigateFileRowByKeyboard(0, 'end');
+          } finally {
+            window.__navShiftExtend = false;
+          }
           return;
         }
       }
 
       if (!anyModalOpen && e.key === 'Enter') {
         e.preventDefault();
-        activateSelectedRowByEnter();
+        // Ctrl+Enter sends the active pane's selection to the other pane;
+        // Ctrl+Shift+Enter moves it (source deleted after a successful copy).
+        if (e.ctrlKey || e.metaKey) {
+          sendSelectionToPeer(lastActivePaneIsRemote, e.shiftKey ? 'move' : 'copy');
+        } else {
+          activateSelectedRowByEnter();
+        }
         return;
       }
 

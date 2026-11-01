@@ -653,6 +653,96 @@
       color: var(--text-main);
     }
 
+    /* Split "Send" button: one primary action plus a menu for the rest.
+       It replaces the three separate transfer icons so the toolbar states the
+       destination once instead of offering four overlapping verbs. */
+    .transfer-split {
+      display: inline-flex;
+      align-items: stretch;
+      height: 25px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      overflow: hidden;
+      background: rgba(56, 189, 248, 0.06);
+    }
+    .transfer-split .btn-tool {
+      width: 26px;
+      height: 23px;
+      border: 0;
+      border-radius: 0;
+    }
+    .transfer-split-main {
+      position: relative;
+    }
+    .transfer-split-caret {
+      width: 14px !important;
+      border-inline-start: 1px solid var(--border-color) !important;
+      opacity: 0.85;
+    }
+    .transfer-split-count {
+      position: absolute;
+      top: -5px;
+      inset-inline-end: -4px;
+      min-width: 13px;
+      height: 13px;
+      padding: 0 3px;
+      border-radius: 7px;
+      background: var(--accent);
+      color: #04121f;
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 13px;
+      text-align: center;
+      display: none;
+    }
+    .transfer-split-count.has-count {
+      display: block;
+    }
+    .transfer-split.is-idle {
+      opacity: 0.45;
+    }
+    .transfer-split.is-idle .transfer-split-main {
+      cursor: not-allowed;
+    }
+
+    /* Batch collision dialog file list */
+    .batch-collision-list {
+      max-height: 168px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-card);
+      padding: 6px 10px;
+      font-family: var(--font-mono, monospace);
+      font-size: 11.5px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .batch-collision-list .bcl-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .batch-collision-list .bcl-name {
+      color: var(--text-main);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      /* Filenames decide their own direction from their first strong char. */
+      unicode-bidi: plaintext;
+    }
+    .batch-collision-list .bcl-meta {
+      color: var(--text-dim);
+      flex-shrink: 0;
+      /* Size deltas are Latin numbers plus a unit; without an isolate the RTL
+         paragraph flips "+12 KB" into "KB 12+". */
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+
     /* Main Workspace Layout (Floating Glassmorphic Split Panes) */
     .workspace-area {
       flex: 1;
@@ -4943,7 +5033,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.88</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.89</span>
         </div>
       </div>
 
@@ -5042,11 +5132,23 @@
         <div class="menu-dropdown" id="transferMenu">
           <div class="dropdown-item" onclick="transferUpload()">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
-            <span>Upload Selected File</span>
+            <span>Copy Selection to Remote</span>
+            <span class="shortcut">Ctrl+Enter</span>
           </div>
           <div class="dropdown-item" onclick="transferDownload()">
             <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-            <span>Download Selected File</span>
+            <span>Copy Selection to Local</span>
+            <span class="shortcut">Ctrl+Enter</span>
+          </div>
+          <div class="dropdown-item" onclick="sendSelectionToPeer(false, 'move')">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24" style="color:#fbbf24;"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+            <span>Move Selection to Remote</span>
+            <span class="shortcut">Ctrl+Shift+Enter</span>
+          </div>
+          <div class="dropdown-item" onclick="sendSelectionToPeer(true, 'move')">
+            <span class="menu-icon"><svg class="icon icon-sm" viewBox="0 0 24 24" style="color:#fbbf24;"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg></span>
+            <span>Move Selection to Local</span>
+            <span class="shortcut">Ctrl+Shift+Enter</span>
           </div>
           <div class="dropdown-separator"></div>
           <div class="dropdown-item" onclick="promptNewLocalFolder()">
@@ -5394,15 +5496,15 @@
             <select id="driveSelect" onchange="onDriveChange()" style="display: none;">
               <option value="C:\">C:\</option>
             </select>
-            <button class="btn-tool" style="color: var(--accent);" title="Upload Selected File to Remote Server" onclick="transferUpload()">
-              <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            </button>
-            <button class="btn-tool" style="color: #4ade80;" title="Move Selected Items to Parent Folder (..) [Alt+Up]" onclick="moveSelectedToParent(false)">
-              <svg class="icon" viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
-            </button>
-            <button class="btn-tool" style="color: #38bdf8;" title="Interactive Move / Copy Selected Items (F6)" onclick="openInteractiveMoveModal(false)">
-              <svg class="icon" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-            </button>
+            <div class="transfer-split" id="localTransferSplit">
+              <button class="btn-tool transfer-split-main" id="btnLocalSend" style="color: var(--accent);" title="Send selected items to the remote pane (Ctrl+Enter = copy, Ctrl+Shift+Enter = move)" onclick="sendSelectionToPeer(false)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span class="transfer-split-count" id="localSendCount">0</span>
+              </button>
+              <button class="btn-tool transfer-split-caret" onclick="openTransferMenu(event, false)" title="More transfer options">
+                <svg class="icon" viewBox="0 0 24 24" style="width: 10px; height: 10px;"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+            </div>
             <button class="btn-tool" title="New Folder" onclick="promptNewLocalFolder()">
               <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
             </button>
@@ -5551,15 +5653,15 @@
             <button class="btn-tool" id="btnToolbarSyncBrowsing" style="color: var(--text-dim);" title="Toggle Synchronized Browsing (Lock Local & Remote folder navigation)" onclick="toggleSyncBrowsingToolbar()">
               <svg class="icon" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </button>
-            <button class="btn-tool" style="color: var(--accent);" title="Download Selected File to Local PC" onclick="transferDownload()">
-              <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
-            <button class="btn-tool" style="color: #4ade80;" title="Move Selected Remote Items to Parent Folder (..) [Alt+Up]" onclick="moveSelectedToParent(true)">
-              <svg class="icon" viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
-            </button>
-            <button class="btn-tool" style="color: #38bdf8;" title="Interactive Move / Copy Selected Remote Items (F6)" onclick="openInteractiveMoveModal(true)">
-              <svg class="icon" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-            </button>
+            <div class="transfer-split" id="remoteTransferSplit">
+              <button class="btn-tool transfer-split-main" id="btnRemoteSend" style="color: var(--accent);" title="Send selected items to the local pane (Ctrl+Enter = copy, Ctrl+Shift+Enter = move)" onclick="sendSelectionToPeer(true)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span class="transfer-split-count" id="remoteSendCount">0</span>
+              </button>
+              <button class="btn-tool transfer-split-caret" onclick="openTransferMenu(event, true)" title="More transfer options">
+                <svg class="icon" viewBox="0 0 24 24" style="width: 10px; height: 10px;"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+            </div>
             <button class="btn-tool" style="color: #38bdf8;" title="Find Files on Remote or Local (Ctrl+F / F3)" onclick="openFindFilesModal()">
               <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </button>
@@ -6613,7 +6715,7 @@
           </div>
           <div class="about-brand-sub">Modern Site Manager & Asynchronous File Transfer Engine</div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.88 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.89 Dev (Windows x64)</span>
             <span style="font-size: 12px; color: var(--text-dim);">Release Channel: Official</span>
           </div>
         </div>
@@ -6728,7 +6830,7 @@
         </div>
         <div class="about-code-box" id="aboutDiagnosticsText">
 Application: 90FTP Desktop Client
-Version: 0.0.0.88 (Release)
+Version: 0.0.0.89 (Release)
 OS: Windows NT 10.0 x64
 WebView2: Evergreen Host
 Renderer: DirectComposition Hardware Accelerated
@@ -7835,6 +7937,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       </div>
     </div>
   </div>
+
+  <!-- Batch Collision Resolver: one decision for a whole selection -->
+  <div class="modal-overlay" id="batchCollisionModal" style="z-index: 1082;">
+    <div class="modal-content" style="width: 560px; max-width: 95vw;">
+      <div class="modal-header" style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.15) 0%, rgba(0, 0, 0, 0.2) 100%); border-bottom: 1px solid rgba(234, 179, 8, 0.3);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 19.5px; color: #f59e0b;"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+          <div>
+            <div style="font-weight: 700; font-size: 14.5px; color: var(--text-main);" id="batchCollisionTitle" dir="auto">Existing Files Found</div>
+            <div style="font-size: 12px; color: var(--text-dim);" id="batchCollisionSubtitle" dir="auto">One decision applies to every conflicting file in this transfer</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="resolveBatchCollision(null)" style="padding: 1px 7px; font-size: 12px;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div id="batchCollisionSummary" dir="auto" style="font-size: 13px; color: var(--text-main); font-weight: 600;"></div>
+        <div id="batchCollisionList" class="batch-collision-list"></div>
+        <div data-i18n="send.hint" dir="auto" style="font-size: 12px; color: var(--text-dim); line-height: 1.5;">
+          Pick one action for the whole batch. Nothing is written until you choose.
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; gap: 8px; flex-wrap: wrap;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="resolveBatchCollision(null)" data-i18n="common.cancel">Cancel</button>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="resolveBatchCollision('skip')" data-i18n="send.skip">Skip Existing</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="resolveBatchCollision('rename')" data-i18n="send.keep_both">Keep Both</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="resolveBatchCollision('overwrite')" data-i18n="send.overwrite">Overwrite All</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Floating Interactive Action Toast (Move / Copy / Undo / Open Target) -->
   <div id="interactiveActionToast" class="interactive-action-toast">

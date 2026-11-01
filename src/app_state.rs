@@ -2012,6 +2012,158 @@ impl AppState {
                 )
             }
 
+            // Batch enqueue: a multi-selection of 200 files used to cost 200 IPC
+            // round trips and 200 full queue snapshots, which is what made large
+            // selections feel sluggish. One call now returns every id plus a
+            // single snapshot. The UI passes the size it already knows from the
+            // listing, so a download no longer needs a stat per file.
+            "transfer_enqueue_batch" => {
+                let kind = match crate::transfer_queue::Kind::parse(
+                    payload["kind"].as_str().unwrap_or("upload"),
+                ) {
+                    Some(k) => k,
+                    None => return IpcResponse::err(id, action, "Unknown transfer kind"),
+                };
+                let items = payload["items"].as_array().cloned().unwrap_or_default();
+                if items.is_empty() {
+                    return IpcResponse::err(id, action, "No items to queue.");
+                }
+                if items.len() > 5000 {
+                    return IpcResponse::err(id, action, "Too many items in one batch (limit 5000).");
+                }
+                if self.current_connection.lock().unwrap().is_none() {
+                    return IpcResponse::err(id, action, "Connect to a server first.");
+                }
+
+                // One slot per input item so the caller can map an id back to its
+                // source file; None means that item was refused.
+                let mut task_ids: Vec<Option<u64>> = Vec::with_capacity(items.len());
+                let mut errors: Vec<String> = Vec::new();
+                for item in &items {
+                    let local_path = item["local_path"].as_str().unwrap_or("").trim().to_string();
+                    let remote_path = item["remote_path"].as_str().unwrap_or("").trim().to_string();
+                    if local_path.is_empty() || remote_path.is_empty() {
+                        errors.push("Skipped an item with a missing path.".to_string());
+                        task_ids.push(None);
+                        continue;
+                    }
+                    let hint = item["size"].as_u64().unwrap_or(0);
+                    let size: Result<u64, String> = if hint > 0 {
+                        Ok(hint)
+                    } else {
+                        match kind {
+                            crate::transfer_queue::Kind::Upload => std::fs::metadata(&local_path)
+                                .map(|m| m.len())
+                                .map_err(|e| format!("Cannot read '{}': {}", local_path, e)),
+                            crate::transfer_queue::Kind::Download => {
+                                let p = remote_path.clone();
+                                match self.with_remote_retry(|client| client.stat(&p)) {
+                                    Ok((Some(existing), _)) => Ok(existing.size),
+                                    _ => Ok(0),
+                                }
+                            }
+                        }
+                    };
+                    match size {
+                        Ok(s) => task_ids.push(Some(
+                            self.transfer_queue
+                                .enqueue(kind, &local_path, &remote_path, s),
+                        )),
+                        Err(e) => {
+                            errors.push(e);
+                            task_ids.push(None);
+                        }
+                    }
+                }
+
+                IpcResponse::ok(
+                    id,
+                    action,
+                    json!({
+                        "task_ids": task_ids,
+                        "errors": errors,
+                        "queue": self.transfer_queue.snapshot(),
+                    }),
+                )
+            }
+
+            // One collision sweep for a whole selection. The UI cannot answer
+            // "does this exist?" from its own listing when the listing is stale,
+            // and asking per file turned a 200-file upload into 200 prompts.
+            "transfer_preflight" => {
+                let kind = match crate::transfer_queue::Kind::parse(
+                    payload["kind"].as_str().unwrap_or("upload"),
+                ) {
+                    Some(k) => k,
+                    None => return IpcResponse::err(id, action, "Unknown transfer kind"),
+                };
+                let items = payload["items"].as_array().cloned().unwrap_or_default();
+                if items.is_empty() {
+                    return IpcResponse::ok(id, action, json!({ "conflicts": [], "checked": 0 }));
+                }
+                if self.current_connection.lock().unwrap().is_none() {
+                    return IpcResponse::err(id, action, "Connect to a server first.");
+                }
+
+                let mut conflicts: Vec<serde_json::Value> = Vec::new();
+                let mut checked: u64 = 0;
+                // Bounded so a pathological selection cannot pin the IPC thread
+                // for minutes; the UI falls back to its own listing beyond this.
+                for item in items.iter().take(1000) {
+                    let dest = item["dest"].as_str().unwrap_or("").trim();
+                    if dest.is_empty() {
+                        continue;
+                    }
+                    checked += 1;
+                    match kind {
+                        crate::transfer_queue::Kind::Upload => {
+                            let p = dest.to_string();
+                            if let Ok((Some(existing), _)) =
+                                self.with_remote_retry(|client| client.stat(&p))
+                            {
+                                conflicts.push(json!({
+                                    "name": item["name"],
+                                    "dest": dest,
+                                    "size": item["size"].as_u64().unwrap_or(0),
+                                    "dest_size": existing.size,
+                                    "dest_modified": existing.modified,
+                                    "dest_is_dir": existing.is_dir,
+                                }));
+                            }
+                        }
+                        crate::transfer_queue::Kind::Download => {
+                            let p = std::path::Path::new(dest);
+                            if p.exists() {
+                                let meta = p.metadata().ok();
+                                let is_dir = p.is_dir();
+                                let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+                                let modified = meta
+                                    .and_then(|m| m.modified().ok())
+                                    .map(|t| {
+                                        let dt: chrono::DateTime<chrono::Utc> = t.into();
+                                        dt.format("%Y-%m-%d %H:%M").to_string()
+                                    })
+                                    .unwrap_or_else(|| "-".to_string());
+                                conflicts.push(json!({
+                                    "name": item["name"],
+                                    "dest": dest,
+                                    "size": item["size"].as_u64().unwrap_or(0),
+                                    "dest_size": size,
+                                    "dest_modified": modified,
+                                    "dest_is_dir": is_dir,
+                                }));
+                            }
+                        }
+                    }
+                }
+
+                IpcResponse::ok(
+                    id,
+                    action,
+                    json!({ "conflicts": conflicts, "checked": checked }),
+                )
+            }
+
             "transfer_list" => IpcResponse::ok(
                 id,
                 action,
