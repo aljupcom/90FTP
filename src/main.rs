@@ -96,8 +96,8 @@ fn main() {
     let app_state = Arc::new(AppState::new(Some(proxy_cb), Some(term_cb)));
 
     // The application script lives in `ui/app.js` and is injected here so the
-    // page stays a single self-contained document: WebView2 loads it through
-    // NavigateToString, where a relative <script src> would not resolve.
+    // page stays a single self-contained document: no relative <script src> has
+    // to resolve at runtime.
     // The interface language is injected before any page script runs, so the
     // correct direction and language are in place on the very first paint.
     // The value is whitelisted by `ui_prefs::normalize_language` and serialized
@@ -116,6 +116,37 @@ fn main() {
         .replace("// __I18N_EN__", include_str!("ui/i18n.en.js"))
         .replace("// __I18N_AR__", include_str!("ui/i18n.ar.js"))
         .replace("// __I18N_JS__", include_str!("ui/i18n.js"));
+
+    // WebView2 rejects oversized documents. `with_html` hands the string to
+    // `NavigateToString`, which answers HRESULT 0x80070057 (E_INVALIDARG) once
+    // the document approaches ~1.5 MiB - and the process dies before the window
+    // is ever shown. The assembled page is already ~1.49 MiB, so one added
+    // feature or a CRLF checkout was enough to stop the app from opening at all
+    // (v0.0.0.91). The very same bytes are therefore served over a private
+    // scheme, which has no such ceiling.
+    const APP_SCHEME: &str = "ninetyftp";
+    let app_url = format!("{APP_SCHEME}://localhost/index.html");
+    let doc_len = html_content.len();
+
+    // One request is ever expected (`/index.html`); everything the page needs is
+    // already inlined, so an unknown path is a bug worth surfacing as a 404
+    // rather than silently answering with the document again.
+    let doc_bytes = html_content.into_bytes();
+    let doc_handler = move |_id: &str, req: wry::http::Request<Vec<u8>>| {
+        let path = req.uri().path();
+        let (status, content_type, body): (u16, &str, Vec<u8>) =
+            if path == "/" || path == "/index.html" {
+                (200, "text/html; charset=utf-8", doc_bytes.clone())
+            } else {
+                (404, "text/plain; charset=utf-8", b"not found".to_vec())
+            };
+        wry::http::Response::builder()
+            .status(status)
+            .header("Content-Type", content_type)
+            .header("Cache-Control", "no-store")
+            .body(std::borrow::Cow::Owned(body))
+            .expect("static response builder cannot fail")
+    };
 
     let mut webview_dir = sessions::get_storage_dir();
     webview_dir.push("webview_data");
@@ -165,16 +196,28 @@ fn main() {
         });
     };
 
-    let webview = WebViewBuilder::new_with_web_context(&mut context)
+    let webview = match WebViewBuilder::new_with_web_context(&mut context)
         // DevTools stay available in debug builds only; shipping them enabled in a
         // release binary hands any script-injection bug a full execution console.
         .with_devtools(cfg!(debug_assertions))
         .with_background_color((17, 17, 19, 255))
         .with_initialization_script(&ui_prefs_script)
-        .with_html(html_content)
+        .with_custom_protocol(APP_SCHEME.to_string(), doc_handler)
+        .with_url(&app_url)
         .with_ipc_handler(ipc_handler)
         .build(&window)
-        .expect("Failed to initialize WebView");
+    {
+        Ok(webview) => webview,
+        Err(e) => {
+            // Record the document size next to the failure: an oversized page is
+            // the one startup fault that looks like a random WebView2 error.
+            logger::log_error(&format!(
+                "Failed to initialize WebView for {} ({} bytes document): {:?}",
+                app_url, doc_len, e
+            ));
+            panic!("Failed to initialize WebView: {:?}", e);
+        }
+    };
 
     // The window stays hidden until the page says it has painted. `with_background_color`
     // already matches the dark shell, so even the shortest gap reads as the app
