@@ -277,7 +277,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.90';
+    let APP_CURRENT_VERSION = '0.0.0.91';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -14948,6 +14948,62 @@ window.onerror = function(msg, url, line, col, error) {
         : `<div class="sc-empty">${escapeHtml(t('sc.empty'))}</div>`;
     }
 
+    // ── Web-view accelerators that must not escape the app ─────────────────
+    //
+    // The interface is HTML, so a handful of key combinations would otherwise
+    // do what they do in a browser instead of what they do in a desktop file
+    // manager. The worst one is Ctrl+A: it selected every log line and every
+    // file name on screen — the whole window looked like a highlighted web
+    // page — even though the panes handled the key correctly. Ctrl+W closed
+    // the window, Ctrl+J opened downloads, the zoom keys resized the entire
+    // interface with no way back, and F11 went full screen.
+    //
+    // This listener runs in the capture phase, so it wins before any page
+    // handler and before the engine's own default action. It only cancels the
+    // native behaviour; the pane selection still happens in the bubble handler
+    // below, which keeps the two concerns apart.
+    const isTextEntry = (el) => !!el && (
+      el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable === true);
+
+    window.addEventListener('keydown', (e) => {
+      const k = (e.key || '').toLowerCase();
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) {
+        if (e.key === 'F11') e.preventDefault();
+        return;
+      }
+      if (e.altKey) return;
+
+      // Ctrl+A belongs to the file list. A focused text field keeps it,
+      // because there it means "select the text I am editing".
+      if (!e.shiftKey && k === 'a') {
+        if (!isTextEntry(document.activeElement)) e.preventDefault();
+        return;
+      }
+      // Window, download and developer-tool shortcuts.
+      if (k === 'w' || k === 'j') { e.preventDefault(); return; }
+      if (e.shiftKey && (k === 'i' || k === 'j' || k === 'c')) { e.preventDefault(); return; }
+      // Zoom: there is no UI to reset it, so a stray Ctrl+= would leave the
+      // user with a permanently resized interface.
+      if (k === '0' || k === '+' || k === '=' || k === '-' || k === '_') e.preventDefault();
+    }, true);
+
+    // A drag or a stray select-all must not paint a text selection across the
+    // chrome. The stylesheet already sets `user-select: none` globally and
+    // opts the readable surfaces (log, editor, path fields) back in, so the
+    // computed style is the single source of truth: block the selection only
+    // where the element itself says it is not selectable.
+    document.addEventListener('selectstart', (e) => {
+      const el = e.target instanceof Element ? e.target : null;
+      if (!el || isTextEntry(el)) return;
+      const cs = window.getComputedStyle(el);
+      const us = cs.userSelect || cs.webkitUserSelect || 'auto';
+      if (us !== 'none') return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return; // extending a selection the user made
+      e.preventDefault();
+    });
+
     // Global Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
       const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
@@ -15121,7 +15177,15 @@ window.onerror = function(msg, url, line, col, error) {
       // ── Ctrl / Cmd combinations ───────────────────────────────────────────
       if (e.ctrlKey || e.metaKey) {
         const k = e.key.toLowerCase();
-        if (k === 'a') { e.preventDefault(); selectAllItemsInPane(lastActivePaneIsRemote); return; }
+        if (k === 'a') {
+          e.preventDefault();
+          // Some engines run their own select-all before the page sees the
+          // key; drop whatever it produced so the pane highlight is the only
+          // selection left on screen.
+          try { window.getSelection()?.removeAllRanges?.(); } catch (_) {}
+          selectAllItemsInPane(lastActivePaneIsRemote);
+          return;
+        }
         if (k === 'x') { e.preventDefault(); clipboardCutSelected(lastActivePaneIsRemote); return; }
         if (k === 'c') {
           // Only take Ctrl+C when the user is not copying selected text.
@@ -15136,7 +15200,7 @@ window.onerror = function(msg, url, line, col, error) {
           if (lastInteractiveMoveUndo) { e.preventDefault(); undoLastInteractiveMove(); }
           return;
         }
-        if (k === 'i') {
+        if (k === 'i' && !e.shiftKey) {
           e.preventDefault();
           const filterInp = document.getElementById(lastActivePaneIsRemote ? 'remoteQuickFilter' : 'localQuickFilter');
           if (filterInp) { filterInp.focus(); filterInp.select(); }
