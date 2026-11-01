@@ -277,7 +277,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.92';
+    let APP_CURRENT_VERSION = '0.0.0.93';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -14654,6 +14654,98 @@ window.onerror = function(msg, url, line, col, error) {
 
     let lastActivePaneIsRemote = false;
 
+    // ── Keyboard ownership ───────────────────────────────────────────────────
+    // Every pane shortcut used to be dropped whenever *any* field had focus, and
+    // nothing in the app ever released that focus. Typing in the quick filter and
+    // then pressing Ctrl+A selected the filter text and left the list untouched,
+    // with no hint about why. The keyboard now has an explicit owner, that owner
+    // is visible in the status bar, and a field only keeps the keys that really
+    // edit text.
+    const TEXT_ENTRY_TAGS = ['INPUT', 'TEXTAREA', 'SELECT'];
+    let kbdAttentionTimer = null;
+
+    function focusedTextEntry() {
+      const el = document.activeElement;
+      if (!el || el === document.body) return null;
+      if (TEXT_ENTRY_TAGS.includes(el.tagName)) return el;
+      if (el.isContentEditable) return el;
+      return null;
+    }
+
+    // True when the focused field must keep this key. Editing and navigation keys
+    // always stay; the clipboard quartet stays only while the field holds text,
+    // because an empty field has nothing to select, cut or copy - there the pane
+    // action is unambiguous and strictly more useful.
+    function fieldOwnsKey(e) {
+      if (e.key === 'Tab') return true; // move between form fields, not panes
+      if (e.key === 'Backspace' || e.key === 'Delete') return true;
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) return true;
+      if (e.ctrlKey || e.metaKey) {
+        const k = (e.key || '').toLowerCase();
+        if (['a', 'c', 'x', 'v', 'z', 'y'].includes(k) && !e.shiftKey) {
+          const el = focusedTextEntry();
+          return !!(el && String(el.value || '').length > 0);
+        }
+        return false;
+      }
+      return (e.key || '').length === 1 && !e.altKey;
+    }
+
+    function keyboardOwner() {
+      if (focusedTextEntry()) return 'field';
+      if (isAnyDialogOpen()) return 'dialog';
+      return lastActivePaneIsRemote ? 'remote' : 'local';
+    }
+
+    function syncKeyboardOwner() {
+      const pill = document.getElementById('kbdOwnerPill');
+      if (!pill) return;
+      const owner = keyboardOwner();
+      if (pill.dataset.owner === owner) return;
+      pill.dataset.owner = owner;
+      const labelKey = owner === 'field' ? 'status.kbd_owner_field'
+        : owner === 'dialog' ? 'status.kbd_owner_dialog'
+        : owner === 'remote' ? 'status.kbd_owner_remote'
+        : 'status.kbd_owner_local';
+      pill.textContent = t(labelKey);
+      pill.title = owner === 'local' || owner === 'remote'
+        ? t('status.kbd_owner_hint_list')
+        : t('status.kbd_owner_hint_field');
+      pill.setAttribute('aria-label', pill.title);
+    }
+
+    // A shortcut that the field legitimately consumed would otherwise look like a
+    // dead key, so the pill pulses to show where the keystroke went.
+    function noteFieldKeptShortcut(e) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = (e.key || '').toLowerCase();
+      if (!['a', 'c', 'x', 'v'].includes(k)) return;
+      const pill = document.getElementById('kbdOwnerPill');
+      if (!pill) return;
+      pill.classList.remove('kbd-owner-attention');
+      void pill.offsetWidth; // restart the animation
+      pill.classList.add('kbd-owner-attention');
+      if (kbdAttentionTimer) clearTimeout(kbdAttentionTimer);
+      kbdAttentionTimer = setTimeout(() => {
+        pill.classList.remove('kbd-owner-attention');
+        kbdAttentionTimer = null;
+      }, 1600);
+    }
+
+    function releaseKeyboardToPane() {
+      const field = focusedTextEntry();
+      if (field && typeof field.blur === 'function') field.blur();
+      syncKeyboardOwner();
+    }
+
+    // Clicking the pill hands the keyboard back to the list without moving the
+    // mouse across the window.
+    window.grabPaneKeyboard = function () {
+      releaseKeyboardToPane();
+      setActivePaneFocus(lastActivePaneIsRemote);
+      try { document.getElementById(lastActivePaneIsRemote ? 'rightPane' : 'leftPane')?.focus(); } catch (_) {}
+    };
+
     function setActivePaneFocus(isRemote) {
       lastActivePaneIsRemote = !!isRemote;
       // #leftPane / #rightPane *are* the .file-pane-wrapper elements, so the old
@@ -14665,12 +14757,25 @@ window.onerror = function(msg, url, line, col, error) {
       // Tab used to move the ring but leave the status bar reading "LOCAL PANE"
       // with the previous pane's count, because only this function ran.
       updateCommanderStatusFooter();
+      syncKeyboardOwner();
     }
 
     document.addEventListener('mousedown', (e) => {
-      if (e.target.closest('#rightPane')) setActivePaneFocus(true);
-      else if (e.target.closest('#leftPane')) setActivePaneFocus(false);
+      const inRight = e.target.closest('#rightPane');
+      const inLeft = e.target.closest('#leftPane');
+      if (!inRight && !inLeft) return;
+      setActivePaneFocus(!!inRight);
+      // Clicking the list, its header or its scrollbar takes the keyboard back.
+      // The pane's own fields are the one exception, or they could never be used.
+      if (!e.target.closest('input, textarea, select, [contenteditable="true"]')) {
+        releaseKeyboardToPane();
+      }
     });
+
+    // Focus can move without a click (dialogs, programmatic focus, Tab inside a
+    // form), so the indicator follows focus itself rather than only clicks.
+    document.addEventListener('focusin', () => syncKeyboardOwner());
+    document.addEventListener('focusout', () => setTimeout(syncKeyboardOwner, 0));
 
     function triggerCommanderFkey(key) {
       const isRem = lastActivePaneIsRemote;
@@ -15037,6 +15142,11 @@ window.onerror = function(msg, url, line, col, error) {
         closeProcessManagerModal();
         closeFileInspectorModal();
         closeShortcutsModal();
+        // Escape is also the way out of a text field. Without this the field kept
+        // focus for the rest of the session and every pane shortcut stayed dead.
+        const escField = focusedTextEntry();
+        if (escField && typeof escField.blur === 'function') escField.blur();
+        syncKeyboardOwner();
         return;
       }
 
@@ -15046,7 +15156,20 @@ window.onerror = function(msg, url, line, col, error) {
         return;
       }
 
-      if (isInput) return;
+      if (isInput) {
+        if (fieldOwnsKey(e)) {
+          // Ctrl+A / Ctrl+C in a field that holds text is the field's business,
+          // but the user deserves to know the pane did not get the key.
+          noteFieldKeptShortcut(e);
+          return;
+        }
+        // A dialog keeps its own field: blurring it from here would steal the
+        // caret in the middle of a rename or a path prompt.
+        if (isAnyDialogOpen()) return;
+        // The key is a pane shortcut the field cannot use: hand the keyboard back
+        // so the action happens visibly instead of being silently dropped.
+        releaseKeyboardToPane();
+      }
 
       // A dialog owns the keyboard while it is up. This closes two holes: pane
       // shortcuts firing behind a prompt (Ctrl+A selected every file behind a
@@ -15505,6 +15628,9 @@ window.onerror = function(msg, url, line, col, error) {
       } catch (err) {
         console.error('Fatal initialization error:', err);
       }
+      // Paint the keyboard-owner pill with the state the app actually starts in,
+      // instead of leaving the static markup to describe a stale owner.
+      syncKeyboardOwner();
       // Give the browser one task turn to finish layout/paint before revealing
       // the window, so the very first visible frame is the real interface.
       setTimeout(notifyUiReady, 0);

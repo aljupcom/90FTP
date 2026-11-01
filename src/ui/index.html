@@ -4635,6 +4635,58 @@
       color: var(--accent);
       border: 1px solid rgba(56, 189, 248, 0.3);
     }
+    /* Keyboard owner: who receives Ctrl+A / Delete / arrows right now. It is a
+       button on purpose - clicking it hands the keyboard back to the file list
+       after a field has taken it. */
+    .kbd-owner-pill {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 7px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      font-family: inherit;
+      cursor: pointer;
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text-dim);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .kbd-owner-pill:hover { border-color: currentColor; }
+    .kbd-owner-pill[data-owner="local"] {
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+    .kbd-owner-pill[data-owner="remote"] {
+      background: rgba(34, 197, 94, 0.14);
+      color: #22c55e;
+      border-color: rgba(34, 197, 94, 0.35);
+    }
+    .kbd-owner-pill[data-owner="field"] {
+      background: rgba(251, 191, 36, 0.16);
+      color: #fbbf24;
+      border-color: rgba(251, 191, 36, 0.45);
+    }
+    .kbd-owner-pill[data-owner="dialog"] {
+      background: rgba(148, 163, 184, 0.08);
+      color: var(--text-dim);
+      border-color: rgba(148, 163, 184, 0.22);
+    }
+    .kbd-owner-pill.kbd-owner-attention {
+      animation: kbdOwnerPulse 0.55s ease 3;
+    }
+    @keyframes kbdOwnerPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+      50% { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.35); }
+    }
+    [data-theme="light"] .kbd-owner-pill { color: #64748b; border-color: #cbd5e1; background: #f1f5f9; }
+    [data-theme="light"] .kbd-owner-pill[data-owner="local"] { color: #0369a1; background: #e0f2fe; border-color: #7dd3fc; }
+    [data-theme="light"] .kbd-owner-pill[data-owner="remote"] { color: #15803d; background: #dcfce7; border-color: #86efac; }
+    [data-theme="light"] .kbd-owner-pill[data-owner="field"] { color: #b45309; background: #fef3c7; border-color: #fcd34d; }
     .fkey-actions-group {
       display: flex;
       align-items: center;
@@ -5110,7 +5162,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.92</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.93</span>
         </div>
       </div>
 
@@ -6051,6 +6103,7 @@
   <div class="commander-fkey-bar" id="commanderFkeyBar">
     <div class="fkey-status-group">
       <span class="fkey-pane-pill" id="fkeyActivePaneBadge">LOCAL PANE</span>
+      <button type="button" class="kbd-owner-pill" id="kbdOwnerPill" data-owner="local" data-i18n-skip onclick="grabPaneKeyboard()" title="Keyboard target">⌨ List</button>
       <span id="fkeySelectionStatus" style="color: var(--text-muted); font-size: 12px;">Ready</span>
     </div>
     <div class="fkey-actions-group">
@@ -6797,7 +6850,7 @@
           </div>
           <div class="about-brand-sub">Modern Site Manager & Asynchronous File Transfer Engine</div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.92 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.93 Dev (Windows x64)</span>
             <span style="font-size: 12px; color: var(--text-dim);">Release Channel: Official</span>
           </div>
         </div>
@@ -6912,7 +6965,7 @@
         </div>
         <div class="about-code-box" id="aboutDiagnosticsText">
 Application: 90FTP Desktop Client
-Version: 0.0.0.92 (Release)
+Version: 0.0.0.93 (Release)
 OS: Windows NT 10.0 x64
 WebView2: Evergreen Host
 Renderer: DirectComposition Hardware Accelerated
