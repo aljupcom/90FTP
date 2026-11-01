@@ -187,6 +187,23 @@ window.onerror = function(msg, url, line, col, error) {
       updateTransferBarState();
     }
 
+    // Space toggles without moving the focus: the row stays put so the same key
+    // can be pressed repeatedly on one item, which is how Explorer behaves.
+    function selToggleKeepFocus(isRemote, idx) {
+      const st = selState(isRemote);
+      const item = selList(isRemote)[idx];
+      if (!item) return;
+      if (st.paths.has(item.path)) st.paths.delete(item.path);
+      else st.paths.add(item.path);
+      st.anchorIdx = idx;
+      st.focusIdx = idx;
+      selSyncFocusItem(isRemote);
+      selPaint(isRemote);
+      updatePaneStatsBadge(isRemote);
+      updateCommanderStatusFooter();
+      updateTransferBarState();
+    }
+
     // Shift+click / Shift+Arrow: everything between the anchor and `idx`.
     function selRangeTo(isRemote, idx) {
       const st = selState(isRemote);
@@ -260,7 +277,7 @@ window.onerror = function(msg, url, line, col, error) {
     let isSyncNavigating = false;
 
     // Software Remote Update Global State
-    let APP_CURRENT_VERSION = '0.0.0.89';
+    let APP_CURRENT_VERSION = '0.0.0.90';
     const GITHUB_REPO_PATH = 'aljupcom/90FTP';
     let currentDownloadUrl = '';
     let currentDownloadFilename = '';
@@ -604,7 +621,15 @@ window.onerror = function(msg, url, line, col, error) {
 
     function resolveAppDesktopDialog(result) {
       const overlay = document.getElementById('appDesktopDialogOverlay');
-      if (overlay) overlay.classList.remove('active');
+      if (overlay) {
+        // Focus has to leave the dialog. It used to stay on the prompt input,
+        // which is hidden but still document.activeElement — and the shortcut
+        // handler treats any focused INPUT as "the user is typing", so every
+        // pane shortcut went dead after cancelling a prompt.
+        const focused = document.activeElement;
+        if (focused && overlay.contains(focused) && typeof focused.blur === 'function') focused.blur();
+        overlay.classList.remove('active');
+      }
       if (activeAppDialogResolver) {
         const fn = activeAppDialogResolver;
         const wasPrompt = activeAppDialogIsPrompt;
@@ -3944,26 +3969,30 @@ window.onerror = function(msg, url, line, col, error) {
       return true;
     }
 
-    async function executeTargetedCrossPaneTransfer(items, isRemoteTarget, targetDirPath) {
-      if (!items || items.length === 0) return;
+    // Returns true when the transfer was actually queued. The clipboard uses
+    // that to decide whether a cut may be consumed, so a cancelled paste keeps
+    // the cut selection instead of silently dropping it.
+    async function executeTargetedCrossPaneTransfer(items, isRemoteTarget, targetDirPath, mode = 'copy', skipMoveConfirm = false) {
+      if (!items || items.length === 0) return false;
       if (isRemoteTarget) {
         if (!isConnected) {
           if (appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile) {
             const ok = await ensureSilentConnected(currentRemotePath);
-            if (!ok) return;
+            if (!ok) return false;
           } else {
             alert('Please connect to a remote server before uploading.');
-            return;
+            return false;
           }
         }
         const savedRemotePath = currentRemotePath;
         currentRemotePath = targetDirPath;
         fsWatcherSuspended = true;
+        let queued = false;
         try {
           addLog(`Targeted Upload: Sending ${items.length} item(s) directly into remote '${targetDirPath}'...`, 'cmd');
           // Same batched path as the Send button: one preflight, one enqueue.
-          await pushSelectionToRemote(items, 'copy');
-          showInteractiveActionToast(
+          queued = await pushSelectionToRemote(items, mode, skipMoveConfirm);
+          if (queued) showInteractiveActionToast(
             `<svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Uploaded ${items.length} item${items.length === 1 ? '' : 's'} into folder`,
             `Remote Target: ${targetDirPath}`,
             targetDirPath,
@@ -3975,14 +4004,16 @@ window.onerror = function(msg, url, line, col, error) {
           currentRemotePath = savedRemotePath;
           await navigateRemote(savedRemotePath);
         }
+        return queued === true;
       } else {
         const savedLocalPath = currentLocalPath;
         currentLocalPath = targetDirPath;
         fsWatcherSuspended = true;
+        let queued = false;
         try {
           addLog(`Targeted Download: Saving ${items.length} item(s) directly into local '${targetDirPath}'...`, 'cmd');
-          await pullSelectionToLocal(items, 'copy');
-          showInteractiveActionToast(
+          queued = await pullSelectionToLocal(items, mode, skipMoveConfirm);
+          if (queued) showInteractiveActionToast(
             `<svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Downloaded ${items.length} item${items.length === 1 ? '' : 's'} into folder`,
             `Local Target: ${targetDirPath}`,
             targetDirPath,
@@ -3994,6 +4025,7 @@ window.onerror = function(msg, url, line, col, error) {
           currentLocalPath = savedLocalPath;
           await navigateLocal(savedLocalPath);
         }
+        return queued === true;
       }
     }
 
@@ -4267,10 +4299,21 @@ window.onerror = function(msg, url, line, col, error) {
           interactiveClipboard = null;
         }
       } else {
-        // Cross-pane paste transfers files between Local and Remote!
-        await executeTargetedCrossPaneTransfer(clip.items, isRemoteTarget, targetDir);
-        if (clip.mode === 'cut') {
+        // Cross-pane paste transfers files between Local and Remote. A cut is a
+        // real move: this used to run as a copy while the clipboard was cleared
+        // anyway, so the sources were silently kept and the cut state was lost.
+        const isCut = clip.mode === 'cut';
+        const queued = await executeTargetedCrossPaneTransfer(
+          clip.items, isRemoteTarget, targetDir, isCut ? 'move' : 'copy', isCut
+        );
+        if (isCut && queued) {
           interactiveClipboard = null;
+          // Drop the dimmed "pending cut" look right away instead of waiting for
+          // the next directory refresh.
+          if (clip.isRemote) renderRemoteFiles(remoteFiles);
+          else renderLocalFiles(localFiles);
+        } else if (isCut) {
+          addLog('Paste did not start — the cut selection was kept so you can retry.', 'info');
         }
       }
     }
@@ -12390,20 +12433,20 @@ window.onerror = function(msg, url, line, col, error) {
       return candidate;
     }
 
-    async function pushSelectionToRemote(items, mode = 'copy') {
+    async function pushSelectionToRemote(items, mode = 'copy', skipMoveConfirm = false) {
       if (!isConnected) {
         if (appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile) {
           const ok = await ensureSilentConnected(currentRemotePath);
-          if (!ok) return;
+          if (!ok) return false;
         } else {
           showAppAlert(t('send.not_connected_upload'), t('send.not_connected'), 'warning');
-          return;
+          return false;
         }
       }
       const destDir = currentRemotePath;
       if (!destDir) {
         showAppAlert(t('send.no_remote_folder'), t('send.not_connected'), 'warning');
-        return;
+        return false;
       }
 
       const files = items.filter((it) => !it.is_dir);
@@ -12424,7 +12467,7 @@ window.onerror = function(msg, url, line, col, error) {
           policy = await askBatchCollision(conflicts, entries.length, 'upload');
           if (!policy) {
             addLog(`Upload cancelled — ${conflicts.length} existing file(s) left untouched.`, 'info');
-            return;
+            return false;
           }
           const blocked = new Set(conflicts.map((c) => c.dest));
           if (policy === 'skip') {
@@ -12458,26 +12501,27 @@ window.onerror = function(msg, url, line, col, error) {
 
       const liveIds = queuedIds.filter((id) => id !== null && id !== undefined);
       if (mode === 'move' && liveIds.length > 0) {
-        await finishMoveAfterTransfer('upload', entries, dirs, liveIds);
+        await finishMoveAfterTransfer('upload', entries, dirs, liveIds, skipMoveConfirm);
       }
 
       updateTransferBarState();
+      return true;
     }
 
-    async function pullSelectionToLocal(items, mode = 'copy') {
+    async function pullSelectionToLocal(items, mode = 'copy', skipMoveConfirm = false) {
       if (!isConnected) {
         if (appOptions && appOptions.autoReconnectOnClick !== false && lastConnectedProfile) {
           const ok = await ensureSilentConnected(currentRemotePath);
-          if (!ok) return;
+          if (!ok) return false;
         } else {
           showAppAlert(t('send.not_connected_download'), t('send.not_connected'), 'warning');
-          return;
+          return false;
         }
       }
       const destDir = currentLocalPath;
       if (!destDir) {
         showAppAlert(t('send.no_local_folder'), t('send.not_connected'), 'warning');
-        return;
+        return false;
       }
 
       const files = items.filter((it) => !it.is_dir);
@@ -12498,7 +12542,7 @@ window.onerror = function(msg, url, line, col, error) {
           policy = await askBatchCollision(conflicts, entries.length, 'download');
           if (!policy) {
             addLog(`Download cancelled — ${conflicts.length} existing file(s) left untouched.`, 'info');
-            return;
+            return false;
           }
           const blocked = new Set(conflicts.map((c) => c.dest));
           if (policy === 'skip') {
@@ -12530,15 +12574,18 @@ window.onerror = function(msg, url, line, col, error) {
 
       const liveIds = queuedIds.filter((id) => id !== null && id !== undefined);
       if (mode === 'move' && liveIds.length > 0) {
-        await finishMoveAfterTransfer('download', entries, dirs, liveIds);
+        await finishMoveAfterTransfer('download', entries, dirs, liveIds, skipMoveConfirm);
       }
 
       updateTransferBarState();
+      return true;
     }
 
     // Delete the sources of a Move only after every copy reported success.
-    async function finishMoveAfterTransfer(kind, entries, dirs, ids) {
-      const confirmed = await showAppConfirm(
+    async function finishMoveAfterTransfer(kind, entries, dirs, ids, skipConfirm = false) {
+      // A Ctrl+X + Ctrl+V paste is already an explicit move: the rows are marked
+      // as cut, so asking "delete the sources?" again would only add a click.
+      const confirmed = skipConfirm ? true : await showAppConfirm(
         t('send.move_confirm', { count: ids.length }),
         { title: t('send.move_confirm_title'), confirmText: t('send.move_confirm_btn'), variant: 'warning' }
       );
@@ -14427,6 +14474,7 @@ window.onerror = function(msg, url, line, col, error) {
     function buildCommandPaletteCatalog() {
       const items = [
         { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>', category: 'Tool', title: 'Find Files (Remote Server & Local Disk)', shortcut: 'Ctrl+F', run: () => openFindFilesModal() },
+        { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="7" y1="14" x2="17" y2="14"/></svg>', category: 'Tool', title: 'Keyboard Shortcuts (All Bindings)', shortcut: 'F1', run: () => openShortcutsModal() },
         { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>', category: 'Tool', title: 'Full-Text Content Grep (Search Inside Files)', shortcut: 'Ctrl+Shift+F', run: () => openContentGrepModal() },
         { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>', category: 'Tool', title: 'Remote Transfer & Server-to-Server Dispatcher (SCP / SFTP / Rsync)', shortcut: '', run: () => openRemoteTransferModal() },
         { icon: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>', category: 'Tool', title: 'Batch Multi-Rename Selected Items (Regex / Counter)', shortcut: 'Ctrl+M', run: () => openBatchRenameModal() },
@@ -14614,6 +14662,9 @@ window.onerror = function(msg, url, line, col, error) {
       const rightWrapper = document.getElementById('rightPane');
       if (leftWrapper) leftWrapper.classList.toggle('pane-focused', !lastActivePaneIsRemote);
       if (rightWrapper) rightWrapper.classList.toggle('pane-focused', lastActivePaneIsRemote);
+      // Tab used to move the ring but leave the status bar reading "LOCAL PANE"
+      // with the previous pane's count, because only this function ran.
+      updateCommanderStatusFooter();
     }
 
     document.addEventListener('mousedown', (e) => {
@@ -14638,8 +14689,6 @@ window.onerror = function(msg, url, line, col, error) {
         }
         if (isRem) openRemoteFileInEditor(item.path);
         else openLocalFileInEditor(item.path);
-      } else if (key === 'F5') {
-        sendSelectionToPeer(isRem, 'copy');
       } else if (key === 'F6') {
         openInteractiveMoveModal(isRem, 'move');
       } else if (key === 'F7') {
@@ -14716,6 +14765,189 @@ window.onerror = function(msg, url, line, col, error) {
       }
     }
 
+    // True while any overlay owns the screen. The app has two overlay families:
+    // `.modal-overlay` (the tool panels) and `#appDesktopDialogOverlay`, which
+    // carries `desktop-dialog-overlay`. Testing only the first one let pane
+    // shortcuts fire behind a "Delete permanently?" prompt.
+    function isAnyDialogOpen() {
+      if (document.querySelector('.modal-overlay.active')) return true;
+      const desktop = document.getElementById('appDesktopDialogOverlay');
+      return !!(desktop && desktop.classList.contains('active'));
+    }
+
+    function focusedPaneItem(isRemote) {
+      const st = selState(isRemote);
+      return st.focusIdx >= 0 ? (selList(isRemote)[st.focusIdx] || null) : null;
+    }
+
+    function openInspectorForFocusedRow() {
+      const isRem = lastActivePaneIsRemote;
+      const item = focusedPaneItem(isRem);
+      if (!item) return;
+      openFileInspectorModal(item.path, item.name, isRem);
+    }
+
+    // Shift+F10 / Menu key. The menu is positioned from the focused row's box so
+    // it lands where a mouse right-click would have put it.
+    function openContextMenuForFocusedRow() {
+      const isRem = lastActivePaneIsRemote;
+      setActivePaneFocus(isRem);
+      const item = focusedPaneItem(isRem);
+      const pane = document.getElementById(isRem ? 'rightPane' : 'leftPane');
+      const row = item
+        ? document.querySelector(selRowSelector(isRem) + '[data-idx="' + selState(isRem).focusIdx + '"]')
+        : null;
+      const box = (row || pane || {}).getBoundingClientRect
+        ? (row || pane).getBoundingClientRect()
+        : { left: 80, top: 120, width: 300, height: 20 };
+      const x = Math.round(box.left + Math.min(Math.max(box.width - 16, 16), 240));
+      const y = Math.round(box.top + Math.min(box.height, 18));
+      const fake = { preventDefault() {}, stopPropagation() {}, clientX: x, clientY: y };
+      if (!item) {
+        openContextMenu(fake, isRem ? 'remote_blank' : 'local_blank', null, null);
+        return;
+      }
+      if (!selHas(isRem, item.path)) selSetSingle(isRem, selState(isRem).focusIdx);
+      openContextMenu(fake, isRem ? 'remote' : 'local', item, selState(isRem).focusIdx);
+    }
+
+    // Type-ahead: a printable character jumps to the first name starting with
+    // what has been typed in the last moment, wrapping around the list.
+    let typeAheadBuffer = '';
+    let typeAheadTimer = null;
+    function typeAheadJump(ch) {
+      clearTimeout(typeAheadTimer);
+      typeAheadBuffer += String(ch).toLowerCase();
+      typeAheadTimer = setTimeout(() => { typeAheadBuffer = ''; }, 900);
+
+      const isRem = lastActivePaneIsRemote;
+      const list = selList(isRem);
+      const n = list.length;
+      if (n === 0) return false;
+      const start = Math.max(0, selState(isRem).focusIdx);
+      for (let step = 1; step <= n; step++) {
+        const idx = (start + step) % n;
+        const it = list[idx];
+        if (it && String(it.name || '').toLowerCase().startsWith(typeAheadBuffer)) {
+          selSetSingle(isRem, idx);
+          const row = document.querySelector(selRowSelector(isRem) + '[data-idx="' + idx + '"]');
+          if (row) row.scrollIntoView({ block: 'nearest' });
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // ── Keyboard shortcut sheet (F1) ────────────────────────────────────────
+    // One data source for the whole sheet so a binding can never be documented
+    // in one place and implemented in another.
+    const SHORTCUT_GROUPS = [
+      { titleKey: 'sc.g.selection', items: [
+        { keys: ['Ctrl', 'A'], labelKey: 'sc.select_all' },
+        { keys: ['Ctrl', 'Click'], labelKey: 'sc.add_remove' },
+        { keys: ['Shift', 'Click'], labelKey: 'sc.range' },
+        { keys: ['Shift', '↑↓'], labelKey: 'sc.extend' },
+        { keys: ['Space'], labelKey: 'sc.toggle' },
+        { keys: ['Ctrl', 'X'], labelKey: 'sc.cut' },
+        { keys: ['Ctrl', 'C'], labelKey: 'sc.copy' },
+        { keys: ['Ctrl', 'V'], labelKey: 'sc.paste' },
+        { keys: ['Ctrl', 'Enter'], labelKey: 'sc.copy_peer' },
+        { keys: ['Ctrl', 'Shift', 'Enter'], labelKey: 'sc.move_peer' }
+      ] },
+      { titleKey: 'sc.g.nav', items: [
+        { keys: ['Tab'], labelKey: 'sc.switch_pane' },
+        { keys: ['↑', '↓'], labelKey: 'sc.move_row' },
+        { keys: ['Home', 'End'], labelKey: 'sc.first_last' },
+        { keys: ['Backspace'], labelKey: 'sc.up_level' },
+        { keys: ['Enter'], labelKey: 'sc.open' },
+        { keys: ['Alt', 'Enter'], labelKey: 'sc.properties' },
+        { keys: ['Shift', 'F10'], labelKey: 'sc.context_menu' },
+        { keys: ['a', 'z'], labelKey: 'sc.type_ahead' }
+      ] },
+      { titleKey: 'sc.g.file', items: [
+        { keys: ['F2'], labelKey: 'sc.rename' },
+        { keys: ['F4'], labelKey: 'sc.edit' },
+        { keys: ['F6'], labelKey: 'sc.move_copy' },
+        { keys: ['F7'], labelKey: 'sc.new_folder' },
+        { keys: ['Ctrl', 'Shift', 'N'], labelKey: 'sc.new_folder_alt' },
+        { keys: ['F8'], labelKey: 'sc.delete' },
+        { keys: ['F3'], labelKey: 'sc.find' },
+        { keys: ['Ctrl', 'M'], labelKey: 'sc.batch_rename' },
+        { keys: ['Ctrl', 'Shift', 'F'], labelKey: 'sc.grep' },
+        { keys: ['Ctrl', 'Z'], labelKey: 'sc.undo_move' }
+      ] },
+      { titleKey: 'sc.g.view', items: [
+        { keys: ['F5'], labelKey: 'sc.refresh' },
+        { keys: ['Shift', 'F1'], labelKey: 'sc.compare' },
+        { keys: ['Ctrl', 'I'], labelKey: 'sc.quick_filter' },
+        { keys: ['Ctrl', 'H'], labelKey: 'sc.hidden' },
+        { keys: ['Ctrl', 'L'], labelKey: 'sc.log_panel' },
+        { keys: ['Ctrl', 'T'], labelKey: 'sc.theme' },
+        { keys: ['Ctrl', 'B'], labelKey: 'sc.bookmarks' }
+      ] },
+      { titleKey: 'sc.g.app', items: [
+        { keys: ['Ctrl', 'K'], labelKey: 'sc.palette' },
+        { keys: ['Ctrl', 'Shift', 'Y'], labelKey: 'sc.sync' },
+        { keys: ['Ctrl', 'Y'], labelKey: 'sc.sync_browse' },
+        { keys: ['Ctrl', 'Q'], labelKey: 'sc.quick_connect' },
+        { keys: ['Ctrl', 'R'], labelKey: 'sc.reconnect' },
+        { keys: ['Ctrl', 'D'], labelKey: 'sc.disconnect' },
+        { keys: ['Ctrl', ','], labelKey: 'sc.options' },
+        { keys: ['Ctrl', 'U'], labelKey: 'sc.update' },
+        { keys: ['Ctrl', 'S'], labelKey: 'sc.sites' },
+        { keys: ['F1'], labelKey: 'sc.help' },
+        { keys: ['Esc'], labelKey: 'sc.escape' }
+      ] }
+    ];
+
+    function openShortcutsModal() {
+      closeAllMenus();
+      closeContextMenu();
+      const modal = document.getElementById('shortcutsModal');
+      if (!modal) return;
+      const search = document.getElementById('shortcutsSearch');
+      if (search) search.value = '';
+      renderShortcutsList();
+      modal.classList.add('active');
+      if (search) setTimeout(() => search.focus(), 40);
+    }
+
+    function closeShortcutsModal() {
+      const modal = document.getElementById('shortcutsModal');
+      if (modal) {
+        // Same reason as the dialog: the filter input must not keep the focus,
+        // or the pane shortcuts stop working once the sheet is closed.
+        const focused = document.activeElement;
+        if (focused && modal.contains(focused) && typeof focused.blur === 'function') focused.blur();
+        modal.classList.remove('active');
+      }
+    }
+
+    function renderShortcutsList() {
+      const body = document.getElementById('shortcutsBody');
+      if (!body) return;
+      const q = (document.getElementById('shortcutsSearch')?.value || '').trim().toLowerCase();
+      const html = [];
+      SHORTCUT_GROUPS.forEach((group) => {
+        const rows = group.items.filter((it) => {
+          if (!q) return true;
+          return t(it.labelKey).toLowerCase().includes(q) || it.keys.join(' ').toLowerCase().includes(q);
+        });
+        if (rows.length === 0) return;
+        html.push(`<div class="sc-group">
+          <div class="sc-group-title">${escapeHtml(t(group.titleKey))}</div>
+          <div class="sc-grid">${rows.map((it) => `
+            <div class="sc-row">
+              <span class="sc-label">${escapeHtml(t(it.labelKey))}</span>
+              <span class="sc-keys">${it.keys.map((k) => `<kbd class="sc-key">${escapeHtml(k)}</kbd>`).join('')}</span>
+            </div>`).join('')}</div>
+        </div>`);
+      });
+      body.innerHTML = html.length
+        ? html.join('')
+        : `<div class="sc-empty">${escapeHtml(t('sc.empty'))}</div>`;
+    }
+
     // Global Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
       const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
@@ -14748,6 +14980,7 @@ window.onerror = function(msg, url, line, col, error) {
         closeBookmarksModal();
         closeProcessManagerModal();
         closeFileInspectorModal();
+        closeShortcutsModal();
         return;
       }
 
@@ -14758,6 +14991,12 @@ window.onerror = function(msg, url, line, col, error) {
       }
 
       if (isInput) return;
+
+      // A dialog owns the keyboard while it is up. This closes two holes: pane
+      // shortcuts firing behind a prompt (Ctrl+A selected every file behind a
+      // "Delete permanently?" dialog) and Enter both confirming the dialog and
+      // opening the row underneath it.
+      if (isAnyDialogOpen()) return;
 
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
@@ -14781,15 +15020,15 @@ window.onerror = function(msg, url, line, col, error) {
         return;
       }
 
-      const anyModalOpen = !!document.querySelector('.modal-overlay.active');
-
-      if (!anyModalOpen && e.key === 'Tab') {
+      // ── Pane focus ────────────────────────────────────────────────────────
+      if (e.key === 'Tab') {
         e.preventDefault();
         setActivePaneFocus(!lastActivePaneIsRemote);
         return;
       }
 
-      if (!anyModalOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End')) {
+      // ── Row navigation ────────────────────────────────────────────────────
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End') {
         if (!e.altKey && !e.ctrlKey && !e.metaKey) {
           e.preventDefault();
           // Shift extends the selection from the anchor, exactly like Explorer.
@@ -14806,55 +15045,67 @@ window.onerror = function(msg, url, line, col, error) {
         }
       }
 
-      if (!anyModalOpen && e.key === 'Enter') {
+      // Space and Enter belong to a focused control before they belong to the
+      // file list: a toolbar button must still activate with the keyboard.
+      const isControl = document.activeElement
+        && ['BUTTON', 'A', 'SUMMARY', 'INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+
+      // Space toggles the focused row in place, so a scattered selection no
+      // longer needs Ctrl+Click.
+      if ((e.key === ' ' || e.key === 'Spacebar') && !isControl) {
+        e.preventDefault();
+        const st = selState(lastActivePaneIsRemote);
+        if (st.focusIdx >= 0) selToggleKeepFocus(lastActivePaneIsRemote, st.focusIdx);
+        return;
+      }
+
+      if (e.key === 'Enter' && !isControl) {
         e.preventDefault();
         // Ctrl+Enter sends the active pane's selection to the other pane;
         // Ctrl+Shift+Enter moves it (source deleted after a successful copy).
         if (e.ctrlKey || e.metaKey) {
           sendSelectionToPeer(lastActivePaneIsRemote, e.shiftKey ? 'move' : 'copy');
+        } else if (e.altKey) {
+          openInspectorForFocusedRow();
         } else {
           activateSelectedRowByEnter();
         }
         return;
       }
 
-      if (!anyModalOpen && e.key === 'Backspace') {
+      if (e.key === 'Backspace') {
         e.preventDefault();
         if (lastActivePaneIsRemote) remoteNavigateUp();
         else localNavigateUp();
         return;
       }
 
-      if (!anyModalOpen && e.key === 'F2') {
+      // ── Context menu from the keyboard ────────────────────────────────────
+      // Shift+F10 and the dedicated Menu key are what Windows users press when
+      // there is no mouse; until now the row menu could only be right-clicked.
+      if ((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu') {
         e.preventDefault();
-        triggerCommanderFkey('F2');
-        return;
-      } else if (!anyModalOpen && e.key === 'F4') {
-        e.preventDefault();
-        triggerCommanderFkey('F4');
-        return;
-      } else if (!anyModalOpen && e.key === 'F7') {
-        e.preventDefault();
-        triggerCommanderFkey('F7');
-        return;
-      } else if (!anyModalOpen && e.key === 'F8') {
-        e.preventDefault();
-        triggerCommanderFkey('F8');
+        openContextMenuForFocusedRow();
         return;
       }
 
+      // ── Function keys ─────────────────────────────────────────────────────
       if (e.shiftKey && e.key === 'F1') {
         e.preventDefault();
         toggleCompareDirectories();
-      } else if (e.key === 'Delete') {
-        if (!anyModalOpen) {
-          e.preventDefault();
-          triggerCommanderFkey('F8');
-        }
-      } else if (e.key === 'F6') {
-        e.preventDefault();
-        triggerCommanderFkey('F6');
-      } else if (e.altKey && e.key === 'ArrowUp') {
+        return;
+      }
+      if (e.key === 'F1') { e.preventDefault(); openShortcutsModal(); return; }
+      if (e.key === 'F2') { e.preventDefault(); triggerCommanderFkey('F2'); return; }
+      if (e.key === 'F3') { e.preventDefault(); openFindFilesModal(); return; }
+      if (e.key === 'F4') { e.preventDefault(); triggerCommanderFkey('F4'); return; }
+      if (e.key === 'F5') { e.preventDefault(); refreshBothPanes(); return; }
+      if (e.key === 'F6') { e.preventDefault(); triggerCommanderFkey('F6'); return; }
+      if (e.key === 'F7') { e.preventDefault(); triggerCommanderFkey('F7'); return; }
+      if (e.key === 'F8' || e.key === 'Delete') { e.preventDefault(); triggerCommanderFkey('F8'); return; }
+
+      // ── Alt combinations ──────────────────────────────────────────────────
+      if (e.altKey && e.key === 'ArrowUp') {
         e.preventDefault();
         const useRemote = lastActivePaneIsRemote ? (getSelectedRemoteItems().length > 0) : (getSelectedLocalItems().length === 0 && getSelectedRemoteItems().length > 0);
         if ((useRemote && getSelectedRemoteItems().length > 0) || (!useRemote && getSelectedLocalItems().length > 0)) {
@@ -14864,66 +15115,50 @@ window.onerror = function(msg, url, line, col, error) {
         } else {
           localNavigateUp();
         }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
-        e.preventDefault();
-        const filterInp = document.getElementById(lastActivePaneIsRemote ? 'remoteQuickFilter' : 'localQuickFilter');
-        if (filterInp) {
-          filterInp.focus();
-          filterInp.select();
+        return;
+      }
+
+      // ── Ctrl / Cmd combinations ───────────────────────────────────────────
+      if (e.ctrlKey || e.metaKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'a') { e.preventDefault(); selectAllItemsInPane(lastActivePaneIsRemote); return; }
+        if (k === 'x') { e.preventDefault(); clipboardCutSelected(lastActivePaneIsRemote); return; }
+        if (k === 'c') {
+          // Only take Ctrl+C when the user is not copying selected text.
+          if (!window.getSelection()?.toString()) {
+            e.preventDefault();
+            clipboardCopySelected(lastActivePaneIsRemote);
+          }
+          return;
         }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
-        e.preventDefault();
-        selectAllItemsInPane(lastActivePaneIsRemote);
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
-        e.preventDefault();
-        clipboardCutSelected(lastActivePaneIsRemote);
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-        const selText = window.getSelection()?.toString();
-        if (!selText) {
+        if (k === 'v') { e.preventDefault(); clipboardPasteHere(lastActivePaneIsRemote); return; }
+        if (k === 'z') {
+          if (lastInteractiveMoveUndo) { e.preventDefault(); undoLastInteractiveMove(); }
+          return;
+        }
+        if (k === 'i') {
           e.preventDefault();
-          clipboardCopySelected(lastActivePaneIsRemote);
+          const filterInp = document.getElementById(lastActivePaneIsRemote ? 'remoteQuickFilter' : 'localQuickFilter');
+          if (filterInp) { filterInp.focus(); filterInp.select(); }
+          return;
         }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-        e.preventDefault();
-        clipboardPasteHere(lastActivePaneIsRemote);
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        if (lastInteractiveMoveUndo) {
-          e.preventDefault();
-          undoLastInteractiveMove();
-        }
-      } else if (e.key === 'F3' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f')) {
-        e.preventDefault();
-        openFindFilesModal();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
-        e.preventDefault();
-        openUpdateModal(true);
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        openSitesModal();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q') {
-        e.preventDefault();
-        focusQuickConnect();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
-        e.preventDefault();
-        disconnect();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
-        e.preventDefault();
-        handleReconnect(true);
-      } else if ((e.ctrlKey || e.metaKey) && e.key === ',') {
-        e.preventDefault();
-        openOptionsModal('general');
-      } else if (e.key === 'F5') {
-        e.preventDefault();
-        refreshBothPanes();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
-        e.preventDefault();
-        toggleHiddenFiles();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
-        e.preventDefault();
-        toggleLogPanel();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 't') {
-        e.preventDefault();
-        toggleTheme();
+        if (k === 'n' && e.shiftKey) { e.preventDefault(); triggerCommanderFkey('F7'); return; }
+        if (k === 'f') { e.preventDefault(); openFindFilesModal(); return; }
+        if (k === 'u') { e.preventDefault(); openUpdateModal(true); return; }
+        if (k === 's') { e.preventDefault(); openSitesModal(); return; }
+        if (k === 'q') { e.preventDefault(); focusQuickConnect(); return; }
+        if (k === 'd') { e.preventDefault(); disconnect(); return; }
+        if (k === 'r') { e.preventDefault(); handleReconnect(true); return; }
+        if (k === ',') { e.preventDefault(); openOptionsModal('general'); return; }
+        if (k === 'h') { e.preventDefault(); toggleHiddenFiles(); return; }
+        if (k === 'l') { e.preventDefault(); toggleLogPanel(); return; }
+        if (k === 't') { e.preventDefault(); toggleTheme(); return; }
+        return;
+      }
+
+      // ── Type-ahead ────────────────────────────────────────────────────────
+      if (e.key.length === 1 && !e.altKey && !isControl) {
+        if (typeAheadJump(e.key)) e.preventDefault();
       }
     });
 

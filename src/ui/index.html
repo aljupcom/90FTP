@@ -743,6 +743,83 @@
       unicode-bidi: isolate;
     }
 
+    /* Keyboard shortcut sheet (F1) */
+    .sc-search {
+      width: 100%;
+      padding: 7px 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-main);
+      font-size: 12.5px;
+      outline: none;
+    }
+    .sc-search:focus { border-color: var(--accent); }
+    .shortcuts-body {
+      max-height: 56vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-inline-end: 4px;
+    }
+    .sc-group-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .sc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+      gap: 2px 22px;
+    }
+    .sc-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 3px 6px;
+      border-radius: 5px;
+    }
+    .sc-row:hover { background: var(--bg-card); }
+    .sc-label {
+      font-size: 12.5px;
+      color: var(--text-main);
+      /* Wrap rather than truncate: a cut-off shortcut name is useless. */
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .sc-keys {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+      /* A key combo is Latin by nature: keep Ctrl, Shift, A in that order even
+         when the whole interface is right-to-left. */
+      direction: ltr;
+    }
+    /* Key caps are always Latin: keep them LTR even inside the Arabic UI. */
+    .sc-key {
+      font-family: var(--font-mono, monospace);
+      font-size: 10.5px;
+      line-height: 1.5;
+      padding: 1px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-main);
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+    .sc-empty {
+      padding: 24px 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12.5px;
+    }
+
     /* Main Workspace Layout (Floating Glassmorphic Split Panes) */
     .workspace-area {
       flex: 1;
@@ -5033,7 +5110,7 @@
         </svg>
         <div class="brand-text">
           <span>90FTP</span>
-          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.89</span>
+          <span class="brand-badge" id="topBrandBadge">Modern Site Manager v0.0.0.90</span>
         </div>
       </div>
 
@@ -5184,6 +5261,11 @@
             <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
             <span class="dd-accent">Command Palette (Omni-Launcher)...</span>
             <span class="shortcut">Ctrl+K</span>
+          </div>
+          <div class="dropdown-item" onclick="openShortcutsModal()">
+            <span class="menu-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="7" y1="14" x2="17" y2="14"/></svg></span>
+            <span>Keyboard Shortcuts...</span>
+            <span class="shortcut">F1</span>
           </div>
           <div class="dropdown-separator"></div>
 
@@ -6715,7 +6797,7 @@
           </div>
           <div class="about-brand-sub">Modern Site Manager & Asynchronous File Transfer Engine</div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.89 Dev (Windows x64)</span>
+            <span id="aboutAppVersion" class="about-version-chip">Version 0.0.0.90 Dev (Windows x64)</span>
             <span style="font-size: 12px; color: var(--text-dim);">Release Channel: Official</span>
           </div>
         </div>
@@ -6830,7 +6912,7 @@
         </div>
         <div class="about-code-box" id="aboutDiagnosticsText">
 Application: 90FTP Desktop Client
-Version: 0.0.0.89 (Release)
+Version: 0.0.0.90 (Release)
 OS: Windows NT 10.0 x64
 WebView2: Evergreen Host
 Renderer: DirectComposition Hardware Accelerated
@@ -7971,6 +8053,34 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     </div>
   </div>
 
+
+  <!-- Keyboard shortcut sheet (F1): generated from SHORTCUT_GROUPS in app.js -->
+  <div class="modal-overlay" id="shortcutsModal" style="z-index: 1084;">
+    <div class="modal-content" style="width: 780px; max-width: 96vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 19.5px; color: var(--accent);"><svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="7" y1="14" x2="17" y2="14"/></svg></span>
+          <div>
+            <div style="font-weight: 700; font-size: 14.5px; color: var(--text-main);" data-i18n="sc.title">Keyboard Shortcuts</div>
+            <div style="font-size: 12px; color: var(--text-dim);" data-i18n="sc.subtitle">Every binding that works in the two file panes</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeShortcutsModal()" style="padding: 1px 7px; font-size: 12px;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 14px 18px; display: flex; flex-direction: column; gap: 12px;">
+        <input type="text" id="shortcutsSearch" class="sc-search" autocomplete="off"
+               data-i18n-placeholder="sc.search" placeholder="Filter by name or key..."
+               oninput="renderShortcutsList()">
+        <div id="shortcutsBody" class="shortcuts-body"></div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 18px;">
+        <span data-i18n="sc.hint" style="font-size: 12px; color: var(--text-dim);">Press F1 at any time to reopen this list.</span>
+        <button type="button" class="btn btn-primary btn-sm" onclick="closeShortcutsModal()" data-i18n="common.close">Close</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Floating Interactive Action Toast (Move / Copy / Undo / Open Target) -->
   <div id="interactiveActionToast" class="interactive-action-toast">
